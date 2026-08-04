@@ -6,10 +6,10 @@ interaction back to the authoritative session runtime.
 
 ## Status
 
-This repository contains plans and contracts only. Orbit remains the active
-implementation frontier. Venus implementation begins only after Orbit's
-governance handoff closes and the user explicitly activates the first Venus
-slice.
+This repository contains plans and contracts only. Orbit's governance handoff
+is closed, and the user activated `ven-upt.1` for architecture and research.
+Product implementation remains gated on accepting that decision and explicitly
+activating `ven-upt.2`.
 
 The first target is deliberately narrow: one Linux window attached to one
 already-running local Orbit session. The client renders the accepted Orbit
@@ -56,9 +56,9 @@ Beads data, lock files, and generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 209 |
+| Agent policy | 207 |
 | README | 64 |
 | Contracts and references | 82 |
 | Crate decisions | 11 |
 | Changelog | 5 |
-| **Total** | **371** |
+| **Total** | **369** |

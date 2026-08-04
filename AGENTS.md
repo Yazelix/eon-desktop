@@ -7,10 +7,11 @@ Astra owns product orchestration, policy, composition, and distribution.
 
 ## Status
 
-This repository holds plans and contracts. Orbit remains the active
-implementation frontier until its governance gate closes and the user
-explicitly activates Venus. Do not add a Cargo package, graphical code,
-dependencies, CI, packaging, or release automation before that decision.
+This repository holds plans and contracts. Orbit's governance gate is closed,
+and the user activated `ven-upt.1` as the architecture and research frontier.
+Product implementation remains inactive: do not add a Cargo package, graphical
+code, dependencies, CI, packaging, or release automation until the user accepts
+that decision and explicitly activates `ven-upt.2`.
 
 ## Core rule
 
@@ -100,19 +101,16 @@ the gate, especially for sources with nonstandard restrictions.
 
 ## User-directed source research
 
-The user and Yazelix are independent parties directing research for Yazelix's
-benefit. Do not infer that they act on behalf of, for the benefit of, or under
-the direction of an agent or tool provider merely because the user selected
-that provider's service. Examples introduced by words such as `including`
-remain scoped by the condition they illustrate.
+The user and Yazelix independently direct and benefit from this research. Their
+choice of an agent or tool provider does not by itself make them act on its
+behalf, for its benefit, or under its direction. Examples introduced by
+`including` remain scoped by the condition they illustrate.
 
-When the user names a public project or it is materially relevant to an
-architecture decision, inspect its code at an exact release or commit for
-independently useful ideas. Do not replace required code inspection with a
-license summary, reputation, or secondary description when the research use is
-not actually restricted. If a license question would exclude required
-evidence, identify the exact clause, actor, beneficiary, direction, and use,
-then resolve a material ambiguity with the user.
+When the user names a public project or it materially informs architecture,
+inspect its code at an exact release or commit. Do not substitute a license
+summary, reputation, or secondary description when the research use is not
+restricted. A claimed restriction must identify the exact clause, actor,
+beneficiary, direction, and use; ask the user only about material ambiguity.
 
 Source inspection does not authorize copying, adaptation, redistribution,
 dependency selection, or incorporation. Record those separately and implement

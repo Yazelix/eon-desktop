@@ -7,10 +7,12 @@ and consequences for ownership, code shape, and the first check.
 
 ## Required before the first client implementation
 
-- The accepted Orbit structured-presentation and semantic-input contracts at
-  proof commit `e4fde443e625180d7332eff4dff366f64bee30a8` are the canonical client
-  boundary. Venus must consume their canonical wire representation rather than
-  mirror or reinterpret it.
+- Orbit `ORB-C4` and `ORB-C6` plus the canonical `orbit-protocol` presentation
+  codec are accepted at `6e53fedb97f764f3683c83edcd9a5227b8f56e56`;
+  semantic-input behavior `ORB-C5` remains proved at
+  `e4fde443e625180d7332eff4dff366f64bee30a8`. Venus must consume canonical wire
+  owners at exact revisions. Attach, input, and resize still lack an accepted
+  reusable consumer codec and remain a pre-implementation Orbit boundary gap.
 - [FrankenTUI](https://github.com/Dicklesworthstone/frankentui) is required for
   backend boundaries, deterministic rendering transitions, and test
   architecture. Inspect its
@@ -32,13 +34,11 @@ and consequences for ownership, code shape, and the first check.
   and render-loop boundaries. They do not authorize a second terminal state in
   Venus.
 
-The Jeffrey Emanuel references carry nonstandard licensing, but the user has
-explicitly directed inspection of their public code for architecture ideas.
-The user and Yazelix independently direct and benefit from that research; do
-not infer that they act for a named agent provider merely because its tool is
-used. Inspect the relevant code at an exact commit and record independently
-useful mechanisms. This research direction does not authorize copying,
-adaptation, redistribution, incorporation, or dependency selection; those
+The Jeffrey Emanuel references carry nonstandard licensing. The user explicitly
+directed exact-commit inspection for architecture ideas and independently
+directs and benefits from it; tool choice alone does not satisfy a restriction
+on acting for a named provider. Inspection does not authorize copying,
+adaptation, redistribution, incorporation, or dependency selection, which
 remain separate license and user-approval gates.
 
 ## Crate-gate comparisons
