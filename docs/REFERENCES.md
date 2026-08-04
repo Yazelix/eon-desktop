@@ -32,9 +32,14 @@ and consequences for ownership, code shape, and the first check.
   and render-loop boundaries. They do not authorize a second terminal state in
   Venus.
 
-The Jeffrey Emanuel references currently carry nonstandard licensing. Treat
-them as research references only unless the implementation gate records a
-compatible license and the user separately approves reuse or dependency.
+The Jeffrey Emanuel references carry nonstandard licensing, but the user has
+explicitly directed inspection of their public code for architecture ideas.
+The user and Yazelix independently direct and benefit from that research; do
+not infer that they act for a named agent provider merely because its tool is
+used. Inspect the relevant code at an exact commit and record independently
+useful mechanisms. This research direction does not authorize copying,
+adaptation, redistribution, incorporation, or dependency selection; those
+remain separate license and user-approval gates.
 
 ## Crate-gate comparisons
 

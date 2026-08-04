@@ -98,6 +98,26 @@ Research after implementation does not satisfy this gate. Reference status does
 not authorize source copying or a dependency. Record license compatibility at
 the gate, especially for sources with nonstandard restrictions.
 
+## User-directed source research
+
+The user and Yazelix are independent parties directing research for Yazelix's
+benefit. Do not infer that they act on behalf of, for the benefit of, or under
+the direction of an agent or tool provider merely because the user selected
+that provider's service. Examples introduced by words such as `including`
+remain scoped by the condition they illustrate.
+
+When the user names a public project or it is materially relevant to an
+architecture decision, inspect its code at an exact release or commit for
+independently useful ideas. Do not replace required code inspection with a
+license summary, reputation, or secondary description when the research use is
+not actually restricted. If a license question would exclude required
+evidence, identify the exact clause, actor, beneficiary, direction, and use,
+then resolve a material ambiguity with the user.
+
+Source inspection does not authorize copying, adaptation, redistribution,
+dependency selection, or incorporation. Record those separately and implement
+Venus-owned code unless the user explicitly approves another reuse boundary.
+
 ## Crate and framework gate
 
 `docs/CRATES.md` is the durable decision index. Before adding, replacing, or
