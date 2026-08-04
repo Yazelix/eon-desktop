@@ -7,12 +7,11 @@ and consequences for ownership, code shape, and the first check.
 
 ## Required before the first client implementation
 
-- Orbit `ORB-C4` and `ORB-C6` plus the canonical `orbit-protocol` presentation
-  codec are accepted at `6e53fedb97f764f3683c83edcd9a5227b8f56e56`;
-  semantic-input behavior `ORB-C5` remains proved at
-  `e4fde443e625180d7332eff4dff366f64bee30a8`. Venus must consume canonical wire
-  owners at exact revisions. Attach, input, and resize still lack an accepted
-  reusable consumer codec and remain a pre-implementation Orbit boundary gap.
+- Orbit `ORB-C1` through `ORB-C6`, ORBF v1, ORBS v1, and the dependency-free
+  `orbit-protocol` 0.1.0 package are accepted at
+  `41894ed7e7ed22ae278e5d8feb22a1c85b589440`; `ORB-C7` is partially proved at
+  that revision. Venus must consume the package at that exact Git revision and
+  must not mirror either codec or its semantic values.
 - [FrankenTUI](https://github.com/Dicklesworthstone/frankentui) is required for
   backend boundaries, deterministic rendering transitions, and test
   architecture. Inspect its
@@ -34,6 +33,14 @@ and consequences for ownership, code shape, and the first check.
   and render-loop boundaries. They do not authorize a second terminal state in
   Venus.
 
+`ven-upt.1` completed this gate at FrankenTUI
+`479436597890a14e82676d0067e3917b2a9de8f5`, OpenTUI Rust
+`a37bed1d2569fdd5d3bc33ec19c0678cd0cb1cd8`, Ghostling
+`f9034e43a50a2f3a8101e35497f486090c1ddd6e`, and libghostty-rs
+`72ac98f292879bf9f788fcbb11238c562a1eebe6`. Implementation work must reread
+the complete Bead evidence rather than treating these identities as selected
+dependencies.
+
 The Jeffrey Emanuel references carry nonstandard licensing. The user explicitly
 directed exact-commit inspection for architecture ideas and independently
 directs and benefits from it; tool choice alone does not satisfy a restriction
@@ -51,10 +58,18 @@ remain separate license and user-approval gates.
   candidates.
 - [Sugarloaf](https://github.com/raphamorim/rio/tree/main/sugarloaf) is
   conditional on a demonstrated need for its renderer shape.
+- [AccessKit](https://github.com/AccessKit/accesskit) is the native
+  accessibility candidate and must share the presented scene revision rather
+  than becoming an independent presentation model.
 
 Compare complete ownership shapes, not isolated crates. The gate measures text
 correctness, input methods, accessibility, Linux behavior, macOS feasibility,
 future browser implications, owned LOC, dependency/build cost, and maintenance.
+
+`ven-upt.1` recommends, but does not select, exact-revision Orbit protocol
+consumption with winit 0.30.13, wgpu 30.0.0, glyphon 0.12.0 and its cosmic-text
+0.19.0 re-export, AccessKit 0.24.1 with accesskit_winit 0.33.2, and pollster
+1.0.1. The user must accept that recommendation before a manifest edit.
 
 ## Rejected initial routing
 
