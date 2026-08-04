@@ -13,9 +13,9 @@ activating `ven-upt.2`.
 
 The first target is deliberately narrow: one Linux window attached to one
 already-running local Orbit session. The client renders the accepted Orbit
-frame contract, sends semantic input and resize events, survives Orbit session
-detachment, and reports bounded attachment or server failures. It does not own
-a PTY or terminal emulator.
+frame contract, sends semantic input and resize events, can detach without
+ending the Orbit session, and reports bounded attachment or server failures. It
+does not own a PTY or terminal emulator.
 
 ## Ownership
 

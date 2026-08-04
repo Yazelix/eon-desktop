@@ -41,10 +41,10 @@ proof status, checks, and gaps. Contract IDs are stable and repository-qualified
 as `VEN-C*`; never renumber or reuse them.
 
 Every product implementation Bead names the Venus contracts it changes, proves,
-consumes, hardens, or preserves and the exact Orbit contracts and proof revision
-it consumes. Repository tooling and documentation Beads explicitly state that
-they change no product contract. Stop for user approval before adding, changing,
-replacing, or retiring a contract.
+consumes, hardens, or preserves and maps each consumed Orbit contract to its
+exact proof revision. Repository tooling and documentation Beads explicitly
+state that they change no product contract. Stop for user approval before
+adding, changing, replacing, or retiring a contract.
 
 `Proved` means the index names an accepted proof-bearing Git commit and the
 canonical checks that passed for that exact revision. Uncommitted evidence is
@@ -69,7 +69,7 @@ test, manifest, or generated-fixture edit for an implementation Bead, claim it
 and add an append-only `Execution baseline` comment containing:
 
 - current `HEAD` and `git hash-object AGENTS.md`;
-- the Bead `updated_at`, affected `VEN-C*` contracts, and consumed Orbit proof;
+- the Bead `updated_at`, affected `VEN-C*` contracts, and consumed Orbit proofs;
 - intended production, test, manifest, and generated surfaces;
 - pre-existing dirty paths that must be preserved;
 - active agent or session identity.
