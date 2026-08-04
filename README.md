@@ -56,9 +56,9 @@ Beads data, lock files, and generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 190 |
+| Agent policy | 189 |
 | README | 64 |
-| Contracts and references | 79 |
-| Crate decisions | 12 |
-| Changelog | 6 |
-| **Total** | **351** |
+| Contracts and references | 77 |
+| Crate decisions | 11 |
+| Changelog | 5 |
+| **Total** | **346** |
