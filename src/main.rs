@@ -56,7 +56,7 @@ struct Application {
     model: SessionModel,
     input: InputState,
     last_resize: Option<SurfaceSize>,
-    scene_presented: bool,
+    presented_revision: Option<u64>,
     render_notice: Option<String>,
     blink_visible: bool,
     next_blink: Option<Instant>,
@@ -72,7 +72,7 @@ impl Application {
             model: SessionModel::new(),
             input: InputState::default(),
             last_resize: None,
-            scene_presented: false,
+            presented_revision: None,
             render_notice: None,
             blink_visible: true,
             next_blink: None,
@@ -269,18 +269,20 @@ impl Application {
         {
             Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
-                self.scene_presented = self.model.scene().is_some()
-                    && surface_size(state.renderer.size(), state.renderer.metrics()).is_some();
+                self.presented_revision = self.model.scene().and_then(|scene| {
+                    surface_size(state.renderer.size(), state.renderer.metrics())
+                        .map(|_| scene.revision)
+                });
             }
             Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Recovered) => {
-                self.scene_presented = false;
+                self.presented_revision = None;
                 state.window.request_redraw();
             }
             Err(error) => {
                 let notice = format!("Venus renderer failure: {error}");
                 self.render_notice = Some(notice.clone());
-                self.scene_presented = false;
+                self.presented_revision = None;
                 state.accessibility.update(
                     &mut state.adapter,
                     self.model.scene(),
@@ -311,6 +313,10 @@ impl ApplicationHandler<UserEvent> for Application {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        let scene_presented = presentation_is_current(
+            self.model.scene().map(|scene| scene.revision),
+            self.presented_revision,
+        );
         let Some(state) = &mut self.window else {
             return;
         };
@@ -323,7 +329,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 state.renderer.resize(size, state.window.scale_factor());
-                self.scene_presented = false;
+                self.presented_revision = None;
                 self.send_resize();
                 self.refresh_client_view();
             }
@@ -331,7 +337,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 state
                     .renderer
                     .resize(state.window.inner_size(), scale_factor);
-                self.scene_presented = false;
+                self.presented_revision = None;
                 self.send_resize();
                 self.refresh_client_view();
             }
@@ -355,19 +361,19 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if let Some(message) = self.input.move_pointer(position.x, position.y)
-                    && self.scene_presented
+                    && scene_presented
                 {
                     self.send(message);
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if let Some(message) = self.input.mouse_button(state, button, self.scene_presented)
+                if let Some(message) = self.input.mouse_button(state, button, scene_presented)
                     && self.send(message)
                 {
                     self.input.commit_mouse_button(state, button);
                 }
             }
-            WindowEvent::MouseWheel { delta, .. } if self.scene_presented => {
+            WindowEvent::MouseWheel { delta, .. } if scene_presented => {
                 let (horizontal, vertical) = match delta {
                     MouseScrollDelta::LineDelta(x, y) => (x, y),
                     MouseScrollDelta::PixelDelta(position) => {
@@ -439,6 +445,10 @@ fn update_blink(
         return true;
     }
     false
+}
+
+fn presentation_is_current(scene_revision: Option<u64>, presented_revision: Option<u64>) -> bool {
+    scene_revision.is_some() && scene_revision == presented_revision
 }
 
 fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
@@ -535,5 +545,13 @@ mod tests {
         assert_eq!((visible, deadline), (true, None));
         assert!(!update_blink(true, &mut visible, &mut deadline, now));
         assert_eq!((visible, deadline), (true, Some(now + BLINK_INTERVAL)));
+    }
+
+    #[test]
+    fn pointer_input_requires_the_current_presented_revision() {
+        assert!(!presentation_is_current(None, None));
+        assert!(!presentation_is_current(Some(8), None));
+        assert!(!presentation_is_current(Some(8), Some(7)));
+        assert!(presentation_is_current(Some(8), Some(8)));
     }
 }

@@ -76,8 +76,8 @@ Beads data, lock files, and generated artifacts.
 | README | 83 |
 | Contracts and references | 120 |
 | Crate decisions | 88 |
-| Changelog | 16 |
-| Rust production | 3,237 |
+| Changelog | 18 |
+| Rust production | 3,255 |
 | Rust tests | 307 |
 | Cargo manifest | 18 |
-| **Total** | **4,075** |
+| **Total** | **4,095** |
