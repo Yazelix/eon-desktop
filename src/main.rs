@@ -170,7 +170,22 @@ impl Application {
     }
 
     fn send(&mut self, message: ClientMessage) -> bool {
-        let notice_source = if matches!(&message, ClientMessage::Resize(_)) {
+        let resize = match &message {
+            ClientMessage::Resize(size) => Some(*size),
+            _ => None,
+        };
+        let current_resize = self
+            .window
+            .as_ref()
+            .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()));
+        if resize.is_none()
+            && let Some(size) = current_resize
+            && self.last_resize != Some(size)
+            && !self.send(ClientMessage::Resize(size))
+        {
+            return false;
+        }
+        let notice_source = if resize.is_some() {
             LocalNoticeSource::Resize
         } else {
             LocalNoticeSource::Input
@@ -186,6 +201,9 @@ impl Application {
                 .set_venus_notice(LocalNoticeSource::Queue, error.to_string());
             self.refresh_client_view();
             return false;
+        }
+        if let Some(size) = resize {
+            self.last_resize = Some(size);
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
         if self.model.clear_venus_notice(notice_source) || queue_recovered {
@@ -209,9 +227,7 @@ impl Application {
             self.model.clear_venus_notice(LocalNoticeSource::Resize);
             return;
         }
-        if self.send(ClientMessage::Resize(size)) {
-            self.last_resize = Some(size);
-        }
+        self.send(ClientMessage::Resize(size));
     }
 
     fn status(&self) -> String {
