@@ -95,6 +95,7 @@ struct PlacedText {
 struct ContentKey {
     revision: Option<u64>,
     blink_visible: bool,
+    preedit: String,
     status: String,
     width: u32,
     height: u32,
@@ -271,8 +272,9 @@ impl Renderer {
         scene: Option<&Scene>,
         status: &str,
         blink_visible: bool,
+        preedit: &str,
     ) -> Result<PresentOutcome, RenderError> {
-        self.rebuild_if_needed(scene, status, blink_visible)?;
+        self.rebuild_if_needed(scene, status, blink_visible, preedit)?;
         self.viewport.update(
             &self.queue,
             Resolution {
@@ -378,10 +380,12 @@ impl Renderer {
         scene: Option<&Scene>,
         status: &str,
         blink_visible: bool,
+        preedit: &str,
     ) -> Result<(), RenderError> {
         let key = ContentKey {
             revision: scene.map(|scene| scene.revision),
             blink_visible,
+            preedit: preedit.to_owned(),
             status: status.to_owned(),
             width: self.config.width,
             height: self.config.height,
@@ -405,6 +409,7 @@ impl Renderer {
                 self.config.width,
                 self.config.height,
             );
+            self.build_preedit(scene, preedit, &mut vertices);
             if !status.is_empty() {
                 build_notice_rectangles(
                     &mut vertices,
@@ -485,6 +490,35 @@ impl Renderer {
         }
     }
 
+    fn build_preedit(&mut self, scene: &Scene, preedit: &str, vertices: &mut Vec<u8>) {
+        let Some(cursor) = scene.cursor.filter(|_| !preedit.is_empty()) else {
+            return;
+        };
+        let left = self.metrics.padding + f32::from(cursor.column) * self.metrics.width;
+        let top = self.metrics.padding + f32::from(cursor.row) * self.metrics.height;
+        let width = (self.config.width as f32 - left - self.metrics.padding).max(1.0);
+        self.push_text(
+            preedit,
+            left,
+            top,
+            width,
+            self.metrics.height,
+            scene.foreground,
+            DrawStyleKind::Preedit,
+        );
+        push_rect(
+            vertices,
+            left,
+            top + self.metrics.height - 2.0,
+            (preedit.chars().count().max(1) as f32 * self.metrics.width).min(width),
+            2.0,
+            scene.foreground,
+            1.0,
+            self.config.width,
+            self.config.height,
+        );
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn push_text(
         &mut self,
@@ -522,6 +556,14 @@ impl Renderer {
                 self.metrics.height * 1.4,
                 Attrs::new().family(Family::SansSerif).weight(Weight::BOLD),
                 None,
+                Wrap::None,
+                255,
+            ),
+            DrawStyleKind::Preedit => (
+                self.metrics.font_size,
+                self.metrics.height,
+                Attrs::new().family(Family::Monospace),
+                Some(self.metrics.width),
                 Wrap::None,
                 255,
             ),
@@ -574,6 +616,7 @@ impl Renderer {
 enum DrawStyleKind {
     Cell(DrawStyle),
     Heading,
+    Preedit,
     Status,
     Notice,
 }

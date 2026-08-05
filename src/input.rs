@@ -12,6 +12,7 @@ use winit::{
 pub struct InputState {
     modifiers: Modifiers,
     composing: bool,
+    preedit: String,
     cursor: (f32, f32),
     pressed_button: Option<MouseButton>,
 }
@@ -21,6 +22,7 @@ impl Default for InputState {
         Self {
             modifiers: Modifiers::empty(),
             composing: false,
+            preedit: String::new(),
             cursor: (0.0, 0.0),
             pressed_button: None,
         }
@@ -41,6 +43,11 @@ impl InputState {
             }
         }
         self.modifiers = result;
+    }
+
+    #[must_use]
+    pub fn preedit(&self) -> &str {
+        &self.preedit
     }
 
     #[must_use]
@@ -70,18 +77,22 @@ impl InputState {
             Ime::Enabled => None,
             Ime::Disabled => {
                 self.composing = false;
+                self.preedit.clear();
                 None
             }
             Ime::Preedit(text, _) => {
                 self.composing = !text.is_empty();
+                self.preedit = text;
                 None
             }
             Ime::Commit(text) if text.is_empty() => {
                 self.composing = false;
+                self.preedit.clear();
                 None
             }
             Ime::Commit(text) => {
                 self.composing = false;
+                self.preedit.clear();
                 let text = key_text(&text)?;
                 Some(ClientMessage::Key(KeyEvent {
                     action: KeyAction::Press,
@@ -434,12 +445,14 @@ mod tests {
     fn ime_sends_only_committed_text() {
         let mut input = InputState::default();
         assert!(input.ime(Ime::Preedit("a".into(), Some((1, 1)))).is_none());
+        assert_eq!(input.preedit(), "a");
         let Some(ClientMessage::Key(event)) = input.ime(Ime::Commit("啊".into())) else {
             panic!("expected a semantic key commit");
         };
         assert_eq!(event.key, PhysicalKey::UNIDENTIFIED);
         assert_eq!(event.text.as_deref(), Some("啊"));
         assert!(!event.composing);
+        assert!(input.preedit().is_empty());
     }
 
     #[test]

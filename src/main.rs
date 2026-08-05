@@ -227,13 +227,14 @@ impl Application {
 
     fn render(&mut self) {
         let status = self.status();
+        let preedit = self.input.preedit().to_owned();
         let mut refresh = false;
         let Some(state) = &mut self.window else {
             return;
         };
         match state
             .renderer
-            .render(self.model.scene(), &status, self.blink_visible)
+            .render(self.model.scene(), &status, self.blink_visible, &preedit)
         {
             Ok(PresentOutcome::Presented(Some(revision))) => {
                 refresh = self.render_notice.take().is_some();
@@ -309,9 +310,11 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => self.send(self.input.key(&event)),
             WindowEvent::Ime(event) => {
-                if let Some(message) = self.input.ime(event) {
+                let message = self.input.ime(event);
+                if let Some(message) = message {
                     self.send(message);
                 }
+                self.refresh_client_view();
             }
             WindowEvent::Focused(focused) => self.send(ClientMessage::Focus(if focused {
                 FocusEvent::Gained
