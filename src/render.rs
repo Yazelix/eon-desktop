@@ -536,7 +536,7 @@ impl Renderer {
         left: f32,
         top: f32,
         layout_width: f32,
-        height: f32,
+        layout_height: f32,
         foreground: SceneColor,
         kind: DrawStyleKind,
     ) -> f32 {
@@ -586,8 +586,10 @@ impl Renderer {
                 255,
             ),
         };
+        let layout_width = layout_width.max(1.0);
+        let layout_height = layout_height.max(1.0);
         let mut buffer = Buffer::new(&mut self.font_system, Metrics::new(font_size, line_height));
-        buffer.set_size(Some(layout_width.max(1.0)), Some(height.max(1.0)));
+        buffer.set_size(Some(layout_width), Some(layout_height));
         buffer.set_wrap(wrap);
         buffer.set_monospace_width(monospace_width);
         buffer.set_text(text, &attrs, Shaping::Advanced, None);
@@ -598,7 +600,7 @@ impl Renderer {
             left,
             top,
             right: (left + layout_width).ceil() as i32,
-            bottom: (top + height).ceil() as i32,
+            bottom: (top + layout_height).ceil() as i32,
             color: Color::rgba(foreground.r, foreground.g, foreground.b, alpha),
         });
         measured_width
