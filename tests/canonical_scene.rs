@@ -125,19 +125,20 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
 }
 
 #[test]
-fn notices_clear_only_from_their_source() {
+fn notices_recover_independently_by_source() {
     let mut model = attached_model();
-    model.set_venus_notice(LocalNoticeSource::Input, "Venus input queue is full");
+    model.set_venus_notice(LocalNoticeSource::Input, "Venus could not encode input");
     model.apply(ServerMessage::Accepted).unwrap();
-    assert_eq!(model.notice(), Some("Venus input queue is full"));
+    assert_eq!(model.notice(), Some("Venus could not encode input"));
     assert!(!model.clear_venus_notice(LocalNoticeSource::Resize));
-    assert!(model.clear_venus_notice(LocalNoticeSource::Input));
     model.set_venus_notice(LocalNoticeSource::Resize, "Window is too large");
-    assert!(!model.clear_venus_notice(LocalNoticeSource::Input));
-    assert!(model.clear_venus_notice(LocalNoticeSource::Resize));
     model.set_venus_notice(LocalNoticeSource::Queue, "Venus input queue is full");
-    assert!(!model.clear_venus_notice(LocalNoticeSource::Resize));
+    assert_eq!(model.notice(), Some("Venus input queue is full"));
     assert!(model.clear_venus_notice(LocalNoticeSource::Queue));
+    assert_eq!(model.notice(), Some("Window is too large"));
+    assert!(model.clear_venus_notice(LocalNoticeSource::Resize));
+    assert_eq!(model.notice(), Some("Venus could not encode input"));
+    assert!(model.clear_venus_notice(LocalNoticeSource::Input));
     model
         .apply(ServerMessage::Failure(Failure {
             code: FailureCode::InvalidInput,
@@ -146,7 +147,11 @@ fn notices_clear_only_from_their_source() {
         .unwrap();
     assert!(!model.clear_venus_notice(LocalNoticeSource::Input));
     assert_eq!(model.notice(), Some("Orbit rejected input: bad key"));
+    model.set_venus_notice(LocalNoticeSource::Queue, "Venus input queue is full");
+    assert_eq!(model.notice(), Some("Venus input queue is full"));
     model.apply(ServerMessage::Accepted).unwrap();
+    assert_eq!(model.notice(), Some("Venus input queue is full"));
+    assert!(model.clear_venus_notice(LocalNoticeSource::Queue));
     assert!(model.notice().is_none());
 }
 

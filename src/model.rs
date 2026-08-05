@@ -60,7 +60,7 @@ pub struct SessionModel {
     reducer: FrameReducer,
     scene: Option<Scene>,
     connection: ConnectionState,
-    notice: Option<Notice>,
+    notices: Vec<Notice>,
 }
 
 impl Default for SessionModel {
@@ -76,7 +76,7 @@ impl SessionModel {
             reducer: FrameReducer::default(),
             scene: None,
             connection: ConnectionState::Connecting,
-            notice: None,
+            notices: Vec::with_capacity(4),
         }
     }
 
@@ -92,7 +92,7 @@ impl SessionModel {
 
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
-        self.notice.as_ref().map(|notice| match notice {
+        self.notices.last().map(|notice| match notice {
             Notice::Orbit(detail) | Notice::Venus(_, detail) => detail.as_str(),
         })
     }
@@ -135,7 +135,7 @@ impl SessionModel {
         match message {
             ServerMessage::Attached { version } => {
                 self.connection = ConnectionState::Attached { version };
-                self.notice = None;
+                self.notices.clear();
                 Ok(())
             }
             ServerMessage::Frame(frame) => {
@@ -144,13 +144,12 @@ impl SessionModel {
                 Ok(())
             }
             ServerMessage::Accepted => {
-                if matches!(self.notice, Some(Notice::Orbit(_))) {
-                    self.notice = None;
-                }
+                self.clear_orbit_notice();
                 Ok(())
             }
             ServerMessage::Failure(failure) => {
-                self.notice = Some(Notice::Orbit(bounded(format!(
+                self.clear_orbit_notice();
+                self.notices.push(Notice::Orbit(bounded(format!(
                     "Orbit rejected input: {}",
                     failure.detail
                 ))));
@@ -158,7 +157,7 @@ impl SessionModel {
             }
             ServerMessage::Busy => {
                 self.connection = ConnectionState::Busy;
-                self.notice = None;
+                self.notices.clear();
                 Ok(())
             }
             ServerMessage::Incompatible {
@@ -169,12 +168,12 @@ impl SessionModel {
                     minimum: minimum_version,
                     maximum: maximum_version,
                 };
-                self.notice = None;
+                self.notices.clear();
                 Ok(())
             }
             ServerMessage::Exited { code } => {
                 self.connection = ConnectionState::Exited { code };
-                self.notice = None;
+                self.notices.clear();
                 Ok(())
             }
         }
@@ -187,22 +186,28 @@ impl SessionModel {
         self.connection = ConnectionState::Lost {
             detail: bounded(detail.into()),
         };
-        self.notice = None;
+        self.notices.clear();
     }
 
     pub fn set_venus_notice(&mut self, source: LocalNoticeSource, detail: impl Into<String>) {
         if self.is_terminal() {
             return;
         }
-        self.notice = Some(Notice::Venus(source, bounded(detail.into())));
+        self.clear_venus_notice(source);
+        self.notices
+            .push(Notice::Venus(source, bounded(detail.into())));
     }
 
     pub fn clear_venus_notice(&mut self, source: LocalNoticeSource) -> bool {
-        if !matches!(self.notice, Some(Notice::Venus(owner, _)) if owner == source) {
-            return false;
-        }
-        self.notice = None;
-        true
+        let previous_len = self.notices.len();
+        self.notices
+            .retain(|notice| !matches!(notice, Notice::Venus(owner, _) if *owner == source));
+        self.notices.len() != previous_len
+    }
+
+    fn clear_orbit_notice(&mut self) {
+        self.notices
+            .retain(|notice| !matches!(notice, Notice::Orbit(_)));
     }
 }
 
