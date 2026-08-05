@@ -160,9 +160,9 @@ impl InputState {
             MouseButton::Four
         } else if vertical < 0.0 {
             MouseButton::Five
-        } else if horizontal < 0.0 {
-            MouseButton::Six
         } else if horizontal > 0.0 {
+            MouseButton::Six
+        } else if horizontal < 0.0 {
             MouseButton::Seven
         } else {
             return None;
@@ -555,6 +555,22 @@ mod tests {
         assert!(input.move_pointer(-1.0, 0.0).is_none());
         assert!(input.move_pointer(f64::INFINITY, 0.0).is_none());
         assert!(input.move_pointer(f64::from(u16::MAX) + 1.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn maps_wheel_directions() {
+        let input = InputState::default();
+        for (horizontal, vertical, expected) in [
+            (0.0, 1.0, MouseButton::Four),
+            (0.0, -1.0, MouseButton::Five),
+            (1.0, 0.0, MouseButton::Six),
+            (-1.0, 0.0, MouseButton::Seven),
+        ] {
+            let Some(ClientMessage::Mouse(event)) = input.wheel(horizontal, vertical) else {
+                panic!("expected semantic wheel input");
+            };
+            assert_eq!(event.button, Some(expected));
+        }
     }
 
     #[test]
