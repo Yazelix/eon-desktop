@@ -22,8 +22,8 @@ use winit::{
     window::{Window, WindowId},
 };
 use yazelix_venus::{
-    Accessibility, ConnectionState, InputState, PresentOutcome, Renderer, SessionModel, Transport,
-    TransportEvent,
+    Accessibility, ConnectionState, InputState, LocalNoticeSource, PresentOutcome, Renderer,
+    SessionModel, Transport, TransportEvent,
 };
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
@@ -121,8 +121,10 @@ impl Application {
                 }
             }
             TransportEvent::InvalidInput(detail) => {
-                self.model
-                    .set_venus_notice(format!("Venus could not encode input: {detail}"));
+                self.model.set_venus_notice(
+                    LocalNoticeSource::Input,
+                    format!("Venus could not encode input: {detail}"),
+                );
             }
             TransportEvent::Lost(detail) => {
                 self.model.mark_lost(detail);
@@ -168,6 +170,11 @@ impl Application {
     }
 
     fn send(&mut self, message: ClientMessage) -> bool {
+        let notice_source = if matches!(&message, ClientMessage::Resize(_)) {
+            LocalNoticeSource::Resize
+        } else {
+            LocalNoticeSource::Input
+        };
         if !self.model.is_attached() {
             return false;
         }
@@ -175,11 +182,12 @@ impl Application {
             return false;
         };
         if let Err(error) = transport.send(message) {
-            self.model.set_venus_notice(error.to_string());
+            self.model
+                .set_venus_notice(notice_source, error.to_string());
             self.refresh_client_view();
             return false;
         }
-        if self.model.clear_venus_notice() {
+        if self.model.clear_venus_notice(notice_source) {
             self.refresh_client_view();
         }
         true
@@ -190,11 +198,14 @@ impl Application {
             return;
         };
         let Some(size) = surface_size(&state.renderer) else {
-            self.model
-                .set_venus_notice("Window dimensions exceed the accepted Orbit surface range");
+            self.model.set_venus_notice(
+                LocalNoticeSource::Resize,
+                "Window dimensions exceed the accepted Orbit surface range",
+            );
             return;
         };
-        if self.last_resize == Some(size) && !self.model.clear_venus_notice() {
+        if self.last_resize == Some(size) {
+            self.model.clear_venus_notice(LocalNoticeSource::Resize);
             return;
         }
         if self.send(ClientMessage::Resize(size)) {

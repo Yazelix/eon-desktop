@@ -43,7 +43,14 @@ impl Error for ModelError {
 #[derive(Debug)]
 enum Notice {
     Orbit(String),
-    Venus(String),
+    Venus(LocalNoticeSource, String),
+}
+
+/// Venus path allowed to resolve its own client-visible notice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalNoticeSource {
+    Input,
+    Resize,
 }
 
 /// The sole persistent owner of accepted presentation state in one client process.
@@ -85,7 +92,7 @@ impl SessionModel {
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_ref().map(|notice| match notice {
-            Notice::Orbit(detail) | Notice::Venus(detail) => detail.as_str(),
+            Notice::Orbit(detail) | Notice::Venus(_, detail) => detail.as_str(),
         })
     }
 
@@ -182,15 +189,15 @@ impl SessionModel {
         self.notice = None;
     }
 
-    pub fn set_venus_notice(&mut self, detail: impl Into<String>) {
+    pub fn set_venus_notice(&mut self, source: LocalNoticeSource, detail: impl Into<String>) {
         if self.is_terminal() {
             return;
         }
-        self.notice = Some(Notice::Venus(bounded(detail.into())));
+        self.notice = Some(Notice::Venus(source, bounded(detail.into())));
     }
 
-    pub fn clear_venus_notice(&mut self) -> bool {
-        if !matches!(self.notice, Some(Notice::Venus(_))) {
+    pub fn clear_venus_notice(&mut self, source: LocalNoticeSource) -> bool {
+        if !matches!(self.notice, Some(Notice::Venus(owner, _)) if owner == source) {
             return false;
         }
         self.notice = None;

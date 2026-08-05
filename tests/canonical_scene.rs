@@ -3,7 +3,7 @@ use orbit_protocol::{
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::{self, Failure, FailureCode, ServerMessage},
 };
-use yazelix_venus::{ConnectionState, ModelError, SessionModel};
+use yazelix_venus::{ConnectionState, LocalNoticeSource, ModelError, SessionModel};
 
 #[test]
 fn canonical_orbit_frame_becomes_one_deterministic_scene() {
@@ -116,7 +116,7 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
     assert!(attached.notice().is_none());
     attached.mark_lost("Orbit closed the local session");
     attached.mark_lost("late socket error");
-    attached.set_venus_notice("late input error");
+    attached.set_venus_notice(LocalNoticeSource::Input, "late input error");
     assert!(matches!(
         attached.connection(),
         ConnectionState::Lost { detail } if detail == "Orbit closed the local session"
@@ -125,19 +125,23 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
 }
 
 #[test]
-fn venus_and_orbit_notices_clear_only_from_their_owner() {
+fn notices_clear_only_from_their_source() {
     let mut model = attached_model();
-    model.set_venus_notice("Venus input queue is full");
+    model.set_venus_notice(LocalNoticeSource::Input, "Venus input queue is full");
     model.apply(ServerMessage::Accepted).unwrap();
     assert_eq!(model.notice(), Some("Venus input queue is full"));
-    assert!(model.clear_venus_notice());
+    assert!(!model.clear_venus_notice(LocalNoticeSource::Resize));
+    assert!(model.clear_venus_notice(LocalNoticeSource::Input));
+    model.set_venus_notice(LocalNoticeSource::Resize, "Window is too large");
+    assert!(!model.clear_venus_notice(LocalNoticeSource::Input));
+    assert!(model.clear_venus_notice(LocalNoticeSource::Resize));
     model
         .apply(ServerMessage::Failure(Failure {
             code: FailureCode::InvalidInput,
             detail: "bad key".into(),
         }))
         .unwrap();
-    assert!(!model.clear_venus_notice());
+    assert!(!model.clear_venus_notice(LocalNoticeSource::Input));
     assert_eq!(model.notice(), Some("Orbit rejected input: bad key"));
     model.apply(ServerMessage::Accepted).unwrap();
     assert!(model.notice().is_none());

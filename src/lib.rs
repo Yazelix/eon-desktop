@@ -11,7 +11,7 @@ mod transport;
 
 pub use accessibility::{Accessibility, Activation};
 pub use input::InputState;
-pub use model::{ConnectionState, ModelError, SessionModel};
+pub use model::{ConnectionState, LocalNoticeSource, ModelError, SessionModel};
 pub use render::{CellMetrics, PresentOutcome, RenderError, Renderer};
 pub use scene::{Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene};
 pub use transport::{SendError, Transport, TransportEvent};
