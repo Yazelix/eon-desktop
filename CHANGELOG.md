@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Render one accepted Orbit session in a native Linux window with styled
-  Unicode text, cursor state, and derived accessibility content.
+- Render one accepted Orbit session in a native Linux window with styled Unicode
+  text, stable blink timing, cursor state, and derived accessibility content.
 - Send semantic keyboard, input-method, pointer, focus, and resize events to
   Orbit, preserving active keyboard layouts, mapping all four wheel directions,
   keeping held-button pairs coherent across presentation and queue recovery,

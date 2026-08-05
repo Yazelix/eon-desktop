@@ -27,6 +27,7 @@ use yazelix_venus::{
 };
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug)]
 enum UserEvent {
@@ -58,7 +59,7 @@ struct Application {
     scene_presented: bool,
     render_notice: Option<String>,
     blink_visible: bool,
-    next_blink: Instant,
+    next_blink: Option<Instant>,
 }
 
 impl Application {
@@ -74,7 +75,7 @@ impl Application {
             scene_presented: false,
             render_notice: None,
             blink_visible: true,
-            next_blink: Instant::now() + Duration::from_millis(500),
+            next_blink: None,
         }
     }
 
@@ -405,22 +406,39 @@ impl ApplicationHandler<UserEvent> for Application {
             .model
             .scene()
             .is_some_and(|scene| scene.has_blinking_content());
-        if !blinking {
-            self.blink_visible = true;
-            event_loop.set_control_flow(ControlFlow::Wait);
-            return;
+        if update_blink(
+            blinking,
+            &mut self.blink_visible,
+            &mut self.next_blink,
+            Instant::now(),
+        ) && let Some(state) = &self.window
+        {
+            state.window.request_redraw();
         }
-
-        let now = Instant::now();
-        if now >= self.next_blink {
-            self.blink_visible = !self.blink_visible;
-            self.next_blink = now + Duration::from_millis(500);
-            if let Some(state) = &self.window {
-                state.window.request_redraw();
-            }
-        }
-        event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_blink));
+        event_loop.set_control_flow(
+            self.next_blink
+                .map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
+        );
     }
+}
+
+fn update_blink(
+    blinking: bool,
+    visible: &mut bool,
+    deadline: &mut Option<Instant>,
+    now: Instant,
+) -> bool {
+    if !blinking {
+        *visible = true;
+        *deadline = None;
+    } else if deadline.is_none() {
+        *deadline = Some(now + BLINK_INTERVAL);
+    } else if deadline.is_some_and(|next| now >= next) {
+        *visible = !*visible;
+        *deadline = Some(now + BLINK_INTERVAL);
+        return true;
+    }
+    false
 }
 
 fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
@@ -505,5 +523,17 @@ mod tests {
         assert!(surface_size(PhysicalSize::new(25, 600), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(960, 25), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(u32::from(u16::MAX) + 1, 600), metrics).is_none());
+    }
+
+    #[test]
+    fn blinking_starts_with_a_complete_visible_phase_after_idle() {
+        let now = Instant::now();
+        let mut visible = false;
+        let mut deadline = Some(now);
+
+        assert!(!update_blink(false, &mut visible, &mut deadline, now));
+        assert_eq!((visible, deadline), (true, None));
+        assert!(!update_blink(true, &mut visible, &mut deadline, now));
+        assert_eq!((visible, deadline), (true, Some(now + BLINK_INTERVAL)));
     }
 }
