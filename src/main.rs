@@ -3,7 +3,7 @@
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
 use orbit_protocol::{
     MAX_CELLS,
-    session::{ClientMessage, FocusEvent, SurfaceSize},
+    session::{ClientMessage, SurfaceSize},
 };
 use std::{
     env,
@@ -318,11 +318,9 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::Focused(focused) => {
-                self.send(ClientMessage::Focus(if focused {
-                    FocusEvent::Gained
-                } else {
-                    FocusEvent::Lost
-                }));
+                let message = self.input.focus(focused);
+                self.send(message);
+                self.refresh_client_view();
             }
             WindowEvent::CursorMoved { position, .. } if self.scene_presented => {
                 if let Some(message) = self.input.move_pointer(position.x, position.y) {

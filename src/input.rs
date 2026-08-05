@@ -1,6 +1,6 @@
 use orbit_protocol::session::{
-    ClientMessage, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton, MouseEvent,
-    PhysicalKey,
+    ClientMessage, FocusEvent, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton,
+    MouseEvent, PhysicalKey,
 };
 use winit::{
     event::{ElementState, Ime, KeyEvent as WinitKeyEvent},
@@ -38,6 +38,19 @@ impl InputState {
         &self.preedit
     }
 
+    pub fn focus(&mut self, focused: bool) -> ClientMessage {
+        if !focused {
+            self.modifiers = Modifiers::empty();
+            self.pressed_button = None;
+            self.clear_composition();
+        }
+        ClientMessage::Focus(if focused {
+            FocusEvent::Gained
+        } else {
+            FocusEvent::Lost
+        })
+    }
+
     #[must_use]
     pub fn key(&self, event: &WinitKeyEvent) -> ClientMessage {
         let code = match event.physical_key {
@@ -64,8 +77,7 @@ impl InputState {
         match event {
             Ime::Enabled => None,
             Ime::Disabled => {
-                self.composing = false;
-                self.preedit.clear();
+                self.clear_composition();
                 None
             }
             Ime::Preedit(text, _) => {
@@ -73,14 +85,8 @@ impl InputState {
                 self.preedit = text;
                 None
             }
-            Ime::Commit(text) if text.is_empty() => {
-                self.composing = false;
-                self.preedit.clear();
-                None
-            }
             Ime::Commit(text) => {
-                self.composing = false;
-                self.preedit.clear();
+                self.clear_composition();
                 let text = key_text(&text)?;
                 Some(ClientMessage::Key(KeyEvent {
                     action: KeyAction::Press,
@@ -93,6 +99,11 @@ impl InputState {
                 }))
             }
         }
+    }
+
+    fn clear_composition(&mut self) {
+        self.composing = false;
+        self.preedit.clear();
     }
 
     pub fn move_pointer(&mut self, x: f64, y: f64) -> Option<ClientMessage> {
@@ -441,6 +452,23 @@ mod tests {
         assert_eq!(event.text.as_deref(), Some("啊"));
         assert!(!event.composing);
         assert!(input.preedit().is_empty());
+    }
+
+    #[test]
+    fn focus_loss_clears_transient_native_input_state() {
+        let mut input = InputState::default();
+        input.set_modifiers(ModifiersState::CONTROL);
+        input.ime(Ime::Preedit("compose".into(), None));
+        input.mouse_button(ElementState::Pressed, winit::event::MouseButton::Left);
+
+        assert_eq!(input.focus(false), ClientMessage::Focus(FocusEvent::Lost));
+        assert!(input.preedit().is_empty());
+        assert!(!input.composing);
+        let Some(ClientMessage::Mouse(event)) = input.move_pointer(10.0, 20.0) else {
+            panic!("expected semantic pointer motion");
+        };
+        assert_eq!(event.button, None);
+        assert_eq!(event.modifiers, Modifiers::empty());
     }
 
     #[test]
