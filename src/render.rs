@@ -306,7 +306,7 @@ impl Renderer {
         blink_visible: bool,
         preedit: &str,
     ) -> Result<PresentOutcome, RenderError> {
-        self.rebuild_if_needed(scene, status, blink_visible, preedit)?;
+        self.rebuild_if_needed(scene, status, blink_visible, preedit);
         self.viewport.update(
             &self.queue,
             Resolution {
@@ -414,7 +414,7 @@ impl Renderer {
         status: &str,
         blink_visible: bool,
         preedit: &str,
-    ) -> Result<(), RenderError> {
+    ) {
         let key = ContentKey {
             revision: scene.map(|scene| scene.revision),
             blink_visible,
@@ -422,7 +422,7 @@ impl Renderer {
             status: status.to_owned(),
         };
         if self.content_key.as_ref() == Some(&key) {
-            return Ok(());
+            return;
         }
 
         self.text.clear();
@@ -479,7 +479,6 @@ impl Renderer {
         }
         self.upload_vertices(&rectangles.bytes);
         self.content_key = Some(key);
-        Ok(())
     }
 
     fn build_scene_text(&mut self, scene: &Scene, blink_visible: bool) {
