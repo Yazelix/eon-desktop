@@ -88,7 +88,6 @@ impl CellMetrics {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PresentOutcome {
     Presented,
-    Retry,
     Deferred,
     Recovered,
 }
@@ -345,7 +344,10 @@ impl Renderer {
 
         let frame = match self.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
-            CurrentSurfaceTexture::Timeout => return Ok(PresentOutcome::Retry),
+            CurrentSurfaceTexture::Timeout => {
+                self.window.request_redraw();
+                return Ok(PresentOutcome::Deferred);
+            }
             CurrentSurfaceTexture::Occluded => return Ok(PresentOutcome::Deferred),
             CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);

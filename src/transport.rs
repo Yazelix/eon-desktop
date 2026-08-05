@@ -5,7 +5,11 @@ use std::{
     net::Shutdown,
     os::unix::net::UnixStream,
     path::PathBuf,
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
 };
 
@@ -35,22 +39,17 @@ impl fmt::Display for SendError {
 
 impl std::error::Error for SendError {}
 
-enum Command {
-    Message(ClientMessage),
-    Stop,
-}
-
 /// Bounded typed input handle for one transient Orbit attachment.
 pub struct Transport {
-    commands: mpsc::SyncSender<Command>,
+    messages: mpsc::SyncSender<ClientMessage>,
 }
 
 impl Transport {
     /// Connect on a worker thread and report decoded server messages through `notify`.
     #[must_use]
     pub fn start(socket: PathBuf, notify: impl Fn(TransportEvent) + Send + Sync + 'static) -> Self {
-        let (commands, receiver) = mpsc::sync_channel(256);
-        let notify = Arc::new(notify);
+        let (messages, receiver) = mpsc::sync_channel(256);
+        let notify = notifier(notify);
         if let Err(error) = thread::Builder::new()
             .name("venus-orbit-reader".into())
             .spawn({
@@ -62,13 +61,13 @@ impl Transport {
                 "Cannot start the Orbit transport worker: {error}"
             )));
         }
-        Self { commands }
+        Self { messages }
     }
 
     /// Queue one canonical Orbit message without blocking the native event loop.
     pub fn send(&self, message: ClientMessage) -> Result<(), SendError> {
-        self.commands
-            .try_send(Command::Message(message))
+        self.messages
+            .try_send(message)
             .map_err(|error| match error {
                 mpsc::TrySendError::Full(_) => SendError::Full,
                 mpsc::TrySendError::Disconnected(_) => SendError::Closed,
@@ -76,15 +75,21 @@ impl Transport {
     }
 }
 
-impl Drop for Transport {
-    fn drop(&mut self) {
-        let _ = self.commands.try_send(Command::Stop);
-    }
+fn notifier(
+    notify: impl Fn(TransportEvent) + Send + Sync + 'static,
+) -> Arc<dyn Fn(TransportEvent) + Send + Sync> {
+    let lost = AtomicBool::new(false);
+    Arc::new(move |event| {
+        if matches!(&event, TransportEvent::Lost(_)) && lost.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        notify(event);
+    })
 }
 
 fn run(
     socket: PathBuf,
-    receiver: mpsc::Receiver<Command>,
+    receiver: mpsc::Receiver<ClientMessage>,
     notify: Arc<dyn Fn(TransportEvent) + Send + Sync>,
 ) {
     let mut stream = match UnixStream::connect(&socket) {
@@ -152,26 +157,18 @@ fn run(
 
 fn write_loop(
     mut stream: UnixStream,
-    receiver: mpsc::Receiver<Command>,
+    receiver: mpsc::Receiver<ClientMessage>,
     notify: Arc<dyn Fn(TransportEvent) + Send + Sync>,
 ) {
-    while let Ok(command) = receiver.recv() {
-        match command {
-            Command::Message(message) => {
-                if let Err(error) = write_message(&mut stream, &message) {
-                    let event = if error.kind() == std::io::ErrorKind::InvalidInput {
-                        TransportEvent::InvalidInput(error.to_string())
-                    } else {
-                        TransportEvent::Lost(format!("Cannot send input to Orbit: {error}"))
-                    };
-                    notify(event);
-                    if error.kind() != std::io::ErrorKind::InvalidInput {
-                        let _ = stream.shutdown(Shutdown::Both);
-                        return;
-                    }
-                }
-            }
-            Command::Stop => {
+    while let Ok(message) = receiver.recv() {
+        if let Err(error) = write_message(&mut stream, &message) {
+            let event = if error.kind() == std::io::ErrorKind::InvalidInput {
+                TransportEvent::InvalidInput(error.to_string())
+            } else {
+                TransportEvent::Lost(format!("Cannot send input to Orbit: {error}"))
+            };
+            notify(event);
+            if error.kind() != std::io::ErrorKind::InvalidInput {
                 let _ = stream.shutdown(Shutdown::Both);
                 return;
             }
@@ -245,6 +242,21 @@ mod tests {
             SendError::Closed.to_string(),
             "Venus input channel is closed"
         );
+    }
+
+    #[test]
+    fn first_terminal_loss_keeps_its_specific_cause() {
+        let (events, receiver) = mpsc::channel();
+        let notify = notifier(move |event| events.send(event).unwrap());
+
+        notify(TransportEvent::Lost("writer failed".into()));
+        notify(TransportEvent::Lost("socket closed".into()));
+
+        assert_eq!(
+            receiver.recv().unwrap(),
+            TransportEvent::Lost("writer failed".into())
+        );
+        assert!(receiver.try_recv().is_err());
     }
 
     #[test]

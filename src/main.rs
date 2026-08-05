@@ -245,7 +245,6 @@ impl Application {
                 self.scene_presented =
                     self.model.scene().is_some() && surface_size(&state.renderer).is_some();
             }
-            Ok(PresentOutcome::Retry) => state.window.request_redraw(),
             Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Recovered) => {
                 self.scene_presented = false;
