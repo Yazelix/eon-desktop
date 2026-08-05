@@ -5,11 +5,7 @@ use std::{
     net::Shutdown,
     os::unix::net::UnixStream,
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::{Arc, Mutex, mpsc},
     thread,
 };
 
@@ -78,11 +74,13 @@ impl Transport {
 fn notifier(
     notify: impl Fn(TransportEvent) + Send + Sync + 'static,
 ) -> Arc<dyn Fn(TransportEvent) + Send + Sync> {
-    let lost = AtomicBool::new(false);
+    let stopped = Mutex::new(false);
     Arc::new(move |event| {
-        if matches!(&event, TransportEvent::Lost(_)) && lost.swap(true, Ordering::Relaxed) {
+        let mut stopped = stopped.lock().expect("transport notifier lock poisoned");
+        if *stopped {
             return;
         }
+        *stopped = matches!(&event, TransportEvent::Lost(_));
         notify(event);
     })
 }
@@ -245,12 +243,14 @@ mod tests {
     }
 
     #[test]
-    fn first_terminal_loss_keeps_its_specific_cause() {
+    fn first_terminal_loss_is_the_final_transport_event() {
         let (events, receiver) = mpsc::channel();
         let notify = notifier(move |event| events.send(event).unwrap());
 
         notify(TransportEvent::Lost("writer failed".into()));
         notify(TransportEvent::Lost("socket closed".into()));
+        notify(TransportEvent::InvalidInput("late input error".into()));
+        notify(TransportEvent::Server(ServerMessage::Accepted));
 
         assert_eq!(
             receiver.recv().unwrap(),
