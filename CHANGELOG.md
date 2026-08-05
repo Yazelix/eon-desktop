@@ -8,3 +8,5 @@
   Orbit without owning the session or PTY.
 - Explain bounded attachment, protocol, frame, input, and connection failures
   in the client window.
+- Preserve resize and pointer readiness across queue and surface failures, and
+  render Orbit colors in the surface's declared color space.
