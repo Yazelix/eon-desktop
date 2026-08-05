@@ -16,18 +16,16 @@ pub enum ConnectionState {
 /// A message violated the accepted local-session order or frame sequence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ModelError {
-    MessageBeforeAttachment,
-    DuplicateAttachment,
+    UnexpectedMessage,
     Frame(orbit_protocol::Error),
 }
 
 impl fmt::Display for ModelError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MessageBeforeAttachment => {
-                formatter.write_str("Orbit sent presentation state before attachment")
+            Self::UnexpectedMessage => {
+                formatter.write_str("Orbit sent a local-session message out of order")
             }
-            Self::DuplicateAttachment => formatter.write_str("Orbit attached the session twice"),
             Self::Frame(error) => write!(formatter, "Orbit frame rejected: {error}"),
         }
     }
@@ -88,20 +86,43 @@ impl SessionModel {
         matches!(self.connection, ConnectionState::Attached { .. })
     }
 
+    #[must_use]
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self.connection,
+            ConnectionState::Busy
+                | ConnectionState::Incompatible { .. }
+                | ConnectionState::Lost { .. }
+                | ConnectionState::Exited { .. }
+        )
+    }
+
     pub fn apply(&mut self, message: ServerMessage) -> Result<(), ModelError> {
+        let in_order = match &message {
+            ServerMessage::Attached { .. }
+            | ServerMessage::Busy
+            | ServerMessage::Incompatible { .. } => {
+                matches!(self.connection, ConnectionState::Connecting)
+            }
+            ServerMessage::Frame(_) | ServerMessage::Accepted | ServerMessage::Exited { .. } => {
+                self.is_attached()
+            }
+            ServerMessage::Failure(_) => matches!(
+                self.connection,
+                ConnectionState::Connecting | ConnectionState::Attached { .. }
+            ),
+        };
+        if !in_order {
+            return Err(ModelError::UnexpectedMessage);
+        }
+
         match message {
             ServerMessage::Attached { version } => {
-                if !matches!(self.connection, ConnectionState::Connecting) {
-                    return Err(ModelError::DuplicateAttachment);
-                }
                 self.connection = ConnectionState::Attached { version };
                 self.notice = None;
                 Ok(())
             }
             ServerMessage::Frame(frame) => {
-                if !self.is_attached() {
-                    return Err(ModelError::MessageBeforeAttachment);
-                }
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
                 self.notice = None;
@@ -140,6 +161,9 @@ impl SessionModel {
     }
 
     pub fn mark_lost(&mut self, detail: impl Into<String>) {
+        if self.is_terminal() {
+            return;
+        }
         self.connection = ConnectionState::Lost {
             detail: bounded(detail.into()),
         };
@@ -147,6 +171,9 @@ impl SessionModel {
     }
 
     pub fn set_notice(&mut self, detail: impl Into<String>) {
+        if self.is_terminal() {
+            return;
+        }
         self.notice = Some(bounded(detail.into()));
     }
 }

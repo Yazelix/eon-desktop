@@ -77,7 +77,9 @@ fn a_new_attachment_replaces_state_without_a_compatibility_window() {
 fn attachment_and_server_failures_are_explicit_and_bounded() {
     let mut busy = SessionModel::new();
     busy.apply(ServerMessage::Busy).unwrap();
+    busy.mark_lost("late socket close");
     assert_eq!(busy.connection(), &ConnectionState::Busy);
+    assert!(busy.is_terminal());
 
     let mut incompatible = SessionModel::new();
     incompatible
@@ -93,8 +95,10 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
             maximum: 3
         }
     );
+    assert!(incompatible.is_terminal());
 
     let mut attached = attached_model();
+    assert!(!attached.is_terminal());
     attached
         .apply(ServerMessage::Failure(Failure {
             code: FailureCode::InvalidInput,
@@ -105,10 +109,13 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
     assert!(notice.starts_with("Orbit rejected input: "));
     assert_eq!(notice.chars().count(), 1_025);
     attached.mark_lost("Orbit closed the local session");
+    attached.mark_lost("late socket error");
+    attached.set_notice("late input error");
     assert!(matches!(
         attached.connection(),
         ConnectionState::Lost { detail } if detail == "Orbit closed the local session"
     ));
+    assert!(attached.notice().is_none());
 }
 
 #[test]
@@ -124,9 +131,20 @@ fn invalid_session_and_frame_bytes_never_reach_draw_state() {
         model
             .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Primary))))
             .unwrap_err(),
-        ModelError::MessageBeforeAttachment
+        ModelError::UnexpectedMessage
     );
     assert!(model.scene().is_none());
+
+    assert_eq!(
+        model.apply(ServerMessage::Accepted).unwrap_err(),
+        ModelError::UnexpectedMessage
+    );
+    let mut attached = attached_model();
+    assert_eq!(
+        attached.apply(ServerMessage::Busy).unwrap_err(),
+        ModelError::UnexpectedMessage
+    );
+    assert!(attached.is_attached());
 }
 
 fn attached_model() -> SessionModel {

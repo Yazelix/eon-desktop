@@ -125,15 +125,11 @@ impl Application {
                     .set_notice(format!("Venus could not encode input: {detail}"));
             }
             TransportEvent::Lost(detail) => {
-                if !matches!(
-                    self.model.connection(),
-                    ConnectionState::Busy
-                        | ConnectionState::Incompatible { .. }
-                        | ConnectionState::Exited { .. }
-                ) {
-                    self.model.mark_lost(detail);
-                }
+                self.model.mark_lost(detail);
             }
+        }
+        if self.model.is_terminal() {
+            self.transport = None;
         }
         self.refresh_client_view();
     }

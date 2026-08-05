@@ -8,25 +8,13 @@ use winit::{
 };
 
 /// Stateful translation from native events to Orbit-owned semantic values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InputState {
     modifiers: Modifiers,
     composing: bool,
     preedit: String,
     cursor: (f32, f32),
     pressed_button: Option<MouseButton>,
-}
-
-impl Default for InputState {
-    fn default() -> Self {
-        Self {
-            modifiers: Modifiers::empty(),
-            composing: false,
-            preedit: String::new(),
-            cursor: (0.0, 0.0),
-            pressed_button: None,
-        }
-    }
 }
 
 impl InputState {
