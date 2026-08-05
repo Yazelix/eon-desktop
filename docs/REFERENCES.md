@@ -48,28 +48,46 @@ on acting for a named provider. Inspection does not authorize copying,
 adaptation, redistribution, incorporation, or dependency selection, which
 remain separate license and user-approval gates.
 
-## Crate-gate comparisons
+## Selected crate evidence and comparisons
 
-- [winit](https://github.com/rust-windowing/winit) is a window and native-event
-  candidate.
-- [wgpu](https://github.com/gfx-rs/wgpu) is a GPU abstraction candidate.
-- [glyphon](https://github.com/grovesNL/glyphon) and
-  [cosmic-text](https://github.com/pop-os/cosmic-text) are text and shaping
-  candidates.
+- [winit 0.30.13](https://docs.rs/winit/0.30.13/winit/) owns the window and
+  native-event boundary. Its
+  [`EventLoopProxy`](https://docs.rs/winit/0.30.13/winit/event_loop/struct.EventLoopProxy.html)
+  carries typed wakeups from transport work into the application loop.
+- [wgpu 30.0.0](https://docs.rs/wgpu/30.0.0/wgpu/) owns GPU access. Its
+  [`CurrentSurfaceTexture`](https://docs.rs/wgpu/30.0.0/wgpu/enum.CurrentSurfaceTexture.html)
+  distinguishes success, occlusion, timeout, outdated configuration, and loss
+  for bounded renderer recovery.
+- [glyphon 0.12.0](https://docs.rs/glyphon/0.12.0/glyphon/) integrates text
+  preparation, clipping, raster caches, and mask or color atlases with wgpu 30.
+  Its [cosmic-text 0.19.0](https://docs.rs/cosmic-text/0.19.0/cosmic_text/)
+  re-export supplies advanced shaping and font fallback. Corpus and native
+  checks must still prove terminal-cell fidelity and atlas failure behavior.
 - [Sugarloaf](https://github.com/raphamorim/rio/tree/main/sugarloaf) is
   conditional on a demonstrated need for its renderer shape.
-- [AccessKit](https://github.com/AccessKit/accesskit) is the native
-  accessibility candidate and must share the presented scene revision rather
-  than becoming an independent presentation model.
+- [AccessKit 0.24.1](https://docs.rs/accesskit/0.24.1/accesskit/) and
+  [accesskit_winit 0.33.2](https://docs.rs/accesskit_winit/0.33.2/accesskit_winit/)
+  own native accessibility adaptation. The
+  [`ActivationHandler`](https://docs.rs/accesskit/0.24.1/accesskit/trait.ActivationHandler.html)
+  requires a real tree by the next display refresh even when the application
+  would skip rendering. Venus derives that tree from the accepted scene;
+  pointer hit testing follows the last-presented scene.
+- [softbuffer 0.4.8](https://docs.rs/softbuffer/0.4.8/softbuffer/) remains the
+  software comparison. Its CPU buffer supports damage on selected platforms,
+  while AppKit presentation requires a blocking copy.
+- [Vello 0.9.0](https://docs.rs/vello/0.9.0/vello/) with
+  [Parley 0.11.0](https://docs.rs/parley/0.11.0/parley/) remains the rich-vector
+  comparison. Vello identifies its renderer as alpha and requires GPU compute;
+  Parley supplies broader rich-text layout than the accepted grid needs.
 
 Compare complete ownership shapes, not isolated crates. The gate measures text
 correctness, input methods, accessibility, Linux behavior, macOS feasibility,
 future browser implications, owned LOC, dependency/build cost, and maintenance.
 
-`ven-upt.1` recommends, but does not select, exact-revision Orbit protocol
-consumption with winit 0.30.13, wgpu 30.0.0, glyphon 0.12.0 and its cosmic-text
-0.19.0 re-export, AccessKit 0.24.1 with accesskit_winit 0.33.2, and pollster
-1.0.1. The user must accept that recommendation before a manifest edit.
+The user selected exact-revision Orbit protocol consumption with winit 0.30.13,
+wgpu 30.0.0, glyphon 0.12.0 and its cosmic-text 0.19.0 re-export, AccessKit
+0.24.1 with accesskit_winit 0.33.2, and pollster 1.0.1. No manifest edit or
+product implementation begins until the user activates `ven-upt.2`.
 
 ## Rejected initial routing
 

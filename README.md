@@ -7,10 +7,9 @@ interaction back to the authoritative session runtime.
 ## Status
 
 This repository contains plans and contracts only. Orbit's governance handoff
-is closed, and `ven-upt.1` completed the first architecture and dependency
-comparison. Its winit, wgpu, glyphon, and AccessKit recommendation is not a
-selection: product implementation remains gated on explicit user acceptance
-and activation of `ven-upt.2`.
+is closed, and the user selected the `ven-upt.1` winit, wgpu, glyphon, and
+AccessKit architecture. Product implementation remains gated on explicit
+activation of `ven-upt.2`.
 
 The first target is deliberately narrow: one Linux window attached to one
 already-running local Orbit session. The client renders the accepted Orbit
@@ -34,9 +33,9 @@ return to Orbit instead of becoming Venus compatibility code.
 
 - [`docs/CONTRACTS.md`](docs/CONTRACTS.md) indexes Venus behavior and proof.
 - [`docs/REFERENCES.md`](docs/REFERENCES.md) routes rendering and composition
-  research before code shape is chosen.
+  evidence required before implementation.
 - [`docs/CRATES.md`](docs/CRATES.md) records the measured dependency
-  recommendation; no graphical stack is selected yet.
+  selection and ranked alternatives; no manifest exists yet.
 - Beads contain the gated implementation plan.
 
 ```sh
@@ -58,8 +57,8 @@ Beads data, lock files, and generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 207 |
-| README | 65 |
-| Contracts and references | 97 |
-| Crate decisions | 60 |
+| README | 64 |
+| Contracts and references | 115 |
+| Crate decisions | 85 |
 | Changelog | 5 |
-| **Total** | **434** |
+| **Total** | **476** |

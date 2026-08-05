@@ -8,10 +8,10 @@ Astra owns product orchestration, policy, composition, and distribution.
 ## Status
 
 This repository holds plans and contracts. Orbit's governance gate is closed,
-and `ven-upt.1` completed its architecture and dependency recommendation.
+and the user accepted the `ven-upt.1` architecture and dependency selection.
 Product implementation remains inactive: do not add a Cargo package, graphical
-code, dependencies, CI, packaging, or release automation until the user accepts
-that recommendation and explicitly activates `ven-upt.2`.
+code, dependencies, CI, packaging, or release automation until the user
+explicitly activates `ven-upt.2`.
 
 ## Core rule
 

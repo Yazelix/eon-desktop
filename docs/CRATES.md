@@ -1,15 +1,15 @@
 # Venus crate decisions
 
-No dependency is selected and no Venus manifest exists. `ven-upt.1` completed
-the comparison below and recommends one shape; explicit user acceptance is
-still required before its status changes to selected or any manifest is added.
+`ven-upt.1` records the user-selected thin winit, wgpu, glyphon, and AccessKit
+shape. No Venus manifest exists. Dependency installation and product work
+remain gated on explicit activation of `ven-upt.2`.
 
-| Boundary | Recommended shape | Status | Owner consequence |
+| Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
-| Orbit protocol consumer | Exact Git revision `838b67652c4df1979e599b9c401ee664ffac66bd` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Orbit boundary accepted; Venus dependency awaiting approval | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
-| Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Recommended; awaiting approval | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
-| GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Recommended; awaiting approval | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
-| Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Recommended; awaiting approval | Venus derives the accessibility tree from the same immutable, revision-tagged scene that supplies draw and hit inputs. |
+| Orbit protocol consumer | Exact Git revision `838b67652c4df1979e599b9c401ee664ffac66bd` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Selected; manifest gated on activation | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
+| Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Selected; manifest gated on activation | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
+| GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Selected; manifest gated on activation | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
+| Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Selected; manifest gated on activation | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
 
 ## Measured comparison
 
@@ -19,12 +19,30 @@ tree counts are unique Linux normal/build output lines.
 
 | Complete shape | Exact releases | Lock packages | Linux tree | Disposition |
 |---|---|---:|---:|---|
-| winit + wgpu + glyphon + AccessKit | 0.30.13, 30.0.0, 0.12.0, 0.24.1/0.33.2 | 324 | 267 | Recommended. Four packages over the owned-atlas shape remove its highest-risk custom subsystem. |
-| winit + wgpu + cosmic-text + owned atlas | 0.30.13, 30.0.0, 0.19.0 | 320 | 262 | Rejected initially. It adds an estimated 700–1,200 specialized atlas, shader, upload, and cache LOC. |
-| winit + softbuffer + cosmic-text + tiny-skia + AccessKit | 0.30.13, 0.4.8, 0.19.0, 0.12.0 | 297 | 232 | Rejected initially. It makes HiDPI composition and full-frame upload CPU work and weakens the intended GPU path. |
-| winit + Vello + Parley + AccessKit | 0.30.13, 0.9.0, 0.11.0 | 336 | 301 | Rejected. It imports general vector/rich-layout policy, ICU and native fontconfig, and currently uses wgpu 29 rather than 30. |
+| winit + wgpu + glyphon + AccessKit | 0.30.13, 30.0.0, 0.12.0, 0.24.1/0.33.2 | 324 | 267 | Selected. Four packages over the owned-atlas shape remove its highest-risk custom subsystem. |
+| winit + wgpu + cosmic-text + owned atlas | 0.30.13, 30.0.0, 0.19.0 | 320 | 262 | Text fallback only. It adds an estimated 700–1,200 specialized atlas, shader, upload, and cache LOC. |
+| winit + softbuffer + cosmic-text + tiny-skia + AccessKit | 0.30.13, 0.4.8, 0.19.0, 0.12.0 | 297 | 232 | Rejected as the primary renderer. It makes HiDPI composition and full-frame upload CPU work and weakens the intended GPU path. |
+| winit + Vello + Parley + AccessKit | 0.30.13, 0.9.0, 0.11.0 | 336 | 301 | Rejected. It imports general vector/rich-layout policy, ICU and native fontconfig, and uses wgpu 29 rather than 30. |
 
-All four shapes passed `cargo check --locked`. The recommended features avoid
+## Ranked tradeoffs
+
+1. **winit + wgpu + glyphon + AccessKit** best fits the first Venus slice.
+   Glyphon removes the risky custom atlas while preserving a narrow scene and
+   renderer seam. The costs are a 324-package lock, wgpu device and surface
+   recovery, and a required native proof for glyph fidelity and redraw latency.
+2. **winit + wgpu + cosmic-text + an owned atlas** gives Venus control over
+   cell placement, cache policy, uploads, and batching. It saves four lock
+   packages but adds an estimated 700–1,200 specialized GPU and cache LOC. Use
+   it only after a focused glyphon failure.
+3. **winit + softbuffer + cosmic-text + tiny-skia + AccessKit** removes the GPU
+   requirement and exposes a direct CPU framebuffer with damage support. CPU
+   rasterization, HiDPI bandwidth, platform-dependent presentation copies, and
+   a later renderer replacement make it weaker as the product architecture.
+4. **winit + Vello + Parley + AccessKit** offers a rich vector scene and text
+   layout foundation. Its alpha renderer, compute requirement, wgpu version
+   skew, and general UI policy exceed the accepted one-window surface.
+
+All four shapes passed `cargo check --locked`. The selected features avoid
 wgpu defaults: Linux starts with Vulkan, macOS remains credible through Metal,
 and GLES is conditional on a measured compatibility failure. X11, Wayland,
 xkbcommon, the Vulkan loader/driver, font discovery, and AT-SPI/D-Bus are the
@@ -40,14 +58,21 @@ authority or demo-grade game rendering. A completely owned stack would
 duplicate windowing, GPU, shaping, font fallback, accessibility, and future
 macOS work.
 
-## Proposed owner seam
+## Selected owner seam
 
 One pure scene reducer maps canonical complete Orbit frames to immutable,
 revision-tagged quads, exact grapheme runs, cursor data, approved hit geometry,
 and accessibility inputs. It owns no socket, window, GPU, or terminal handle.
-The native host maps winit events only into `orbit-protocol` values. The
-renderer consumes scenes and advances candidate scene, hit, and accessibility
-state to last-presented state only after a successful present.
+The native host maps winit events only into `orbit-protocol` values, keeps
+transport outside the renderer, and sends typed wakeups through
+`EventLoopProxy`. The selected shape adds no general async application runtime.
+
+Venus derives drawing, accessibility, and deterministic contract snapshots from
+the latest accepted scene. After a successful GPU present, the renderer
+advances a separate last-presented revision and its pointer hit geometry.
+AccessKit may publish the accepted scene while the surface is occluded or
+recovering because assistive technology must not wait for GPU presentation.
+Both views derive from the same scene and keep no independent content model.
 
 The first slice rebuilds and redraws the complete scene. Damage is derived only
 after measurement and never becomes wire state. Expected owned size is
