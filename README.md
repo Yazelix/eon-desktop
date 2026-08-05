@@ -6,16 +6,11 @@ interaction back to the authoritative session runtime.
 
 ## Status
 
-This repository contains plans and contracts only. Orbit's governance handoff
-is closed, and the user selected the `ven-upt.1` winit, wgpu, glyphon, and
-AccessKit architecture. Product implementation remains gated on explicit
-activation of `ven-upt.2`.
-
-The first target is deliberately narrow: one Linux window attached to one
-already-running local Orbit session. The client renders the accepted Orbit
-frame contract, sends semantic input and resize events, can detach without
-ending the Orbit session, and reports bounded attachment or server failures. It
-does not own a PTY or terminal emulator.
+Venus implements one Linux window attached to one already-running local Orbit
+session. It renders the accepted Orbit frame contract, sends semantic native
+input and resize events, detaches without ending the Orbit session, and reports
+bounded attachment or server failures. It does not own a PTY or terminal
+emulator.
 
 ## Ownership
 
@@ -25,22 +20,38 @@ Venus          -> native presentation, interaction, client failure UX
 Orbit          -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes the accepted Orbit `ORB-C4`, `ORB-C5`, and `ORB-C6` boundary and
-preserves Orbit's session, authority, and one-client contracts. Contract gaps
-return to Orbit instead of becoming Venus compatibility code.
+Venus consumes `orbit-protocol` 0.1.0, ORBF v1, and ORBS v1 at exact Orbit proof
+`c905bf9610581747f1b07565814b501ca66cfaa6`. One reducer turns complete canonical
+frames into immutable scene data used by drawing and accessibility. The native
+host owns the local socket, window, input mapping, and redraw lifecycle; it owns
+no terminal state.
 
-## Planning sources
+## Run
 
-- [`docs/CONTRACTS.md`](docs/CONTRACTS.md) indexes Venus behavior and proof.
-- [`docs/REFERENCES.md`](docs/REFERENCES.md) routes rendering and composition
-  evidence required before implementation.
-- [`docs/CRATES.md`](docs/CRATES.md) records the measured dependency
-  selection and ranked alternatives; no manifest exists yet.
-- Beads contain the gated implementation plan.
+Start an Orbit session server first, then pass its Unix socket to Venus:
 
 ```sh
-bv --robot-triage
-br ready
+cargo run --locked -- /path/to/orbit.sock
+```
+
+Without an argument, Venus uses
+`$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
+`/tmp/yazelix-orbit-$UID/orbit.sock` when the runtime directory is unavailable.
+Only one presentation client can attach to an Orbit session at a time.
+
+## Architecture and evidence
+
+- [`docs/CONTRACTS.md`](docs/CONTRACTS.md) indexes Venus behavior and proof.
+- [`docs/REFERENCES.md`](docs/REFERENCES.md) records the exact architectural
+  evidence used by the implementation gate.
+- [`docs/CRATES.md`](docs/CRATES.md) records the measured dependency selection,
+  owner seams, and rejected alternatives.
+
+```sh
+cargo fmt --check
+cargo check --locked
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
 ```
 
 ## Initial exclusions
@@ -49,6 +60,11 @@ Tabs, panes, sidebars, popups, settings, visual effects, configuration, plugins,
 remote and web access, macOS implementation, packaging, and distribution are
 outside the first slice.
 
+The Linux host uses winit, wgpu, glyphon, and AccessKit. macOS remains an
+architectural target, not an implemented or proved platform. The pinned Orbit
+proof commit must be published before a clean external Cargo checkout can
+resolve it from GitHub.
+
 ## LOC scorecard
 
 The scorecard counts tracked handwritten text and code. It excludes `.git/`,
@@ -56,9 +72,12 @@ Beads data, lock files, and generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 207 |
-| README | 64 |
+| Agent policy | 206 |
+| README | 83 |
 | Contracts and references | 115 |
 | Crate decisions | 85 |
-| Changelog | 5 |
-| **Total** | **476** |
+| Changelog | 10 |
+| Rust production | 2,900 |
+| Rust tests | 234 |
+| Cargo manifest | 18 |
+| **Total** | **3,651** |

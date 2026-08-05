@@ -7,11 +7,10 @@ Astra owns product orchestration, policy, composition, and distribution.
 
 ## Status
 
-This repository holds plans and contracts. Orbit's governance gate is closed,
-and the user accepted the `ven-upt.1` architecture and dependency selection.
-Product implementation remains inactive: do not add a Cargo package, graphical
-code, dependencies, CI, packaging, or release automation until the user
-explicitly activates `ven-upt.2`.
+This repository implements the accepted `ven-upt.2` first Linux slice using the
+`ven-upt.1` architecture and dependency selection. Further product expansion
+remains inactive. Do not add another feature, dependency, platform, CI,
+packaging, or release automation until the user chooses it.
 
 ## Core rule
 

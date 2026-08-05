@@ -9,7 +9,7 @@ and consequences for ownership, code shape, and the first check.
 
 - Orbit `ORB-C1` through `ORB-C6`, ORBF v1, ORBS v1, and the dependency-free
   `orbit-protocol` 0.1.0 package are accepted at
-  `838b67652c4df1979e599b9c401ee664ffac66bd`; `ORB-C7` is partially proved at
+  `c905bf9610581747f1b07565814b501ca66cfaa6`; `ORB-C7` is partially proved at
   that revision. Venus must consume the package at that exact Git revision and
   must not mirror either codec or its semantic values.
 - [FrankenTUI](https://github.com/Dicklesworthstone/frankentui) is required for
@@ -86,8 +86,8 @@ future browser implications, owned LOC, dependency/build cost, and maintenance.
 
 The user selected exact-revision Orbit protocol consumption with winit 0.30.13,
 wgpu 30.0.0, glyphon 0.12.0 and its cosmic-text 0.19.0 re-export, AccessKit
-0.24.1 with accesskit_winit 0.33.2, and pollster 1.0.1. No manifest edit or
-product implementation begins until the user activates `ven-upt.2`.
+0.24.1 with accesskit_winit 0.33.2, and pollster 1.0.1. `ven-upt.2` completed the
+reference and crate gates before implementing that shape.
 
 ## Rejected initial routing
 

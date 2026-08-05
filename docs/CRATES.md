@@ -1,15 +1,15 @@
 # Venus crate decisions
 
 `ven-upt.1` records the user-selected thin winit, wgpu, glyphon, and AccessKit
-shape. No Venus manifest exists. Dependency installation and product work
-remain gated on explicit activation of `ven-upt.2`.
+shape. `ven-upt.2` implements it with exact direct versions and features in
+`Cargo.toml`.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
-| Orbit protocol consumer | Exact Git revision `838b67652c4df1979e599b9c401ee664ffac66bd` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Selected; manifest gated on activation | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
-| Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Selected; manifest gated on activation | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
-| GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Selected; manifest gated on activation | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
-| Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Selected; manifest gated on activation | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
+| Orbit protocol consumer | Exact Git revision `c905bf9610581747f1b07565814b501ca66cfaa6` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
+| Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Active | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
+| GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
+| Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
 
 ## Measured comparison
 
@@ -75,8 +75,8 @@ recovering because assistive technology must not wait for GPU presentation.
 Both views derive from the same scene and keep no independent content model.
 
 The first slice rebuilds and redraws the complete scene. Damage is derived only
-after measurement and never becomes wire state. Expected owned size is
-1,500–2,400 production LOC plus 900–1,400 focused test and fixture LOC.
+after measurement and never becomes wire state. The implementation is smaller
+than the gate estimate; the README scorecard records the exact owned size.
 
 If corpus and native checks show that glyphon cannot preserve exact graphemes,
 cell alignment, clipping, color glyphs, or acceptable sustained redraw latency,
