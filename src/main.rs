@@ -55,7 +55,7 @@ struct Application {
     model: SessionModel,
     input: InputState,
     last_resize: Option<SurfaceSize>,
-    last_presented: Option<(u64, SurfaceSize)>,
+    scene_presented: bool,
     render_notice: Option<String>,
     blink_visible: bool,
     next_blink: Instant,
@@ -71,7 +71,7 @@ impl Application {
             model: SessionModel::new(),
             input: InputState::default(),
             last_resize: None,
-            last_presented: None,
+            scene_presented: false,
             render_notice: None,
             blink_visible: true,
             next_blink: Instant::now() + Duration::from_millis(500),
@@ -170,17 +170,19 @@ impl Application {
         state.window.request_redraw();
     }
 
-    fn send(&mut self, message: ClientMessage) {
+    fn send(&mut self, message: ClientMessage) -> bool {
         if !self.model.is_attached() {
-            return;
+            return false;
         }
         let Some(transport) = &self.transport else {
-            return;
+            return false;
         };
         if let Err(error) = transport.send(message) {
             self.model.set_notice(error.to_string());
             self.refresh_client_view();
+            return false;
         }
+        true
     }
 
     fn send_resize(&mut self) {
@@ -195,8 +197,9 @@ impl Application {
         if self.last_resize == Some(size) {
             return;
         }
-        self.last_resize = Some(size);
-        self.send(ClientMessage::Resize(size));
+        if self.send(ClientMessage::Resize(size)) {
+            self.last_resize = Some(size);
+        }
     }
 
     fn status(&self) -> String {
@@ -236,18 +239,20 @@ impl Application {
             .renderer
             .render(self.model.scene(), &status, self.blink_visible, &preedit)
         {
-            Ok(PresentOutcome::Presented(Some(revision))) => {
+            Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
-                if let Some(size) = surface_size(&state.renderer) {
-                    self.last_presented = Some((revision, size));
-                }
+                self.scene_presented =
+                    self.model.scene().is_some() && surface_size(&state.renderer).is_some();
             }
-            Ok(PresentOutcome::Presented(None) | PresentOutcome::Deferred) => {}
-            Ok(PresentOutcome::Recovered) => state.window.request_redraw(),
+            Ok(PresentOutcome::Deferred) => {}
+            Ok(PresentOutcome::Recovered) => {
+                self.scene_presented = false;
+                state.window.request_redraw();
+            }
             Err(error) => {
                 let notice = format!("Venus renderer failure: {error}");
                 self.render_notice = Some(notice.clone());
-                self.last_presented = None;
+                self.scene_presented = false;
                 state.accessibility.update(
                     &mut state.adapter,
                     self.model.scene(),
@@ -262,7 +267,7 @@ impl Application {
     }
 
     fn pointer_is_presented(&self) -> bool {
-        self.last_presented.is_some()
+        self.scene_presented
     }
 }
 
@@ -294,7 +299,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 state.renderer.resize(size, state.window.scale_factor());
-                self.last_presented = None;
+                self.scene_presented = false;
                 self.send_resize();
                 self.refresh_client_view();
             }
@@ -302,13 +307,15 @@ impl ApplicationHandler<UserEvent> for Application {
                 state
                     .renderer
                     .resize(state.window.inner_size(), scale_factor);
-                self.last_presented = None;
+                self.scene_presented = false;
                 self.send_resize();
                 self.refresh_client_view();
             }
             WindowEvent::RedrawRequested => self.render(),
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
-            WindowEvent::KeyboardInput { event, .. } => self.send(self.input.key(&event)),
+            WindowEvent::KeyboardInput { event, .. } => {
+                self.send(self.input.key(&event));
+            }
             WindowEvent::Ime(event) => {
                 let message = self.input.ime(event);
                 if let Some(message) = message {
@@ -316,11 +323,13 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 self.refresh_client_view();
             }
-            WindowEvent::Focused(focused) => self.send(ClientMessage::Focus(if focused {
-                FocusEvent::Gained
-            } else {
-                FocusEvent::Lost
-            })),
+            WindowEvent::Focused(focused) => {
+                self.send(ClientMessage::Focus(if focused {
+                    FocusEvent::Gained
+                } else {
+                    FocusEvent::Lost
+                }));
+            }
             WindowEvent::CursorMoved { position, .. } if self.pointer_is_presented() => {
                 if let Some(message) = self.input.move_pointer(position.x, position.y) {
                     self.send(message);

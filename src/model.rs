@@ -13,13 +13,6 @@ pub enum ConnectionState {
     Exited { code: i32 },
 }
 
-/// Observable result of applying one server message.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ModelChange {
-    pub scene: bool,
-    pub status: bool,
-}
-
 /// A message violated the accepted local-session order or frame sequence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ModelError {
@@ -95,7 +88,7 @@ impl SessionModel {
         matches!(self.connection, ConnectionState::Attached { .. })
     }
 
-    pub fn apply(&mut self, message: ServerMessage) -> Result<ModelChange, ModelError> {
+    pub fn apply(&mut self, message: ServerMessage) -> Result<(), ModelError> {
         match message {
             ServerMessage::Attached { version } => {
                 if !matches!(self.connection, ConnectionState::Connecting) {
@@ -103,10 +96,7 @@ impl SessionModel {
                 }
                 self.connection = ConnectionState::Attached { version };
                 self.notice = None;
-                Ok(ModelChange {
-                    scene: false,
-                    status: true,
-                })
+                Ok(())
             }
             ServerMessage::Frame(frame) => {
                 if !self.is_attached() {
@@ -115,29 +105,20 @@ impl SessionModel {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
                 self.notice = None;
-                Ok(ModelChange {
-                    scene: true,
-                    status: true,
-                })
+                Ok(())
             }
             ServerMessage::Accepted => {
-                let changed = self.notice.take().is_some();
-                Ok(ModelChange {
-                    scene: false,
-                    status: changed,
-                })
+                self.notice = None;
+                Ok(())
             }
             ServerMessage::Failure(failure) => {
                 self.notice = Some(bounded(failure.detail));
-                Ok(ModelChange {
-                    scene: false,
-                    status: true,
-                })
+                Ok(())
             }
             ServerMessage::Busy => {
                 self.connection = ConnectionState::Busy;
                 self.notice = None;
-                Ok(status_change())
+                Ok(())
             }
             ServerMessage::Incompatible {
                 minimum_version,
@@ -148,34 +129,25 @@ impl SessionModel {
                     maximum: maximum_version,
                 };
                 self.notice = None;
-                Ok(status_change())
+                Ok(())
             }
             ServerMessage::Exited { code } => {
                 self.connection = ConnectionState::Exited { code };
                 self.notice = None;
-                Ok(status_change())
+                Ok(())
             }
         }
     }
 
-    pub fn mark_lost(&mut self, detail: impl Into<String>) -> ModelChange {
+    pub fn mark_lost(&mut self, detail: impl Into<String>) {
         self.connection = ConnectionState::Lost {
             detail: bounded(detail.into()),
         };
         self.notice = None;
-        status_change()
     }
 
-    pub fn set_notice(&mut self, detail: impl Into<String>) -> ModelChange {
+    pub fn set_notice(&mut self, detail: impl Into<String>) {
         self.notice = Some(bounded(detail.into()));
-        status_change()
-    }
-}
-
-fn status_change() -> ModelChange {
-    ModelChange {
-        scene: false,
-        status: true,
     }
 }
 

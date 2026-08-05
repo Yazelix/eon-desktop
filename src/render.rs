@@ -1,7 +1,7 @@
 use crate::{Color as SceneColor, DrawStyle, Scene};
 use glyphon::{
-    Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, Style,
-    SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
+    Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
+    Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
 use orbit_protocol::{CursorShape, Underline};
 use std::{error::Error, fmt, sync::Arc};
@@ -35,8 +35,25 @@ fn vertex(@location(0) position: vec2<f32>, @location(1) color: vec4<f32>) -> Ve
 }
 
 @fragment
-fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_linear(input: VertexOutput) -> @location(0) vec4<f32> {
     return input.color;
+}
+
+fn srgb_channel_to_linear(value: f32) -> f32 {
+    if value <= 0.04045 {
+        return value / 12.92;
+    }
+    return pow((value + 0.055) / 1.055, 2.4);
+}
+
+@fragment
+fn fragment_srgb(input: VertexOutput) -> @location(0) vec4<f32> {
+    let rgb = vec3<f32>(
+        srgb_channel_to_linear(input.color.r),
+        srgb_channel_to_linear(input.color.g),
+        srgb_channel_to_linear(input.color.b),
+    );
+    return vec4<f32>(rgb, input.color.a);
 }
 "#;
 
@@ -65,7 +82,7 @@ impl CellMetrics {
 /// Result of one bounded surface presentation attempt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PresentOutcome {
-    Presented(Option<u64>),
+    Presented,
     Deferred,
     Recovered,
 }
@@ -97,10 +114,6 @@ struct ContentKey {
     blink_visible: bool,
     preedit: String,
     status: String,
-    width: u32,
-    height: u32,
-    metric_width: u32,
-    metric_height: u32,
 }
 
 /// One wgpu surface and one glyphon text owner for the native window.
@@ -152,6 +165,14 @@ impl Renderer {
         let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
             .ok_or_else(|| RenderError("the GPU surface has no supported format".into()))?;
+        if let Some(format) = surface
+            .get_capabilities(&adapter)
+            .formats
+            .into_iter()
+            .find(wgpu::TextureFormat::is_srgb)
+        {
+            config.format = format;
+        }
         config.present_mode = PresentMode::Fifo;
         config.alpha_mode = CompositeAlphaMode::Opaque;
         surface.configure(&device, &config);
@@ -194,7 +215,11 @@ impl Renderer {
             multisample: MultisampleState::default(),
             fragment: Some(FragmentState {
                 module: &shader,
-                entry_point: Some("fragment"),
+                entry_point: Some(if config.format.is_srgb() {
+                    "fragment_srgb"
+                } else {
+                    "fragment_linear"
+                }),
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(ColorTargetState {
                     format: config.format,
@@ -217,9 +242,16 @@ impl Renderer {
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
-        let mut atlas = TextAtlas::new(&device, &queue, &cache, config.format);
+        let color_mode = if config.format.is_srgb() {
+            ColorMode::Accurate
+        } else {
+            ColorMode::Web
+        };
+        let mut atlas =
+            TextAtlas::with_color_mode(&device, &queue, &cache, config.format, color_mode);
         let text_renderer =
             TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
+        let srgb_target = config.format.is_srgb();
 
         Ok(Self {
             instance,
@@ -238,11 +270,14 @@ impl Renderer {
             text_renderer,
             text: Vec::new(),
             content_key: None,
-            clear: color(SceneColor {
-                r: 10,
-                g: 13,
-                b: 20,
-            }),
+            clear: color(
+                SceneColor {
+                    r: 10,
+                    g: 13,
+                    b: 20,
+                },
+                srgb_target,
+            ),
             metrics: CellMetrics::for_scale(window.scale_factor()),
             window,
         })
@@ -283,7 +318,6 @@ impl Renderer {
             },
         );
 
-        let areas = text_areas(&self.text);
         if self
             .text_renderer
             .prepare(
@@ -292,7 +326,7 @@ impl Renderer {
                 &mut self.font_system,
                 &mut self.atlas,
                 &self.viewport,
-                areas,
+                text_areas(&self.text),
                 &mut self.swash_cache,
             )
             .is_err()
@@ -372,7 +406,7 @@ impl Renderer {
         self.queue.submit(Some(encoder.finish()));
         self.queue.present(frame);
         self.atlas.trim();
-        Ok(PresentOutcome::Presented(scene.map(|scene| scene.revision)))
+        Ok(PresentOutcome::Presented)
     }
 
     fn rebuild_if_needed(
@@ -387,10 +421,6 @@ impl Renderer {
             blink_visible,
             preedit: preedit.to_owned(),
             status: status.to_owned(),
-            width: self.config.width,
-            height: self.config.height,
-            metric_width: self.metrics.width.to_bits(),
-            metric_height: self.metrics.height.to_bits(),
         };
         if self.content_key.as_ref() == Some(&key) {
             return Ok(());
@@ -399,7 +429,7 @@ impl Renderer {
         self.text.clear();
         let mut vertices = Vec::new();
         if let Some(scene) = scene {
-            self.clear = color(scene.background);
+            self.clear = color(scene.background, self.config.format.is_srgb());
             self.build_scene_text(scene, blink_visible);
             build_scene_rectangles(
                 &mut vertices,
@@ -428,15 +458,18 @@ impl Renderer {
                         g: 192,
                         b: 94,
                     },
-                    DrawStyleKind::Notice,
+                    DrawStyleKind::Status,
                 );
             }
         } else {
-            self.clear = color(SceneColor {
-                r: 10,
-                g: 13,
-                b: 20,
-            });
+            self.clear = color(
+                SceneColor {
+                    r: 10,
+                    g: 13,
+                    b: 20,
+                },
+                self.config.format.is_srgb(),
+            );
             self.push_text(
                 "VENUS",
                 self.metrics.padding * 2.0,
@@ -567,7 +600,7 @@ impl Renderer {
                 Wrap::None,
                 255,
             ),
-            DrawStyleKind::Status | DrawStyleKind::Notice => (
+            DrawStyleKind::Status => (
                 self.metrics.font_size,
                 self.metrics.height * 1.25,
                 Attrs::new().family(Family::SansSerif),
@@ -618,26 +651,23 @@ enum DrawStyleKind {
     Heading,
     Preedit,
     Status,
-    Notice,
 }
 
-fn text_areas(text: &[PlacedText]) -> Vec<TextArea<'_>> {
-    text.iter()
-        .map(|text| TextArea {
-            buffer: &text.buffer,
-            left: text.left,
-            top: text.top,
-            scale: 1.0,
-            bounds: TextBounds {
-                left: text.left.floor() as i32,
-                top: text.top.floor() as i32,
-                right: text.right,
-                bottom: text.bottom,
-            },
-            default_color: text.color,
-            custom_glyphs: &[],
-        })
-        .collect()
+fn text_areas(text: &[PlacedText]) -> impl Iterator<Item = TextArea<'_>> {
+    text.iter().map(|text| TextArea {
+        buffer: &text.buffer,
+        left: text.left,
+        top: text.top,
+        scale: 1.0,
+        bounds: TextBounds {
+            left: text.left.floor() as i32,
+            top: text.top.floor() as i32,
+            right: text.right,
+            bottom: text.bottom,
+        },
+        default_color: text.color,
+        custom_glyphs: &[],
+    })
 }
 
 fn build_scene_rectangles(
@@ -917,11 +947,22 @@ fn nonzero(size: PhysicalSize<u32>) -> PhysicalSize<u32> {
     PhysicalSize::new(size.width.max(1), size.height.max(1))
 }
 
-fn color(color: SceneColor) -> wgpu::Color {
+fn color(color: SceneColor, srgb_target: bool) -> wgpu::Color {
+    let channel = |value| {
+        let value = f64::from(value) / 255.0;
+        if !srgb_target {
+            return value;
+        }
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
     wgpu::Color {
-        r: f64::from(color.r) / 255.0,
-        g: f64::from(color.g) / 255.0,
-        b: f64::from(color.b) / 255.0,
+        r: channel(color.r),
+        g: channel(color.g),
+        b: channel(color.b),
         a: 1.0,
     }
 }
@@ -970,5 +1011,21 @@ mod tests {
                 padding: 24.0,
             }
         );
+    }
+
+    #[test]
+    fn clear_colors_match_the_surface_color_space() {
+        let source = SceneColor {
+            r: 128,
+            g: 0,
+            b: 255,
+        };
+        let linear = color(source, true);
+        let encoded = color(source, false);
+
+        assert!((linear.r - 0.215_860_5).abs() < 0.000_001);
+        assert_eq!(linear.g, 0.0);
+        assert_eq!(linear.b, 1.0);
+        assert_eq!(encoded.r, 128.0 / 255.0);
     }
 }

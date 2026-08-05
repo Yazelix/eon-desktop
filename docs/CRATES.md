@@ -63,18 +63,19 @@ macOS work.
 ## Selected owner seam
 
 One pure scene reducer maps canonical complete Orbit frames to immutable,
-revision-tagged quads, exact grapheme runs, cursor data, approved hit geometry,
-and accessibility inputs. It owns no socket, window, GPU, or terminal handle.
+revision-tagged quads, exact grapheme runs, cursor data, and accessibility
+inputs. It owns no socket, window, GPU, or terminal handle.
 The native host maps winit events only into `orbit-protocol` values, keeps
 transport outside the renderer, and sends typed wakeups through
 `EventLoopProxy`. The selected shape adds no general async application runtime.
 
 Venus derives drawing, accessibility, and deterministic contract snapshots from
 the latest accepted scene. After a successful GPU present, the renderer
-advances a separate last-presented revision and its pointer hit geometry.
-AccessKit may publish the accepted scene while the surface is occluded or
-recovering because assistive technology must not wait for GPU presentation.
-Both views derive from the same scene and keep no independent content model.
+enables pointer events until resize or surface recovery invalidates that
+presentation. AccessKit may publish the accepted scene while the surface is
+occluded or recovering because assistive technology must not wait for GPU
+presentation. Both views derive from the same scene and keep no independent
+content model.
 
 The first slice rebuilds and redraws the complete scene. Damage is derived only
 after measurement and never becomes wire state. The implementation is smaller
