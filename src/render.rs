@@ -486,7 +486,7 @@ impl Renderer {
         for run in scene
             .glyph_runs()
             .into_iter()
-            .filter(|run| blink_visible || !run.style.blink)
+            .filter(|run| run.style.foreground_visible(blink_visible))
         {
             let left = self.metrics.padding + f32::from(run.column) * self.metrics.width;
             let top = self.metrics.padding + f32::from(run.row) * self.metrics.height;
@@ -739,7 +739,7 @@ fn build_scene_rectangles(
             start = end;
         }
         for (column, cell) in row.cells.iter().enumerate() {
-            if cell.style.blink && !blink_visible {
+            if !cell.style.foreground_visible(blink_visible) {
                 continue;
             }
             let left = metrics.padding + column as f32 * metrics.width;
@@ -914,6 +914,56 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{DrawCell, DrawRow};
+    use orbit_protocol::{CellWidth, Screen};
+
+    #[test]
+    fn concealed_cells_draw_no_foreground_elements() {
+        let style = DrawStyle {
+            foreground: SceneColor::default(),
+            background: DEFAULT_BACKGROUND,
+            underline_color: SceneColor::default(),
+            bold: false,
+            italic: false,
+            faint: false,
+            blink: true,
+            invisible: true,
+            strikethrough: true,
+            overline: true,
+            selected: false,
+            protected: false,
+            underline: Underline::Single,
+        };
+        let scene = Scene {
+            revision: 1,
+            columns: 1,
+            rows: 1,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: DEFAULT_BACKGROUND,
+            foreground: SceneColor::default(),
+            cursor: None,
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells: vec![DrawCell {
+                    width: CellWidth::Narrow,
+                    text: "secret".into(),
+                    hyperlink: String::new(),
+                    style,
+                }],
+            }],
+        };
+        let mut rectangles = RectangleBatch::new(100, 100);
+
+        build_scene_rectangles(&mut rectangles, &scene, true, CellMetrics::for_scale(1.0));
+
+        assert!(rectangles.bytes.is_empty());
+        assert!(scene.glyph_runs().is_empty());
+        assert!(!scene.has_blinking_content());
+    }
 
     #[test]
     fn rectangle_encoding_is_row_major_and_bounded() {

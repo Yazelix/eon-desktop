@@ -39,6 +39,12 @@ pub struct DrawStyle {
     pub underline: Underline,
 }
 
+impl DrawStyle {
+    pub(crate) fn foreground_visible(self, blink_visible: bool) -> bool {
+        !self.invisible && (blink_visible || !self.blink)
+    }
+}
+
 /// One exact grid cell after palette and inverse-color resolution.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DrawCell {
@@ -163,7 +169,7 @@ impl Scene {
                 } else {
                     &cell.text
                 };
-                if cell.style.invisible {
+                if !cell.style.foreground_visible(true) {
                     finish_run(&mut runs, &mut current);
                 } else if let Some(run) = &mut current
                     && run.style == cell.style
@@ -197,7 +203,7 @@ impl Scene {
                 .content
                 .iter()
                 .flat_map(|row| &row.cells)
-                .any(|cell| cell.style.blink)
+                .any(|cell| cell.style.blink && cell.style.foreground_visible(true))
     }
 
     /// Text exposed to native accessibility, derived directly from this scene.
