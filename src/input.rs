@@ -4,7 +4,8 @@ use orbit_protocol::session::{
 };
 use winit::{
     event::{ElementState, Ime, KeyEvent as WinitKeyEvent, MouseButton as WinitMouseButton},
-    keyboard::{KeyCode, ModifiersState, PhysicalKey as WinitPhysicalKey},
+    keyboard::{Key, KeyCode, ModifiersState, PhysicalKey as WinitPhysicalKey},
+    platform::modifier_supplement::KeyEventExtModifierSupplement,
 };
 
 /// Stateful translation from native events to Orbit-owned semantic values.
@@ -68,7 +69,7 @@ impl InputState {
             consumed_modifiers: Modifiers::empty(),
             composing: self.composing,
             text: event.text.as_deref().and_then(key_text),
-            unshifted_codepoint: code.and_then(unshifted_codepoint),
+            unshifted_codepoint: unshifted_codepoint(event.key_without_modifiers()),
         })
     }
 
@@ -349,59 +350,13 @@ fn physical_key(code: KeyCode) -> PhysicalKey {
     }
 }
 
-fn unshifted_codepoint(code: KeyCode) -> Option<char> {
-    use KeyCode as W;
-    Some(match code {
-        W::Backquote => '`',
-        W::Backslash | W::IntlBackslash | W::IntlYen => '\\',
-        W::BracketLeft => '[',
-        W::BracketRight => ']',
-        W::Comma => ',',
-        W::Digit0 => '0',
-        W::Digit1 => '1',
-        W::Digit2 => '2',
-        W::Digit3 => '3',
-        W::Digit4 => '4',
-        W::Digit5 => '5',
-        W::Digit6 => '6',
-        W::Digit7 => '7',
-        W::Digit8 => '8',
-        W::Digit9 => '9',
-        W::Equal => '=',
-        W::KeyA => 'a',
-        W::KeyB => 'b',
-        W::KeyC => 'c',
-        W::KeyD => 'd',
-        W::KeyE => 'e',
-        W::KeyF => 'f',
-        W::KeyG => 'g',
-        W::KeyH => 'h',
-        W::KeyI => 'i',
-        W::KeyJ => 'j',
-        W::KeyK => 'k',
-        W::KeyL => 'l',
-        W::KeyM => 'm',
-        W::KeyN => 'n',
-        W::KeyO => 'o',
-        W::KeyP => 'p',
-        W::KeyQ => 'q',
-        W::KeyR => 'r',
-        W::KeyS => 's',
-        W::KeyT => 't',
-        W::KeyU => 'u',
-        W::KeyV => 'v',
-        W::KeyW => 'w',
-        W::KeyX => 'x',
-        W::KeyY => 'y',
-        W::KeyZ => 'z',
-        W::Minus => '-',
-        W::Period => '.',
-        W::Quote => '\'',
-        W::Semicolon => ';',
-        W::Slash | W::IntlRo => '/',
-        W::Space => ' ',
-        _ => return None,
-    })
+fn unshifted_codepoint(key: Key) -> Option<char> {
+    let Key::Character(text) = key else {
+        return None;
+    };
+    let mut characters = text.chars();
+    let codepoint = characters.next()?;
+    characters.next().is_none().then_some(codepoint)
 }
 
 fn coordinates(x: f64, y: f64) -> Option<(f32, f32)> {
@@ -449,6 +404,16 @@ mod tests {
         );
         assert_eq!(physical_key(KeyCode::F25), PhysicalKey::F25);
         assert_eq!(physical_key(KeyCode::Lang1), PhysicalKey::UNIDENTIFIED);
+    }
+
+    #[test]
+    fn accepts_one_layout_derived_unshifted_codepoint() {
+        assert_eq!(unshifted_codepoint(Key::Character("ч".into())), Some('ч'));
+        assert_eq!(unshifted_codepoint(Key::Character("ss".into())), None);
+        assert_eq!(
+            unshifted_codepoint(Key::Named(winit::keyboard::NamedKey::Enter)),
+            None
+        );
     }
 
     #[test]

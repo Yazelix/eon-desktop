@@ -5,9 +5,9 @@
 - Render one accepted Orbit session in a native Linux window with styled
   Unicode text, cursor state, and derived accessibility content.
 - Send semantic keyboard, input-method, pointer, focus, and resize events to
-  Orbit, mapping all four wheel directions, keeping held-button pairs coherent
-  across presentation and queue recovery, and clearing transient input on focus
-  loss without owning the session or PTY.
+  Orbit, preserving active keyboard layouts, mapping all four wheel directions,
+  keeping held-button pairs coherent across presentation and queue recovery,
+  and clearing transient input on focus loss without owning the session or PTY.
 - Explain bounded attachment, protocol, frame, input, and connection failures
   accurately in the client window and accessibility tree without letting
   unrelated presentation, resize, or response traffic erase them.
