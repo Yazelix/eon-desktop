@@ -211,24 +211,19 @@ impl Scene {
             let mut column = 0_usize;
             while column < row.cells.len() {
                 let cell = &row.cells[column];
+                let wide = cell.width == CellWidth::Wide;
                 match cell.width {
-                    CellWidth::Narrow => text.push_str(if cell.text.is_empty() {
-                        " "
-                    } else {
-                        &cell.text
-                    }),
-                    CellWidth::Wide => {
-                        text.push_str(if cell.text.is_empty() {
-                            "  "
+                    CellWidth::Narrow | CellWidth::Wide => {
+                        text.push_str(if cell.style.invisible || cell.text.is_empty() {
+                            if wide { "  " } else { " " }
                         } else {
                             &cell.text
                         });
-                        column = column.saturating_add(1);
                     }
                     CellWidth::SpacerHead => text.push(' '),
                     CellWidth::SpacerTail => {}
                 }
-                column += 1;
+                column += usize::from(wide) + 1;
             }
             while text.ends_with(' ') {
                 text.pop();

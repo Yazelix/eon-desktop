@@ -45,6 +45,22 @@ fn blinking_state_drives_native_wakeups_without_changing_frame_data() {
 }
 
 #[test]
+fn concealed_cells_stay_out_of_drawing_and_accessibility() {
+    let mut concealed = frame(9, Screen::Primary);
+    concealed.rows[0].cells[0].text = "secret".into();
+    concealed.rows[0].cells[0].style.invisible = true;
+
+    let scene = yazelix_venus::Scene::from_frame(&concealed);
+    assert!(
+        scene
+            .glyph_runs()
+            .iter()
+            .all(|run| !run.text.contains("secret"))
+    );
+    assert_eq!(scene.accessible_text(), " 界");
+}
+
+#[test]
 fn ordered_frames_reject_stale_revisions_without_replacing_state() {
     let mut model = attached_model();
     model
