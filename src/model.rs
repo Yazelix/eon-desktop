@@ -50,6 +50,7 @@ enum Notice {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LocalNoticeSource {
     Input,
+    Queue,
     Resize,
 }
 

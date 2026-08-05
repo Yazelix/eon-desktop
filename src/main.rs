@@ -183,11 +183,12 @@ impl Application {
         };
         if let Err(error) = transport.send(message) {
             self.model
-                .set_venus_notice(notice_source, error.to_string());
+                .set_venus_notice(LocalNoticeSource::Queue, error.to_string());
             self.refresh_client_view();
             return false;
         }
-        if self.model.clear_venus_notice(notice_source) {
+        let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
+        if self.model.clear_venus_notice(notice_source) || queue_recovered {
             self.refresh_client_view();
         }
         true

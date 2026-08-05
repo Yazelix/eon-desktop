@@ -135,6 +135,9 @@ fn notices_clear_only_from_their_source() {
     model.set_venus_notice(LocalNoticeSource::Resize, "Window is too large");
     assert!(!model.clear_venus_notice(LocalNoticeSource::Input));
     assert!(model.clear_venus_notice(LocalNoticeSource::Resize));
+    model.set_venus_notice(LocalNoticeSource::Queue, "Venus input queue is full");
+    assert!(!model.clear_venus_notice(LocalNoticeSource::Resize));
+    assert!(model.clear_venus_notice(LocalNoticeSource::Queue));
     model
         .apply(ServerMessage::Failure(Failure {
             code: FailureCode::InvalidInput,
