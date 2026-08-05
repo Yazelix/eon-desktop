@@ -510,7 +510,7 @@ impl Renderer {
         let left = self.metrics.padding + f32::from(cursor.column) * self.metrics.width;
         let top = self.metrics.padding + f32::from(cursor.row) * self.metrics.height;
         let width = (self.config.width as f32 - left - self.metrics.padding).max(1.0);
-        self.push_text(
+        let preedit_width = self.push_text(
             preedit,
             left,
             top,
@@ -522,7 +522,7 @@ impl Renderer {
         rectangles.push(
             left,
             top + self.metrics.height - 2.0,
-            (preedit.chars().count().max(1) as f32 * self.metrics.width).min(width),
+            preedit_width.max(self.metrics.width).min(width),
             2.0,
             scene.foreground,
             1.0,
@@ -539,9 +539,9 @@ impl Renderer {
         height: f32,
         foreground: SceneColor,
         kind: DrawStyleKind,
-    ) {
+    ) -> f32 {
         if text.is_empty() {
-            return;
+            return 0.0;
         }
         let (font_size, line_height, attrs, monospace_width, wrap, alpha) = match kind {
             DrawStyleKind::Cell(style) => {
@@ -592,6 +592,7 @@ impl Renderer {
         buffer.set_monospace_width(monospace_width);
         buffer.set_text(text, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
+        let width = shaped_width(&buffer);
         self.text.push(PlacedText {
             buffer,
             left,
@@ -600,6 +601,7 @@ impl Renderer {
             bottom: (top + height).ceil() as i32,
             color: Color::rgba(foreground.r, foreground.g, foreground.b, alpha),
         });
+        width
     }
 
     fn upload_vertices(&mut self, bytes: &[u8]) {
@@ -628,6 +630,12 @@ enum DrawStyleKind {
     Heading,
     Preedit,
     Status,
+}
+
+fn shaped_width(buffer: &Buffer) -> f32 {
+    buffer
+        .layout_runs()
+        .fold(0.0_f32, |width, run| width.max(run.line_w))
 }
 
 fn text_areas(text: &[PlacedText]) -> impl Iterator<Item = TextArea<'_>> {
@@ -1004,5 +1012,30 @@ mod tests {
         assert_eq!(linear.g, 0.0);
         assert_eq!(linear.b, 1.0);
         assert_eq!(encoded.r, 128.0 / 255.0);
+    }
+
+    #[test]
+    fn shaped_width_does_not_charge_combining_marks_as_cells() {
+        fn text_width(text: &str) -> f32 {
+            let mut font_system = FontSystem::new();
+            let mut buffer = Buffer::new(&mut font_system, Metrics::new(14.0, 18.0));
+            buffer.set_size(Some(100.0), Some(18.0));
+            buffer.set_wrap(Wrap::None);
+            buffer.set_monospace_width(Some(9.0));
+            buffer.set_text(
+                text,
+                &Attrs::new().family(Family::Monospace),
+                Shaping::Advanced,
+                None,
+            );
+            buffer.shape_until_scroll(&mut font_system, false);
+            shaped_width(&buffer)
+        }
+
+        let base = text_width("e");
+        let decomposed = text_width("e\u{301}");
+
+        assert!(base > 0.0);
+        assert!((base - decomposed).abs() < 0.01);
     }
 }
