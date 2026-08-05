@@ -194,8 +194,7 @@ impl Application {
                 .set_venus_notice("Window dimensions exceed the accepted Orbit surface range");
             return;
         };
-        if self.last_resize == Some(size) {
-            self.model.clear_venus_notice();
+        if self.last_resize == Some(size) && !self.model.clear_venus_notice() {
             return;
         }
         if self.send(ClientMessage::Resize(size)) {
