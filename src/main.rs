@@ -425,9 +425,12 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
     if horizontal_padding >= screen.width || vertical_padding >= screen.height {
         return None;
     }
-    let columns = ((screen.width - horizontal_padding) / cell_width).max(1);
-    let mut rows = ((screen.height - vertical_padding) / cell_height).max(1);
-    rows = rows.min(MAX_CELLS as u32 / columns.max(1));
+    let columns = (screen.width - horizontal_padding) / cell_width;
+    let mut rows = (screen.height - vertical_padding) / cell_height;
+    if columns == 0 || rows == 0 {
+        return None;
+    }
+    rows = rows.min(MAX_CELLS as u32 / columns);
     Some(SurfaceSize {
         cols: u16::try_from(columns).ok()?,
         rows: u16::try_from(rows).ok()?,
@@ -481,8 +484,12 @@ mod tests {
         let metrics = CellMetrics::for_scale(1.0);
         let size = surface_size(PhysicalSize::new(960, 600), metrics).unwrap();
         assert_eq!((size.cols, size.rows), (104, 32));
-        assert!(usize::from(size.cols) * usize::from(size.rows) <= MAX_CELLS);
+        assert!(
+            orbit_protocol::session::encode_client_message(&ClientMessage::Resize(size)).is_ok()
+        );
         assert!(surface_size(PhysicalSize::new(1, 1), metrics).is_none());
+        assert!(surface_size(PhysicalSize::new(25, 600), metrics).is_none());
+        assert!(surface_size(PhysicalSize::new(960, 25), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(u32::from(u16::MAX) + 1, 600), metrics).is_none());
     }
 }
