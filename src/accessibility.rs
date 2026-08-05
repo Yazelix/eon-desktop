@@ -6,6 +6,7 @@ use winit::dpi::PhysicalSize;
 
 const WINDOW: NodeId = NodeId(0);
 const CONTENT: NodeId = NodeId(1);
+const STATUS: NodeId = NodeId(2);
 
 #[derive(Clone, Debug)]
 struct Snapshot {
@@ -21,7 +22,11 @@ impl Snapshot {
         let mut root = Node::new(Role::Window);
         root.set_label(self.title.as_str());
         root.set_bounds(bounds(self.size));
-        root.set_children(vec![CONTENT]);
+        root.set_children(if self.terminal && !self.status.is_empty() {
+            vec![CONTENT, STATUS]
+        } else {
+            vec![CONTENT]
+        });
 
         let mut content = Node::new(if self.terminal {
             Role::Terminal
@@ -33,15 +38,23 @@ impl Snapshot {
         } else {
             "Venus status"
         });
-        content.set_value(if self.status.is_empty() {
+        content.set_value(if self.terminal {
             self.value.as_str()
         } else {
             self.status.as_str()
         });
         content.set_bounds(bounds(self.size));
 
+        let mut nodes = vec![(WINDOW, root), (CONTENT, content)];
+        if self.terminal && !self.status.is_empty() {
+            let mut status = Node::new(Role::Alert);
+            status.set_label("Venus status");
+            status.set_value(self.status.as_str());
+            nodes.push((STATUS, status));
+        }
+
         TreeUpdate {
-            nodes: vec![(WINDOW, root), (CONTENT, content)],
+            nodes,
             tree: Some(Tree::new(WINDOW)),
             tree_id: TreeId::ROOT,
             focus: CONTENT,
@@ -128,4 +141,35 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scene_notice_preserves_terminal_content_and_adds_an_alert() {
+        let update = Snapshot {
+            title: "shell".into(),
+            value: "terminal content".into(),
+            status: "renderer failure".into(),
+            size: PhysicalSize::new(800, 600),
+            terminal: true,
+        }
+        .tree();
+        let node = |id| {
+            &update
+                .nodes
+                .iter()
+                .find(|(node_id, _)| *node_id == id)
+                .unwrap()
+                .1
+        };
+
+        assert_eq!(node(CONTENT).role(), Role::Terminal);
+        assert_eq!(node(CONTENT).value(), Some("terminal content"));
+        assert_eq!(node(STATUS).role(), Role::Alert);
+        assert_eq!(node(STATUS).value(), Some("renderer failure"));
+        assert_eq!(node(WINDOW).children(), &[CONTENT, STATUS]);
+    }
 }

@@ -101,7 +101,9 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
             detail: "x".repeat(2_000),
         }))
         .unwrap();
-    assert_eq!(attached.notice().unwrap().chars().count(), 1_025);
+    let notice = attached.notice().unwrap();
+    assert!(notice.starts_with("Orbit rejected input: "));
+    assert_eq!(notice.chars().count(), 1_025);
     attached.mark_lost("Orbit closed the local session");
     assert!(matches!(
         attached.connection(),

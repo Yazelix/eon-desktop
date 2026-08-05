@@ -20,6 +20,11 @@ use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::Window};
 const VERTEX_SIZE: u64 = 24;
 #[cfg(test)]
 const VERTICES_PER_QUAD: u32 = 6;
+const DEFAULT_BACKGROUND: SceneColor = SceneColor {
+    r: 10,
+    g: 13,
+    b: 20,
+};
 const SHADER: &str = r#"
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -83,6 +88,7 @@ impl CellMetrics {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PresentOutcome {
     Presented,
+    Retry,
     Deferred,
     Recovered,
 }
@@ -173,6 +179,7 @@ impl Renderer {
         {
             config.format = format;
         }
+        let srgb_target = config.format.is_srgb();
         config.present_mode = PresentMode::Fifo;
         config.alpha_mode = CompositeAlphaMode::Opaque;
         surface.configure(&device, &config);
@@ -215,7 +222,7 @@ impl Renderer {
             multisample: MultisampleState::default(),
             fragment: Some(FragmentState {
                 module: &shader,
-                entry_point: Some(if config.format.is_srgb() {
+                entry_point: Some(if srgb_target {
                     "fragment_srgb"
                 } else {
                     "fragment_linear"
@@ -242,7 +249,7 @@ impl Renderer {
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
-        let color_mode = if config.format.is_srgb() {
+        let color_mode = if srgb_target {
             ColorMode::Accurate
         } else {
             ColorMode::Web
@@ -251,8 +258,6 @@ impl Renderer {
             TextAtlas::with_color_mode(&device, &queue, &cache, config.format, color_mode);
         let text_renderer =
             TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
-        let srgb_target = config.format.is_srgb();
-
         Ok(Self {
             instance,
             device,
@@ -270,14 +275,7 @@ impl Renderer {
             text_renderer,
             text: Vec::new(),
             content_key: None,
-            clear: color(
-                SceneColor {
-                    r: 10,
-                    g: 13,
-                    b: 20,
-                },
-                srgb_target,
-            ),
+            clear: color(DEFAULT_BACKGROUND, srgb_target),
             metrics: CellMetrics::for_scale(window.scale_factor()),
             window,
         })
@@ -347,9 +345,8 @@ impl Renderer {
 
         let frame = match self.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
-            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
-                return Ok(PresentOutcome::Deferred);
-            }
+            CurrentSurfaceTexture::Timeout => return Ok(PresentOutcome::Retry),
+            CurrentSurfaceTexture::Occluded => return Ok(PresentOutcome::Deferred),
             CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(PresentOutcome::Recovered);
@@ -427,26 +424,14 @@ impl Renderer {
         }
 
         self.text.clear();
-        let mut vertices = Vec::new();
+        let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
         if let Some(scene) = scene {
             self.clear = color(scene.background, self.config.format.is_srgb());
             self.build_scene_text(scene, blink_visible);
-            build_scene_rectangles(
-                &mut vertices,
-                scene,
-                blink_visible,
-                self.metrics,
-                self.config.width,
-                self.config.height,
-            );
-            self.build_preedit(scene, preedit, &mut vertices);
+            build_scene_rectangles(&mut rectangles, scene, blink_visible, self.metrics);
+            self.build_preedit(scene, preedit, &mut rectangles);
             if !status.is_empty() {
-                build_notice_rectangles(
-                    &mut vertices,
-                    self.metrics,
-                    self.config.width,
-                    self.config.height,
-                );
+                build_notice_rectangles(&mut rectangles, self.metrics);
                 self.push_text(
                     status,
                     self.metrics.padding * 2.0,
@@ -462,14 +447,7 @@ impl Renderer {
                 );
             }
         } else {
-            self.clear = color(
-                SceneColor {
-                    r: 10,
-                    g: 13,
-                    b: 20,
-                },
-                self.config.format.is_srgb(),
-            );
+            self.clear = color(DEFAULT_BACKGROUND, self.config.format.is_srgb());
             self.push_text(
                 "VENUS",
                 self.metrics.padding * 2.0,
@@ -497,7 +475,7 @@ impl Renderer {
                 DrawStyleKind::Status,
             );
         }
-        self.upload_vertices(&vertices);
+        self.upload_vertices(&rectangles.bytes);
         self.content_key = Some(key);
         Ok(())
     }
@@ -523,7 +501,7 @@ impl Renderer {
         }
     }
 
-    fn build_preedit(&mut self, scene: &Scene, preedit: &str, vertices: &mut Vec<u8>) {
+    fn build_preedit(&mut self, scene: &Scene, preedit: &str, rectangles: &mut RectangleBatch) {
         let Some(cursor) = scene.cursor.filter(|_| !preedit.is_empty()) else {
             return;
         };
@@ -539,16 +517,13 @@ impl Renderer {
             scene.foreground,
             DrawStyleKind::Preedit,
         );
-        push_rect(
-            vertices,
+        rectangles.push(
             left,
             top + self.metrics.height - 2.0,
             (preedit.chars().count().max(1) as f32 * self.metrics.width).min(width),
             2.0,
             scene.foreground,
             1.0,
-            self.config.width,
-            self.config.height,
         );
     }
 
@@ -670,13 +645,76 @@ fn text_areas(text: &[PlacedText]) -> impl Iterator<Item = TextArea<'_>> {
     })
 }
 
+struct RectangleBatch {
+    bytes: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+impl RectangleBatch {
+    fn new(width: u32, height: u32) -> Self {
+        Self {
+            bytes: Vec::new(),
+            width,
+            height,
+        }
+    }
+
+    fn push(&mut self, x: f32, y: f32, width: f32, height: f32, color: SceneColor, alpha: f32) {
+        if width <= 0.0 || height <= 0.0 {
+            return;
+        }
+        let to_x = |value: f32| value / self.width as f32 * 2.0 - 1.0;
+        let to_y = |value: f32| 1.0 - value / self.height as f32 * 2.0;
+        let left = to_x(x);
+        let right = to_x(x + width);
+        let top = to_y(y);
+        let bottom = to_y(y + height);
+        let rgba = [
+            f32::from(color.r) / 255.0,
+            f32::from(color.g) / 255.0,
+            f32::from(color.b) / 255.0,
+            alpha,
+        ];
+        for [x, y] in [
+            [left, top],
+            [left, bottom],
+            [right, bottom],
+            [left, top],
+            [right, bottom],
+            [right, top],
+        ] {
+            for value in [x, y, rgba[0], rgba[1], rgba[2], rgba[3]] {
+                self.bytes.extend_from_slice(&value.to_ne_bytes());
+            }
+        }
+    }
+
+    fn push_hollow(
+        &mut self,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        thickness: f32,
+        color: SceneColor,
+    ) {
+        for (x, y, width, height) in [
+            (x, y, width, thickness),
+            (x, y + height - thickness, width, thickness),
+            (x, y, thickness, height),
+            (x + width - thickness, y, thickness, height),
+        ] {
+            self.push(x, y, width, height, color, 1.0);
+        }
+    }
+}
+
 fn build_scene_rectangles(
-    vertices: &mut Vec<u8>,
+    rectangles: &mut RectangleBatch,
     scene: &Scene,
     blink_visible: bool,
     metrics: CellMetrics,
-    width: u32,
-    height: u32,
 ) {
     for (row_index, row) in scene.content.iter().enumerate() {
         let mut start = 0_usize;
@@ -687,16 +725,13 @@ fn build_scene_rectangles(
                 end += 1;
             }
             if background != scene.background {
-                push_rect(
-                    vertices,
+                rectangles.push(
                     metrics.padding + start as f32 * metrics.width,
                     metrics.padding + row_index as f32 * metrics.height,
                     (end - start) as f32 * metrics.width,
                     metrics.height,
                     background,
                     1.0,
-                    width,
-                    height,
                 );
             }
             start = end;
@@ -710,22 +745,18 @@ fn build_scene_rectangles(
             let thickness = (metrics.height / 14.0).max(1.0);
             match cell.style.underline {
                 Underline::None => {}
-                Underline::Single => push_rect(
-                    vertices,
+                Underline::Single => rectangles.push(
                     left,
                     top + metrics.height - thickness * 2.0,
                     metrics.width,
                     thickness,
                     cell.style.underline_color,
                     1.0,
-                    width,
-                    height,
                 ),
                 Underline::Curly => {
                     let segment = (metrics.width / 4.0).max(1.0);
                     for part in 0..4 {
-                        push_rect(
-                            vertices,
+                        rectangles.push(
                             left + part as f32 * segment,
                             top + metrics.height
                                 - thickness * if part % 2 == 0 { 3.0 } else { 1.5 },
@@ -733,8 +764,6 @@ fn build_scene_rectangles(
                             thickness,
                             cell.style.underline_color,
                             1.0,
-                            width,
-                            height,
                         );
                     }
                 }
@@ -742,16 +771,13 @@ fn build_scene_rectangles(
                     let dot = thickness.max(1.0);
                     let mut x = left;
                     while x < left + metrics.width {
-                        push_rect(
-                            vertices,
+                        rectangles.push(
                             x,
                             top + metrics.height - thickness * 2.0,
                             dot,
                             thickness,
                             cell.style.underline_color,
                             1.0,
-                            width,
-                            height,
                         );
                         x += dot * 2.0;
                     }
@@ -759,59 +785,47 @@ fn build_scene_rectangles(
                 Underline::Dashed => {
                     let dash = (metrics.width / 3.0).max(1.0);
                     for part in [0.0, 2.0] {
-                        push_rect(
-                            vertices,
+                        rectangles.push(
                             left + part * dash,
                             top + metrics.height - thickness * 2.0,
                             dash,
                             thickness,
                             cell.style.underline_color,
                             1.0,
-                            width,
-                            height,
                         );
                     }
                 }
                 Underline::Double => {
                     for offset in [2.0, 4.0] {
-                        push_rect(
-                            vertices,
+                        rectangles.push(
                             left,
                             top + metrics.height - thickness * offset,
                             metrics.width,
                             thickness,
                             cell.style.underline_color,
                             1.0,
-                            width,
-                            height,
                         );
                     }
                 }
             }
             if cell.style.strikethrough {
-                push_rect(
-                    vertices,
+                rectangles.push(
                     left,
                     top + metrics.height * 0.52,
                     metrics.width,
                     thickness,
                     cell.style.foreground,
                     1.0,
-                    width,
-                    height,
                 );
             }
             if cell.style.overline {
-                push_rect(
-                    vertices,
+                rectangles.push(
                     left,
                     top + thickness,
                     metrics.width,
                     thickness,
                     cell.style.foreground,
                     1.0,
-                    width,
-                    height,
                 );
             }
         }
@@ -834,30 +848,26 @@ fn build_scene_rectangles(
             ),
             CursorShape::Block => (left, top, metrics.width, metrics.height, 0.55),
             CursorShape::BlockHollow => {
-                push_hollow_rect(
-                    vertices,
+                rectangles.push_hollow(
                     left,
                     top,
                     metrics.width,
                     metrics.height,
                     thickness,
                     cursor.color,
-                    width,
-                    height,
                 );
                 return;
             }
         };
-        push_rect(vertices, x, y, w, h, cursor.color, alpha, width, height);
+        rectangles.push(x, y, w, h, cursor.color, alpha);
     }
 }
 
-fn build_notice_rectangles(vertices: &mut Vec<u8>, metrics: CellMetrics, width: u32, height: u32) {
-    push_rect(
-        vertices,
+fn build_notice_rectangles(rectangles: &mut RectangleBatch, metrics: CellMetrics) {
+    rectangles.push(
         metrics.padding,
-        height as f32 - metrics.height * 2.0,
-        width as f32 - metrics.padding * 2.0,
+        rectangles.height as f32 - metrics.height * 2.0,
+        rectangles.width as f32 - metrics.padding * 2.0,
         metrics.height * 1.5,
         SceneColor {
             r: 35,
@@ -865,82 +875,7 @@ fn build_notice_rectangles(vertices: &mut Vec<u8>, metrics: CellMetrics, width: 
             b: 18,
         },
         0.96,
-        width,
-        height,
     );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn push_hollow_rect(
-    vertices: &mut Vec<u8>,
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-    thickness: f32,
-    color: SceneColor,
-    screen_width: u32,
-    screen_height: u32,
-) {
-    for (x, y, width, height) in [
-        (x, y, width, thickness),
-        (x, y + height - thickness, width, thickness),
-        (x, y, thickness, height),
-        (x + width - thickness, y, thickness, height),
-    ] {
-        push_rect(
-            vertices,
-            x,
-            y,
-            width,
-            height,
-            color,
-            1.0,
-            screen_width,
-            screen_height,
-        );
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn push_rect(
-    vertices: &mut Vec<u8>,
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-    color: SceneColor,
-    alpha: f32,
-    screen_width: u32,
-    screen_height: u32,
-) {
-    if width <= 0.0 || height <= 0.0 {
-        return;
-    }
-    let to_x = |value: f32| value / screen_width as f32 * 2.0 - 1.0;
-    let to_y = |value: f32| 1.0 - value / screen_height as f32 * 2.0;
-    let left = to_x(x);
-    let right = to_x(x + width);
-    let top = to_y(y);
-    let bottom = to_y(y + height);
-    let rgba = [
-        f32::from(color.r) / 255.0,
-        f32::from(color.g) / 255.0,
-        f32::from(color.b) / 255.0,
-        alpha,
-    ];
-    for [x, y] in [
-        [left, top],
-        [left, bottom],
-        [right, bottom],
-        [left, top],
-        [right, bottom],
-        [right, top],
-    ] {
-        for value in [x, y, rgba[0], rgba[1], rgba[2], rgba[3]] {
-            vertices.extend_from_slice(&value.to_ne_bytes());
-        }
-    }
 }
 
 fn nonzero(size: PhysicalSize<u32>) -> PhysicalSize<u32> {
@@ -980,24 +915,14 @@ mod tests {
 
     #[test]
     fn rectangle_encoding_is_row_major_and_bounded() {
-        let mut bytes = Vec::new();
-        push_rect(
-            &mut bytes,
-            0.0,
-            0.0,
-            10.0,
-            20.0,
-            SceneColor { r: 1, g: 2, b: 3 },
-            1.0,
-            100,
-            100,
-        );
+        let mut rectangles = RectangleBatch::new(100, 100);
+        rectangles.push(0.0, 0.0, 10.0, 20.0, SceneColor { r: 1, g: 2, b: 3 }, 1.0);
         assert_eq!(
-            bytes.len(),
+            rectangles.bytes.len(),
             VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize
         );
-        assert_eq!(&bytes[..4], &(-1.0_f32).to_ne_bytes());
-        assert_eq!(&bytes[4..8], &1.0_f32.to_ne_bytes());
+        assert_eq!(&rectangles.bytes[..4], &(-1.0_f32).to_ne_bytes());
+        assert_eq!(&rectangles.bytes[4..8], &1.0_f32.to_ne_bytes());
     }
 
     #[test]

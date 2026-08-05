@@ -13,7 +13,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum TransportEvent {
     Server(ServerMessage),
-    InputRejected(String),
+    InvalidInput(String),
     Lost(String),
 }
 
@@ -27,8 +27,8 @@ pub enum SendError {
 impl fmt::Display for SendError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Full => formatter.write_str("Orbit input queue is full"),
-            Self::Closed => formatter.write_str("Orbit input channel is closed"),
+            Self::Full => formatter.write_str("Venus input queue is full"),
+            Self::Closed => formatter.write_str("Venus input channel is closed"),
         }
     }
 }
@@ -124,6 +124,7 @@ fn run(
         .name("venus-orbit-writer".into())
         .spawn(move || write_loop(writer, receiver, writer_notify))
     {
+        let _ = stream.shutdown(Shutdown::Both);
         notify(TransportEvent::Lost(format!(
             "Cannot start the Orbit input worker: {error}"
         )));
@@ -159,7 +160,7 @@ fn write_loop(
             Command::Message(message) => {
                 if let Err(error) = write_message(&mut stream, &message) {
                     let event = if error.kind() == std::io::ErrorKind::InvalidInput {
-                        TransportEvent::InputRejected(error.to_string())
+                        TransportEvent::InvalidInput(error.to_string())
                     } else {
                         TransportEvent::Lost(format!("Cannot send input to Orbit: {error}"))
                     };
@@ -236,6 +237,15 @@ mod tests {
         os::unix::net::UnixListener,
         time::{Duration, SystemTime},
     };
+
+    #[test]
+    fn local_queue_failures_name_venus_as_the_owner() {
+        assert_eq!(SendError::Full.to_string(), "Venus input queue is full");
+        assert_eq!(
+            SendError::Closed.to_string(),
+            "Venus input channel is closed"
+        );
+    }
 
     #[test]
     fn typed_attachment_is_duplex_and_client_drop_leaves_server_listener() {

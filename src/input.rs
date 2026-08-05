@@ -169,7 +169,7 @@ impl InputState {
 
 /// Map winit's physical identity directly into Orbit's accepted semantic type.
 #[must_use]
-pub fn physical_key(code: KeyCode) -> PhysicalKey {
+fn physical_key(code: KeyCode) -> PhysicalKey {
     use KeyCode as W;
     match code {
         W::Backquote => PhysicalKey::BACKQUOTE,

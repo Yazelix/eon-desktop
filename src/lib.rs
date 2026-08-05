@@ -2,16 +2,16 @@
 
 //! Native presentation and interaction for one authoritative Orbit session.
 
-pub mod accessibility;
-pub mod input;
-pub mod model;
-pub mod render;
-pub mod scene;
-pub mod transport;
+mod accessibility;
+mod input;
+mod model;
+mod render;
+mod scene;
+mod transport;
 
 pub use accessibility::{Accessibility, Activation};
-pub use input::{InputState, physical_key};
+pub use input::InputState;
 pub use model::{ConnectionState, ModelError, SessionModel};
-pub use render::{CellMetrics, PresentOutcome, Renderer};
+pub use render::{CellMetrics, PresentOutcome, RenderError, Renderer};
 pub use scene::{Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene};
 pub use transport::{SendError, Transport, TransportEvent};

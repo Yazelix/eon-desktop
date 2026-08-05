@@ -112,7 +112,7 @@ impl SessionModel {
                 Ok(())
             }
             ServerMessage::Failure(failure) => {
-                self.notice = Some(bounded(failure.detail));
+                self.notice = Some(bounded(format!("Orbit rejected input: {}", failure.detail)));
                 Ok(())
             }
             ServerMessage::Busy => {

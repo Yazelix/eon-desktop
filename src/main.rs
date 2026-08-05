@@ -120,8 +120,9 @@ impl Application {
                     self.send_resize();
                 }
             }
-            TransportEvent::InputRejected(detail) => {
-                self.model.set_notice(detail);
+            TransportEvent::InvalidInput(detail) => {
+                self.model
+                    .set_notice(format!("Venus could not encode input: {detail}"));
             }
             TransportEvent::Lost(detail) => {
                 if !matches!(
@@ -207,7 +208,7 @@ impl Application {
             return notice.clone();
         }
         if let Some(notice) = self.model.notice() {
-            return format!("Orbit rejected input: {notice}");
+            return notice.to_owned();
         }
         match self.model.connection() {
             ConnectionState::Connecting => {
@@ -230,20 +231,21 @@ impl Application {
 
     fn render(&mut self) {
         let status = self.status();
-        let preedit = self.input.preedit().to_owned();
+        let preedit = self.input.preedit();
         let mut refresh = false;
         let Some(state) = &mut self.window else {
             return;
         };
         match state
             .renderer
-            .render(self.model.scene(), &status, self.blink_visible, &preedit)
+            .render(self.model.scene(), &status, self.blink_visible, preedit)
         {
             Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
                 self.scene_presented =
                     self.model.scene().is_some() && surface_size(&state.renderer).is_some();
             }
+            Ok(PresentOutcome::Retry) => state.window.request_redraw(),
             Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Recovered) => {
                 self.scene_presented = false;
@@ -264,10 +266,6 @@ impl Application {
         if refresh {
             self.refresh_client_view();
         }
-    }
-
-    fn pointer_is_presented(&self) -> bool {
-        self.scene_presented
     }
 }
 
@@ -311,6 +309,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.send_resize();
                 self.refresh_client_view();
             }
+            WindowEvent::Occluded(false) => state.window.request_redraw(),
             WindowEvent::RedrawRequested => self.render(),
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => {
@@ -330,16 +329,16 @@ impl ApplicationHandler<UserEvent> for Application {
                     FocusEvent::Lost
                 }));
             }
-            WindowEvent::CursorMoved { position, .. } if self.pointer_is_presented() => {
+            WindowEvent::CursorMoved { position, .. } if self.scene_presented => {
                 if let Some(message) = self.input.move_pointer(position.x, position.y) {
                     self.send(message);
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } if self.pointer_is_presented() => {
+            WindowEvent::MouseInput { state, button, .. } if self.scene_presented => {
                 let message = self.input.mouse_button(state, button);
                 self.send(message);
             }
-            WindowEvent::MouseWheel { delta, .. } if self.pointer_is_presented() => {
+            WindowEvent::MouseWheel { delta, .. } if self.scene_presented => {
                 let (horizontal, vertical) = match delta {
                     MouseScrollDelta::LineDelta(x, y) => (x, y),
                     MouseScrollDelta::PixelDelta(position) => {
