@@ -15,7 +15,9 @@ shape. `ven-upt.2` implements it with exact direct versions and features in
 
 Minimal Rust 2024 scratch binaries were resolved and checked on Rust 1.96.0.
 Counts include the scratch root; lock counts include cross-target entries, while
-tree counts are unique Linux normal/build output lines.
+tree counts are unique Linux normal/build output lines. The implemented lock
+contains 325 packages including Venus and `orbit-protocol`; its current Linux
+normal/build tree has 266 unique lines.
 
 | Complete shape | Exact releases | Lock packages | Linux tree | Disposition |
 |---|---|---:|---:|---|
