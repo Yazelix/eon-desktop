@@ -325,14 +325,18 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.send(message);
                 self.refresh_client_view();
             }
-            WindowEvent::CursorMoved { position, .. } if self.scene_presented => {
-                if let Some(message) = self.input.move_pointer(position.x, position.y) {
+            WindowEvent::CursorMoved { position, .. } => {
+                if let Some(message) = self.input.move_pointer(position.x, position.y)
+                    && self.scene_presented
+                {
                     self.send(message);
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } if self.scene_presented => {
+            WindowEvent::MouseInput { state, button, .. } => {
                 let message = self.input.mouse_button(state, button);
-                self.send(message);
+                if self.scene_presented {
+                    self.send(message);
+                }
             }
             WindowEvent::MouseWheel { delta, .. } if self.scene_presented => {
                 let (horizontal, vertical) = match delta {
