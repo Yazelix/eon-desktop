@@ -535,7 +535,7 @@ impl Renderer {
         text: &str,
         left: f32,
         top: f32,
-        width: f32,
+        layout_width: f32,
         height: f32,
         foreground: SceneColor,
         kind: DrawStyleKind,
@@ -587,21 +587,21 @@ impl Renderer {
             ),
         };
         let mut buffer = Buffer::new(&mut self.font_system, Metrics::new(font_size, line_height));
-        buffer.set_size(Some(width.max(1.0)), Some(height.max(1.0)));
+        buffer.set_size(Some(layout_width.max(1.0)), Some(height.max(1.0)));
         buffer.set_wrap(wrap);
         buffer.set_monospace_width(monospace_width);
         buffer.set_text(text, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
-        let width = shaped_width(&buffer);
+        let measured_width = shaped_width(&buffer);
         self.text.push(PlacedText {
             buffer,
             left,
             top,
-            right: (left + width).ceil() as i32,
+            right: (left + layout_width).ceil() as i32,
             bottom: (top + height).ceil() as i32,
             color: Color::rgba(foreground.r, foreground.g, foreground.b, alpha),
         });
-        width
+        measured_width
     }
 
     fn upload_vertices(&mut self, bytes: &[u8]) {
