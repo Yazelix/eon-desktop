@@ -122,7 +122,7 @@ impl Application {
             }
             TransportEvent::InvalidInput(detail) => {
                 self.model
-                    .set_notice(format!("Venus could not encode input: {detail}"));
+                    .set_venus_notice(format!("Venus could not encode input: {detail}"));
             }
             TransportEvent::Lost(detail) => {
                 self.model.mark_lost(detail);
@@ -175,9 +175,12 @@ impl Application {
             return false;
         };
         if let Err(error) = transport.send(message) {
-            self.model.set_notice(error.to_string());
+            self.model.set_venus_notice(error.to_string());
             self.refresh_client_view();
             return false;
+        }
+        if self.model.clear_venus_notice() {
+            self.refresh_client_view();
         }
         true
     }
@@ -188,10 +191,11 @@ impl Application {
         };
         let Some(size) = surface_size(&state.renderer) else {
             self.model
-                .set_notice("Window dimensions exceed the accepted Orbit surface range");
+                .set_venus_notice("Window dimensions exceed the accepted Orbit surface range");
             return;
         };
         if self.last_resize == Some(size) {
+            self.model.clear_venus_notice();
             return;
         }
         if self.send(ClientMessage::Resize(size)) {

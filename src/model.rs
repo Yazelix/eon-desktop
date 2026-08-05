@@ -40,13 +40,19 @@ impl Error for ModelError {
     }
 }
 
+#[derive(Debug)]
+enum Notice {
+    Orbit(String),
+    Venus(String),
+}
+
 /// The sole persistent owner of accepted presentation state in one client process.
 #[derive(Debug)]
 pub struct SessionModel {
     reducer: FrameReducer,
     scene: Option<Scene>,
     connection: ConnectionState,
-    notice: Option<String>,
+    notice: Option<Notice>,
 }
 
 impl Default for SessionModel {
@@ -78,7 +84,9 @@ impl SessionModel {
 
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
-        self.notice.as_deref()
+        self.notice.as_ref().map(|notice| match notice {
+            Notice::Orbit(detail) | Notice::Venus(detail) => detail.as_str(),
+        })
     }
 
     #[must_use]
@@ -128,11 +136,16 @@ impl SessionModel {
                 Ok(())
             }
             ServerMessage::Accepted => {
-                self.notice = None;
+                if matches!(self.notice, Some(Notice::Orbit(_))) {
+                    self.notice = None;
+                }
                 Ok(())
             }
             ServerMessage::Failure(failure) => {
-                self.notice = Some(bounded(format!("Orbit rejected input: {}", failure.detail)));
+                self.notice = Some(Notice::Orbit(bounded(format!(
+                    "Orbit rejected input: {}",
+                    failure.detail
+                ))));
                 Ok(())
             }
             ServerMessage::Busy => {
@@ -169,11 +182,19 @@ impl SessionModel {
         self.notice = None;
     }
 
-    pub fn set_notice(&mut self, detail: impl Into<String>) {
+    pub fn set_venus_notice(&mut self, detail: impl Into<String>) {
         if self.is_terminal() {
             return;
         }
-        self.notice = Some(bounded(detail.into()));
+        self.notice = Some(Notice::Venus(bounded(detail.into())));
+    }
+
+    pub fn clear_venus_notice(&mut self) -> bool {
+        if !matches!(self.notice, Some(Notice::Venus(_))) {
+            return false;
+        }
+        self.notice = None;
+        true
     }
 }
 
