@@ -105,9 +105,15 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
             detail: "x".repeat(2_000),
         }))
         .unwrap();
-    let notice = attached.notice().unwrap();
+    let notice = attached.notice().unwrap().to_owned();
     assert!(notice.starts_with("Orbit rejected input: "));
     assert_eq!(notice.chars().count(), 1_025);
+    attached
+        .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Primary))))
+        .unwrap();
+    assert_eq!(attached.notice(), Some(notice.as_str()));
+    attached.apply(ServerMessage::Accepted).unwrap();
+    assert!(attached.notice().is_none());
     attached.mark_lost("Orbit closed the local session");
     attached.mark_lost("late socket error");
     attached.set_notice("late input error");

@@ -125,7 +125,6 @@ impl SessionModel {
             ServerMessage::Frame(frame) => {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
-                self.notice = None;
                 Ok(())
             }
             ServerMessage::Accepted => {
