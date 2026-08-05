@@ -174,12 +174,11 @@ impl Application {
             ClientMessage::Resize(size) => Some(*size),
             _ => None,
         };
-        let current_resize = self
-            .window
-            .as_ref()
-            .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()));
-        if resize.is_none()
-            && let Some(size) = current_resize
+        if matches!(&message, ClientMessage::Mouse(_))
+            && let Some(size) = self
+                .window
+                .as_ref()
+                .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()))
             && self.last_resize != Some(size)
             && !self.send(ClientMessage::Resize(size))
         {
