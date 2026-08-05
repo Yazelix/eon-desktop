@@ -9,7 +9,7 @@ and consequences for ownership, code shape, and the first check.
 
 - Orbit `ORB-C1` through `ORB-C6`, ORBF v1, ORBS v1, and the dependency-free
   `orbit-protocol` 0.1.0 package are accepted at
-  `41894ed7e7ed22ae278e5d8feb22a1c85b589440`; `ORB-C7` is partially proved at
+  `838b67652c4df1979e599b9c401ee664ffac66bd`; `ORB-C7` is partially proved at
   that revision. Venus must consume the package at that exact Git revision and
   must not mirror either codec or its semantic values.
 - [FrankenTUI](https://github.com/Dicklesworthstone/frankentui) is required for

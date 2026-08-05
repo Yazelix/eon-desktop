@@ -6,7 +6,7 @@ still required before its status changes to selected or any manifest is added.
 
 | Boundary | Recommended shape | Status | Owner consequence |
 |---|---|---|---|
-| Orbit protocol consumer | Exact Git revision `41894ed7e7ed22ae278e5d8feb22a1c85b589440` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Orbit boundary accepted; Venus dependency awaiting approval | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
+| Orbit protocol consumer | Exact Git revision `838b67652c4df1979e599b9c401ee664ffac66bd` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Orbit boundary accepted; Venus dependency awaiting approval | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
 | Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Recommended; awaiting approval | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Recommended; awaiting approval | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Recommended; awaiting approval | Venus derives the accessibility tree from the same immutable, revision-tagged scene that supplies draw and hit inputs. |
