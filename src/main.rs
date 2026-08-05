@@ -22,8 +22,8 @@ use winit::{
     window::{Window, WindowId},
 };
 use yazelix_venus::{
-    Accessibility, ConnectionState, InputState, LocalNoticeSource, PresentOutcome, Renderer,
-    SessionModel, Transport, TransportEvent,
+    Accessibility, CellMetrics, ConnectionState, InputState, LocalNoticeSource, PresentOutcome,
+    Renderer, SessionModel, Transport, TransportEvent,
 };
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
@@ -198,10 +198,10 @@ impl Application {
         let Some(state) = &self.window else {
             return;
         };
-        let Some(size) = surface_size(&state.renderer) else {
+        let Some(size) = surface_size(state.renderer.size(), state.renderer.metrics()) else {
             self.model.set_venus_notice(
                 LocalNoticeSource::Resize,
-                "Window dimensions exceed the accepted Orbit surface range",
+                "Window dimensions are outside Orbit's accepted surface range",
             );
             return;
         };
@@ -253,8 +253,8 @@ impl Application {
         {
             Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
-                self.scene_presented =
-                    self.model.scene().is_some() && surface_size(&state.renderer).is_some();
+                self.scene_presented = self.model.scene().is_some()
+                    && surface_size(state.renderer.size(), state.renderer.metrics()).is_some();
             }
             Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Recovered) => {
@@ -409,8 +409,7 @@ impl ApplicationHandler<UserEvent> for Application {
     }
 }
 
-fn surface_size(renderer: &Renderer) -> Option<SurfaceSize> {
-    let screen = renderer.size();
+fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
     if screen.width == 0
         || screen.height == 0
         || screen.width > u32::from(u16::MAX)
@@ -418,7 +417,6 @@ fn surface_size(renderer: &Renderer) -> Option<SurfaceSize> {
     {
         return None;
     }
-    let metrics = renderer.metrics();
     let cell_width = metrics.width.round() as u32;
     let cell_height = metrics.height.round() as u32;
     let padding = metrics.padding.round() as u32;
@@ -480,11 +478,11 @@ mod tests {
 
     #[test]
     fn surface_measurements_match_orbit_invariants() {
-        let metrics = yazelix_venus::CellMetrics::for_scale(1.0);
-        let size = PhysicalSize::new(960, 600);
-        let columns = (size.width - 24) / metrics.width as u32;
-        let rows = (size.height - 24) / metrics.height as u32;
-        assert_eq!((columns, rows), (104, 32));
-        assert!(columns * rows <= MAX_CELLS as u32);
+        let metrics = CellMetrics::for_scale(1.0);
+        let size = surface_size(PhysicalSize::new(960, 600), metrics).unwrap();
+        assert_eq!((size.cols, size.rows), (104, 32));
+        assert!(usize::from(size.cols) * usize::from(size.rows) <= MAX_CELLS);
+        assert!(surface_size(PhysicalSize::new(1, 1), metrics).is_none());
+        assert!(surface_size(PhysicalSize::new(u32::from(u16::MAX) + 1, 600), metrics).is_none());
     }
 }
