@@ -3,7 +3,7 @@ use orbit_protocol::session::{
     MouseEvent, PhysicalKey,
 };
 use winit::{
-    event::{ElementState, Ime, KeyEvent as WinitKeyEvent},
+    event::{ElementState, Ime, KeyEvent as WinitKeyEvent, MouseButton as WinitMouseButton},
     keyboard::{KeyCode, ModifiersState, PhysicalKey as WinitPhysicalKey},
 };
 
@@ -14,7 +14,7 @@ pub struct InputState {
     composing: bool,
     preedit: String,
     cursor: (f32, f32),
-    pressed_button: Option<MouseButton>,
+    pressed_buttons: Vec<WinitMouseButton>,
 }
 
 impl InputState {
@@ -41,7 +41,7 @@ impl InputState {
     pub fn focus(&mut self, focused: bool) -> ClientMessage {
         if !focused {
             self.modifiers = Modifiers::empty();
-            self.pressed_button = None;
+            self.pressed_buttons.clear();
             self.clear_composition();
         }
         ClientMessage::Focus(if focused {
@@ -111,29 +111,23 @@ impl InputState {
         self.cursor = (x, y);
         Some(ClientMessage::Mouse(MouseEvent {
             action: MouseAction::Motion,
-            button: self.pressed_button,
+            button: self.pressed_buttons.last().copied().map(mouse_button),
             modifiers: self.modifiers,
             x,
             y,
         }))
     }
 
-    pub fn mouse_button(
-        &mut self,
-        state: ElementState,
-        button: winit::event::MouseButton,
-    ) -> ClientMessage {
-        let button = mouse_button(button);
+    pub fn mouse_button(&mut self, state: ElementState, button: WinitMouseButton) -> ClientMessage {
+        self.pressed_buttons.retain(|pressed| *pressed != button);
         let action = match state {
             ElementState::Pressed => {
-                self.pressed_button = Some(button);
+                self.pressed_buttons.push(button);
                 MouseAction::Press
             }
-            ElementState::Released => {
-                self.pressed_button = None;
-                MouseAction::Release
-            }
+            ElementState::Released => MouseAction::Release,
         };
+        let button = mouse_button(button);
         ClientMessage::Mouse(MouseEvent {
             action,
             button: Some(button),
@@ -469,6 +463,23 @@ mod tests {
         };
         assert_eq!(event.button, None);
         assert_eq!(event.modifiers, Modifiers::empty());
+    }
+
+    #[test]
+    fn pointer_motion_keeps_the_remaining_pressed_button() {
+        for (released, expected) in [
+            (WinitMouseButton::Left, MouseButton::Right),
+            (WinitMouseButton::Right, MouseButton::Left),
+        ] {
+            let mut input = InputState::default();
+            input.mouse_button(ElementState::Pressed, WinitMouseButton::Left);
+            input.mouse_button(ElementState::Pressed, WinitMouseButton::Right);
+            input.mouse_button(ElementState::Released, released);
+            let Some(ClientMessage::Mouse(event)) = input.move_pointer(10.0, 20.0) else {
+                panic!("expected semantic pointer motion");
+            };
+            assert_eq!(event.button, Some(expected));
+        }
     }
 
     #[test]
