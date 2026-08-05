@@ -345,8 +345,8 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let message = self.input.mouse_button(state, button);
-                if self.scene_presented {
+                if let Some(message) = self.input.mouse_button(state, button, self.scene_presented)
+                {
                     self.send(message);
                 }
             }
