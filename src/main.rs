@@ -17,7 +17,7 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
-    event::{MouseScrollDelta, WindowEvent},
+    event::{ElementState, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
@@ -346,8 +346,10 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(message) = self.input.mouse_button(state, button, self.scene_presented)
+                    && !self.send(message)
+                    && state == ElementState::Pressed
                 {
-                    self.send(message);
+                    self.input.reject_mouse_press(button);
                 }
             }
             WindowEvent::MouseWheel { delta, .. } if self.scene_presented => {

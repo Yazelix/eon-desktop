@@ -118,7 +118,7 @@ impl InputState {
         }))
     }
 
-    /// Keep semantic button transitions paired while new presses are presentation-gated.
+    /// Keep semantic button transitions paired across presentation and queue gates.
     pub fn mouse_button(
         &mut self,
         state: ElementState,
@@ -126,7 +126,9 @@ impl InputState {
         accept_press: bool,
     ) -> Option<ClientMessage> {
         match state {
-            ElementState::Pressed if !accept_press => return None,
+            ElementState::Pressed if !accept_press || self.pressed_buttons.contains(&button) => {
+                return None;
+            }
             ElementState::Released if !self.pressed_buttons.contains(&button) => return None,
             _ => {}
         }
@@ -146,6 +148,11 @@ impl InputState {
             x: self.cursor.0,
             y: self.cursor.1,
         }))
+    }
+
+    /// Forget a press that failed to enter the outbound queue.
+    pub fn reject_mouse_press(&mut self, button: WinitMouseButton) {
+        self.pressed_buttons.retain(|pressed| *pressed != button);
     }
 
     #[must_use]
@@ -494,15 +501,29 @@ mod tests {
     }
 
     #[test]
-    fn presentation_gap_preserves_only_reported_button_pairs() {
+    fn button_pairing_survives_presentation_and_queue_gates() {
         let mut input = InputState::default();
-        let mut button =
-            |state, button, accept_press| input.mouse_button(state, button, accept_press);
-        assert!(button(ElementState::Pressed, WinitMouseButton::Left, false).is_none());
-        assert!(button(ElementState::Released, WinitMouseButton::Left, true).is_none());
-        assert!(button(ElementState::Pressed, WinitMouseButton::Right, true).is_some());
+        {
+            let mut button =
+                |state, button, accept_press| input.mouse_button(state, button, accept_press);
+            assert!(button(ElementState::Pressed, WinitMouseButton::Left, false).is_none());
+            assert!(button(ElementState::Released, WinitMouseButton::Left, true).is_none());
+            assert!(button(ElementState::Pressed, WinitMouseButton::Right, true).is_some());
+            assert!(button(ElementState::Pressed, WinitMouseButton::Right, true).is_none());
+        }
+        input.reject_mouse_press(WinitMouseButton::Right);
+        let Some(ClientMessage::Mouse(motion)) = input.move_pointer(10.0, 20.0) else {
+            panic!("expected semantic pointer motion");
+        };
+        assert_eq!(motion.button, None);
+
+        assert!(
+            input
+                .mouse_button(ElementState::Pressed, WinitMouseButton::Right, true)
+                .is_some()
+        );
         assert!(matches!(
-            button(ElementState::Released, WinitMouseButton::Right, false),
+            input.mouse_button(ElementState::Released, WinitMouseButton::Right, false),
             Some(ClientMessage::Mouse(MouseEvent {
                 action: MouseAction::Release,
                 button: Some(MouseButton::Right),
