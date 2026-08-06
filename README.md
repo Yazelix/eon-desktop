@@ -76,10 +76,10 @@ Beads data, lock files, and generated artifacts.
 |---|---:|
 | Agent policy | 191 |
 | README | 85 |
-| Contracts and references | 122 |
+| Contracts and references | 123 |
 | Crate decisions | 88 |
-| Changelog | 18 |
-| Rust production | 3,289 |
+| Changelog | 21 |
+| Rust production | 3,481 |
 | Rust tests | 307 |
 | Cargo manifest | 18 |
-| **Total** | **4,118** |
+| **Total** | **4,314** |

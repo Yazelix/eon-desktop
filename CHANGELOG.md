@@ -16,3 +16,6 @@
   unrelated presentation, resize, or response traffic erase them.
 - Preserve resize and pointer readiness across queue and surface failures, and
   render Orbit colors in the surface's declared color space.
+- Keep sustained complete-frame rendering within the accepted Linux CPU and
+  memory envelope through superseded-frame replacement and cheap ASCII shaping
+  while preserving revision failures, ordered acknowledgements, and Unicode.
