@@ -362,21 +362,21 @@ mod tests {
     fn frame_reduction_preserves_message_and_revision_order() {
         let events = EventQueue::default();
         assert!(events.push(server_frame(1)));
+        assert!(!events.push(TransportEvent::Server(ServerMessage::Accepted)));
         assert!(!events.push(server_frame(2)));
         assert!(!events.push(TransportEvent::InvalidInput("input".into())));
         assert!(!events.push(server_frame(3)));
         assert!(!events.push(server_frame(4)));
 
-        let revisions = events
-            .drain()
-            .into_iter()
-            .map(|event| match event {
-                TransportEvent::Server(ServerMessage::Frame(frame)) => Some(frame.revision),
-                TransportEvent::InvalidInput(_) => None,
-                event => panic!("unexpected event: {event:?}"),
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(revisions, [Some(2), None, Some(4)]);
+        assert_eq!(
+            events.drain(),
+            [
+                TransportEvent::Server(ServerMessage::Accepted),
+                server_frame(2),
+                TransportEvent::InvalidInput("input".into()),
+                server_frame(4),
+            ]
+        );
 
         assert!(events.push(server_frame(3)));
         assert!(!events.push(server_frame(5)));
@@ -385,22 +385,6 @@ mod tests {
         assert!(events.push(server_frame(6)));
         assert!(!events.push(server_frame(5)));
         assert_eq!(events.drain(), [server_frame(6), server_frame(5)]);
-    }
-
-    #[test]
-    fn accepted_events_do_not_block_complete_frame_replacement() {
-        let events = EventQueue::default();
-        assert!(events.push(server_frame(1)));
-        assert!(!events.push(TransportEvent::Server(ServerMessage::Accepted)));
-        assert!(!events.push(server_frame(2)));
-
-        assert_eq!(
-            events.drain(),
-            [
-                TransportEvent::Server(ServerMessage::Accepted),
-                server_frame(2),
-            ]
-        );
     }
 
     #[test]

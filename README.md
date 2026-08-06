@@ -64,7 +64,7 @@ The Linux host uses winit, wgpu, glyphon, and AccessKit. macOS remains an
 architectural target, not an implemented or proved platform. The exact
 `c905bf9610581747f1b07565814b501ca66cfaa6` Orbit package revision is published
 and resolves from GitHub. Later Orbit runtime proof
-`838b67652c4df1979e599b9c401ee664ffac66bd` preserves identical protocol and
+`847cab1ca37495c5cd45454623bd81909b488564` preserves identical protocol and
 Cargo metadata, so Venus keeps its accepted dependency pin.
 
 ## LOC scorecard
@@ -79,7 +79,7 @@ Beads data, lock files, and generated artifacts.
 | Contracts and references | 123 |
 | Crate decisions | 88 |
 | Changelog | 21 |
-| Rust production | 3,481 |
+| Rust production | 3,486 |
 | Rust tests | 307 |
 | Cargo manifest | 18 |
-| **Total** | **4,314** |
+| **Total** | **4,319** |
