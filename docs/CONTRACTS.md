@@ -14,7 +14,9 @@ The Orbit proof revisions above establish source boundaries; they do not prove
 a Venus contract. Every consumer proof records the exact Orbit revisions tested
 and reports any gap to Orbit.
 
-Orbit proof `c905bf9610581747f1b07565814b501ca66cfaa6` is not yet published
-on `origin/edge`. The locked local proof passes, but a clean external Cargo
-checkout cannot resolve the exact Git dependency until that Orbit history is
-published.
+Orbit proof `c905bf9610581747f1b07565814b501ca66cfaa6` is published on
+`origin/edge` and remains Venus's exact `orbit-protocol` dependency. Later
+Orbit runtime proof `838b67652c4df1979e599b9c401ee664ffac66bd` is compatible:
+`crates/protocol`, `Cargo.toml`, and `Cargo.lock` are byte-identical between the
+two revisions, so no Venus manifest migration is required. Orbit retains its
+partial `ORB-C7` hardening gap.

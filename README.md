@@ -61,9 +61,11 @@ remote and web access, macOS implementation, packaging, and distribution are
 outside the first slice.
 
 The Linux host uses winit, wgpu, glyphon, and AccessKit. macOS remains an
-architectural target, not an implemented or proved platform. The pinned Orbit
-proof commit must be published before a clean external Cargo checkout can
-resolve it from GitHub.
+architectural target, not an implemented or proved platform. The exact
+`c905bf9610581747f1b07565814b501ca66cfaa6` Orbit package revision is published
+and resolves from GitHub. Later Orbit runtime proof
+`838b67652c4df1979e599b9c401ee664ffac66bd` preserves identical protocol and
+Cargo metadata, so Venus keeps its accepted dependency pin.
 
 ## LOC scorecard
 
@@ -73,11 +75,11 @@ Beads data, lock files, and generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 191 |
-| README | 83 |
-| Contracts and references | 120 |
+| README | 85 |
+| Contracts and references | 122 |
 | Crate decisions | 88 |
 | Changelog | 18 |
 | Rust production | 3,289 |
 | Rust tests | 307 |
 | Cargo manifest | 18 |
-| **Total** | **4,114** |
+| **Total** | **4,118** |
