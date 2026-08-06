@@ -24,7 +24,7 @@ fn canonical_orbit_frame_becomes_one_deterministic_scene() {
     assert_eq!(
         scene.snapshot(),
         concat!(
-            "revision=7 screen=Alternate size=4x1 title=\"Astra ✦\" cwd=\"/tmp/venus\"\n",
+            "revision=7 screen=Alternate size=4x1 title=\"Eon ✦\" cwd=\"/tmp/venus\"\n",
             "run 0,0+1 \"e\\u{301}\" fg=f0f1f5 bg=10131a\n",
             "run 1,0+2 \"界\" fg=22cc88 bg=10131a\n",
             "cursor 1,0 Block visible=true tail=false\n"
@@ -240,7 +240,7 @@ fn frame(revision: u64, screen: Screen) -> Frame {
         revision,
         dimensions: Dimensions { cols: 4, rows: 1 },
         screen,
-        title: "Astra ✦".into(),
+        title: "Eon ✦".into(),
         working_directory: "/tmp/venus".into(),
         capabilities: Capabilities {
             hyperlinks: true,

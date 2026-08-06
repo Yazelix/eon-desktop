@@ -285,10 +285,10 @@ Required practice:
 
 ## Repository-local rules
 
-Venus is the greenfield native graphical client for Orbit and Yazelix Astra.
-It materializes Orbit-authored presentation state and sends semantic
-interaction. Orbit remains the sole owner of PTYs and terminal authority;
-Astra owns product orchestration, policy, composition, and distribution.
+Eon Desktop is the repository for Eon for desktop. Its Venus subsystem
+materializes Orbit-authored presentation state and sends semantic interaction.
+Eon Sessions contains Orbit, which remains the sole owner of PTYs and terminal
+authority; Eon owns product orchestration, policy, composition, and distribution.
 
 ## Status
 
@@ -333,9 +333,10 @@ checks and advance the exact proof revision or record the remaining gap.
 
 ## One active frontier
 
-Keep one active implementation frontier across Orbit, Venus, and Astra unless
-the user authorizes parallel product work. Research and Beads may prepare Venus
-without adding production code. Do not build against speculative Orbit APIs.
+Keep one active implementation frontier across Eon Sessions, Eon Desktop, and
+Eon unless the user authorizes parallel product work. Research and Beads may
+prepare Venus without adding production code. Do not build against speculative
+Orbit APIs.
 
 Before Venus implementation begins, record the exact accepted Orbit proof
 commit and consumed `ORB-C*` revisions. Any boundary gap returns to Orbit. A

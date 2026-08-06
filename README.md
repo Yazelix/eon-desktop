@@ -1,23 +1,23 @@
-# Venus
+# Eon Desktop
 
-Venus is the greenfield native graphical client for Orbit and Yazelix Astra.
-It renders structured presentation state authored by Orbit and sends semantic
-interaction back to the authoritative session runtime.
+Eon Desktop is the repository for Eon for desktop. Its Venus subsystem renders
+structured presentation state authored by the Orbit subsystem in Eon Sessions
+and sends semantic interaction back to the authoritative session runtime.
 
 ## Status
 
-Venus implements one Linux window attached to one already-running local Orbit
-session. It renders the accepted Orbit frame contract, sends semantic native
-input and resize events, detaches without ending the Orbit session, and reports
-bounded attachment or server failures. It does not own a PTY or terminal
-emulator.
+The Venus client implements one Linux window attached to one already-running
+local Orbit session. It renders the accepted Orbit frame contract, sends
+semantic native input and resize events, detaches without ending the Orbit
+session, and reports bounded attachment or server failures. It does not own a
+PTY or terminal emulator.
 
 ## Ownership
 
 ```text
-Yazelix Astra  -> product policy, composition, distribution
-Venus          -> native presentation, interaction, client failure UX
-Orbit          -> PTYs, terminal state, session lifetime, wire authority
+Eon                     -> product policy, composition, distribution
+Eon Desktop / Venus     -> native presentation, interaction, client failure UX
+Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
 Venus consumes `orbit-protocol` 0.1.0, ORBF v1, and ORBS v1 at exact Orbit proof
@@ -28,7 +28,8 @@ no terminal state.
 
 ## Run
 
-Start an Orbit session server first, then pass its Unix socket to Venus:
+Start the Eon Sessions Orbit server first, then pass its Unix socket to the
+Venus client:
 
 ```sh
 cargo run --locked -- /path/to/orbit.sock
@@ -41,7 +42,7 @@ Only one presentation client can attach to an Orbit session at a time.
 
 ## Architecture and evidence
 
-- [`docs/CONTRACTS.md`](docs/CONTRACTS.md) indexes Venus behavior and proof.
+- [`docs/CONTRACTS.md`](docs/CONTRACTS.md) indexes Venus subsystem behavior and proof.
 - [`docs/REFERENCES.md`](docs/REFERENCES.md) records the exact architectural
   evidence used by the implementation gate.
 - [`docs/CRATES.md`](docs/CRATES.md) records the measured dependency selection,
@@ -74,12 +75,12 @@ Beads data, lock files, and generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 191 |
-| README | 85 |
+| Agent policy | 188 |
+| README | 86 |
 | Contracts and references | 123 |
 | Crate decisions | 88 |
 | Changelog | 21 |
 | Rust source, including unit tests | 3,486 |
 | Rust integration tests | 307 |
 | Cargo manifest | 18 |
-| **Total** | **4,319** |
+| **Total** | **4,317** |
