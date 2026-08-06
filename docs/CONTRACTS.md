@@ -12,7 +12,7 @@ names an accepted immutable proof commit and its canonical checks.
 
 The Orbit proof revisions above establish source boundaries; they do not prove
 a Venus contract. Every consumer proof records the exact Orbit revisions tested
-and reports any gap to Orbit.
+and reports any gap to Orbit. Test-only proof maintenance at `7fab37efa40de5f340557cc31e061f37ed43859f` passed the locked checks without changing product logic; native proof remains at `8929c9f9d151641a343813ddeb6005cb9c771286`.
 
 Orbit proof `c905bf9610581747f1b07565814b501ca66cfaa6` is published on
 `origin/edge` and remains Venus's exact `orbit-protocol` dependency. Later
