@@ -1,5 +1,6 @@
 use orbit_protocol::session::{self, ClientMessage, ServerMessage};
 use std::{
+    collections::VecDeque,
     fmt,
     io::{Read, Write},
     net::Shutdown,
@@ -38,14 +39,16 @@ impl std::error::Error for SendError {}
 /// Bounded typed input handle for one transient Orbit attachment.
 pub struct Transport {
     messages: mpsc::SyncSender<ClientMessage>,
+    events: Arc<EventQueue>,
 }
 
 impl Transport {
-    /// Connect on a worker thread and report decoded server messages through `notify`.
+    /// Connect on a worker thread, queue decoded server messages, and wake the event loop.
     #[must_use]
-    pub fn start(socket: PathBuf, notify: impl Fn(TransportEvent) + Send + Sync + 'static) -> Self {
+    pub fn start(socket: PathBuf, wake: impl Fn() + Send + Sync + 'static) -> Self {
         let (messages, receiver) = mpsc::sync_channel(256);
-        let notify = notifier(notify);
+        let events = Arc::new(EventQueue::default());
+        let notify = notifier(Arc::clone(&events), wake);
         if let Err(error) = thread::Builder::new()
             .name("venus-orbit-reader".into())
             .spawn({
@@ -57,7 +60,7 @@ impl Transport {
                 "Cannot start the Orbit transport worker: {error}"
             )));
         }
-        Self { messages }
+        Self { messages, events }
     }
 
     /// Queue one canonical Orbit message without blocking the native event loop.
@@ -69,19 +72,109 @@ impl Transport {
                 mpsc::TrySendError::Disconnected(_) => SendError::Closed,
             })
     }
+
+    /// Drain ordered server events, with consecutive complete frames reduced to the latest one.
+    pub fn drain_events(&self) -> Vec<TransportEvent> {
+        self.events.drain()
+    }
+}
+
+#[derive(Default)]
+struct EventQueue(Mutex<QueuedEvents>);
+
+#[derive(Default)]
+struct QueuedEvents {
+    events: VecDeque<TransportEvent>,
+    frames: usize,
+    delivered_frame_high_water: Option<u64>,
+    stopped: bool,
+}
+
+const EVENT_QUEUE_CAPACITY: usize = 256;
+const FRAME_QUEUE_CAPACITY: usize = 2;
+
+impl EventQueue {
+    fn push(&self, event: TransportEvent) -> bool {
+        let mut state = self.0.lock().expect("transport event queue lock poisoned");
+        if state.stopped {
+            return false;
+        }
+        let incoming_revision = frame_revision(&event);
+        if let Some(revision) = incoming_revision {
+            let mut replaced = None;
+            for (index, queued) in state.events.iter().enumerate().rev() {
+                match queued {
+                    TransportEvent::Server(ServerMessage::Accepted) => {}
+                    TransportEvent::Server(ServerMessage::Frame(frame)) => {
+                        let previous_revision = state
+                            .events
+                            .iter()
+                            .take(index)
+                            .filter_map(frame_revision)
+                            .chain(state.delivered_frame_high_water)
+                            .max();
+                        if revision > frame.revision
+                            && previous_revision.is_none_or(|previous| frame.revision > previous)
+                        {
+                            replaced = Some(index);
+                        }
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+            if let Some(index) = replaced {
+                state.events.remove(index);
+                state.events.push_back(event);
+                return false;
+            }
+        }
+        let wake = state.events.is_empty();
+        if state.events.len() == EVENT_QUEUE_CAPACITY
+            || (incoming_revision.is_some() && state.frames == FRAME_QUEUE_CAPACITY)
+        {
+            state.events.clear();
+            state.events.push_back(TransportEvent::Lost(
+                "Orbit event queue exceeded its bounded capacity".into(),
+            ));
+            state.frames = 0;
+            state.stopped = true;
+            return wake;
+        }
+        state.stopped = matches!(&event, TransportEvent::Lost(_));
+        state.frames += usize::from(incoming_revision.is_some());
+        state.events.push_back(event);
+        wake
+    }
+
+    fn drain(&self) -> Vec<TransportEvent> {
+        let mut state = self.0.lock().expect("transport event queue lock poisoned");
+        state.delivered_frame_high_water = state
+            .events
+            .iter()
+            .filter_map(frame_revision)
+            .chain(state.delivered_frame_high_water)
+            .max();
+        state.frames = 0;
+        state.events.drain(..).collect()
+    }
+}
+
+fn frame_revision(event: &TransportEvent) -> Option<u64> {
+    match event {
+        TransportEvent::Server(ServerMessage::Frame(frame)) => Some(frame.revision),
+        _ => None,
+    }
 }
 
 fn notifier(
-    notify: impl Fn(TransportEvent) + Send + Sync + 'static,
+    events: Arc<EventQueue>,
+    wake: impl Fn() + Send + Sync + 'static,
 ) -> Arc<dyn Fn(TransportEvent) + Send + Sync> {
-    let stopped = Mutex::new(false);
     Arc::new(move |event| {
-        let mut stopped = stopped.lock().expect("transport notifier lock poisoned");
-        if *stopped {
-            return;
+        if events.push(event) {
+            wake();
         }
-        *stopped = matches!(&event, TransportEvent::Lost(_));
-        notify(event);
     })
 }
 
@@ -226,7 +319,10 @@ impl From<session::Error> for ReadError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orbit_protocol::session::FocusEvent;
+    use orbit_protocol::{
+        Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
+        session::FocusEvent,
+    };
     use std::{
         fs,
         os::unix::net::UnixListener,
@@ -244,19 +340,84 @@ mod tests {
 
     #[test]
     fn first_terminal_loss_is_the_final_transport_event() {
-        let (events, receiver) = mpsc::channel();
-        let notify = notifier(move |event| events.send(event).unwrap());
+        let events = Arc::new(EventQueue::default());
+        let queued = Arc::clone(&events);
+        let (wakes, receiver) = mpsc::channel();
+        let notify = notifier(queued, move || wakes.send(()).unwrap());
 
         notify(TransportEvent::Lost("writer failed".into()));
         notify(TransportEvent::Lost("socket closed".into()));
         notify(TransportEvent::InvalidInput("late input error".into()));
         notify(TransportEvent::Server(ServerMessage::Accepted));
 
-        assert_eq!(
-            receiver.recv().unwrap(),
-            TransportEvent::Lost("writer failed".into())
-        );
+        receiver.recv().unwrap();
         assert!(receiver.try_recv().is_err());
+        assert_eq!(
+            events.drain(),
+            [TransportEvent::Lost("writer failed".into())]
+        );
+    }
+
+    #[test]
+    fn frame_reduction_preserves_message_and_revision_order() {
+        let events = EventQueue::default();
+        assert!(events.push(server_frame(1)));
+        assert!(!events.push(server_frame(2)));
+        assert!(!events.push(TransportEvent::InvalidInput("input".into())));
+        assert!(!events.push(server_frame(3)));
+        assert!(!events.push(server_frame(4)));
+
+        let revisions = events
+            .drain()
+            .into_iter()
+            .map(|event| match event {
+                TransportEvent::Server(ServerMessage::Frame(frame)) => Some(frame.revision),
+                TransportEvent::InvalidInput(_) => None,
+                event => panic!("unexpected event: {event:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(revisions, [Some(2), None, Some(4)]);
+
+        assert!(events.push(server_frame(3)));
+        assert!(!events.push(server_frame(5)));
+        assert_eq!(events.drain(), [server_frame(3), server_frame(5)]);
+
+        assert!(events.push(server_frame(6)));
+        assert!(!events.push(server_frame(5)));
+        assert_eq!(events.drain(), [server_frame(6), server_frame(5)]);
+    }
+
+    #[test]
+    fn accepted_events_do_not_block_complete_frame_replacement() {
+        let events = EventQueue::default();
+        assert!(events.push(server_frame(1)));
+        assert!(!events.push(TransportEvent::Server(ServerMessage::Accepted)));
+        assert!(!events.push(server_frame(2)));
+
+        assert_eq!(
+            events.drain(),
+            [
+                TransportEvent::Server(ServerMessage::Accepted),
+                server_frame(2),
+            ]
+        );
+    }
+
+    #[test]
+    fn decoded_frame_queue_is_bounded() {
+        let events = EventQueue::default();
+        events.push(server_frame(1));
+        events.push(TransportEvent::InvalidInput("first barrier".into()));
+        events.push(server_frame(2));
+        events.push(TransportEvent::InvalidInput("second barrier".into()));
+        events.push(server_frame(3));
+
+        assert_eq!(
+            events.drain(),
+            [TransportEvent::Lost(
+                "Orbit event queue exceeded its bounded capacity".into()
+            )]
+        );
     }
 
     #[test]
@@ -298,15 +459,16 @@ mod tests {
             read_client(&mut reopened)
         });
 
-        let (events, receiver) = mpsc::channel();
-        let transport = Transport::start(path.clone(), move |event| {
-            let _ = events.send(event);
+        let (wakes, receiver) = mpsc::channel();
+        let transport = Transport::start(path.clone(), move || {
+            let _ = wakes.send(());
         });
+        receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(
-            receiver.recv_timeout(Duration::from_secs(5)).unwrap(),
-            TransportEvent::Server(ServerMessage::Attached {
+            transport.drain_events(),
+            [TransportEvent::Server(ServerMessage::Attached {
                 version: session::VERSION
-            })
+            })]
         );
         transport
             .send(ClientMessage::Focus(FocusEvent::Gained))
@@ -337,11 +499,12 @@ mod tests {
             let _ = read_client(&mut stream);
             stream.write_all(&[0; session::HEADER_BYTES]).unwrap();
         });
-        let (events, receiver) = mpsc::channel();
-        let _transport = Transport::start(socket.path.clone(), move |event| {
-            let _ = events.send(event);
+        let (wakes, receiver) = mpsc::channel();
+        let transport = Transport::start(socket.path.clone(), move || {
+            let _ = wakes.send(());
         });
-        let event = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        let event = transport.drain_events().pop().unwrap();
         assert!(matches!(
             event,
             TransportEvent::Lost(detail) if detail.contains("invalid local-session message")
@@ -359,6 +522,34 @@ mod tests {
             .read_exact(&mut bytes[session::HEADER_BYTES..])
             .unwrap();
         session::decode_client_message(&bytes).unwrap()
+    }
+
+    fn server_frame(revision: u64) -> TransportEvent {
+        TransportEvent::Server(ServerMessage::Frame(Box::new(Frame {
+            revision,
+            dimensions: Dimensions { cols: 0, rows: 0 },
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            capabilities: Capabilities {
+                hyperlinks: false,
+                kitty_graphics: false,
+            },
+            colors: Colors {
+                background: Rgb::BLACK,
+                foreground: Rgb::BLACK,
+                cursor: None,
+                palette: [Rgb::BLACK; orbit_protocol::PALETTE_LEN],
+            },
+            cursor: Cursor {
+                visible: false,
+                blinking: false,
+                password_input: false,
+                shape: CursorShape::Block,
+                viewport: None,
+            },
+            rows: Vec::new(),
+        })))
     }
 
     struct TestSocket {

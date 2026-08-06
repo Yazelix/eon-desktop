@@ -591,7 +591,7 @@ impl Renderer {
         buffer.set_size(Some(layout_width), Some(layout_height));
         buffer.set_wrap(wrap);
         buffer.set_monospace_width(monospace_width);
-        buffer.set_text(text, &attrs, Shaping::Advanced, None);
+        buffer.set_text(text, &attrs, shaping(text), None);
         buffer.shape_until_scroll(&mut self.font_system, false);
         let measured_width = shaped_width(&buffer);
         self.text.push(PlacedText {
@@ -637,6 +637,14 @@ fn shaped_width(buffer: &Buffer) -> f32 {
     buffer
         .layout_runs()
         .fold(0.0_f32, |width, run| width.max(run.line_w))
+}
+
+fn shaping(text: &str) -> Shaping {
+    if text.is_ascii() {
+        Shaping::Basic
+    } else {
+        Shaping::Advanced
+    }
 }
 
 fn text_areas(text: &[PlacedText]) -> impl Iterator<Item = TextArea<'_>> {
@@ -1038,5 +1046,11 @@ mod tests {
 
         assert!(base > 0.0);
         assert!((base - decomposed).abs() < 0.01);
+    }
+
+    #[test]
+    fn ascii_uses_basic_shaping_without_weakening_unicode() {
+        assert_eq!(shaping("plain ASCII"), Shaping::Basic);
+        assert_eq!(shaping("e\u{301}"), Shaping::Advanced);
     }
 }

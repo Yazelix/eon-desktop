@@ -32,7 +32,7 @@ const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 #[derive(Debug)]
 enum UserEvent {
     AccessKit(AccessKitEvent),
-    Transport(TransportEvent),
+    Transport,
 }
 
 impl From<AccessKitEvent> for UserEvent {
@@ -97,8 +97,8 @@ impl Application {
         window.set_visible(true);
 
         let proxy = self.proxy.clone();
-        self.transport = Some(Transport::start(self.socket.clone(), move |event| {
-            let _ = proxy.send_event(UserEvent::Transport(event));
+        self.transport = Some(Transport::start(self.socket.clone(), move || {
+            let _ = proxy.send_event(UserEvent::Transport);
         }));
         self.window = Some(WindowState {
             renderer,
@@ -390,7 +390,15 @@ impl ApplicationHandler<UserEvent> for Application {
 
     fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
         match event {
-            UserEvent::Transport(event) => self.handle_transport(event),
+            UserEvent::Transport => {
+                let events = self
+                    .transport
+                    .as_ref()
+                    .map_or_else(Vec::new, Transport::drain_events);
+                for event in events {
+                    self.handle_transport(event);
+                }
+            }
             UserEvent::AccessKit(event) => {
                 let Some(state) = &mut self.window else {
                     return;
