@@ -589,9 +589,9 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
         cell_width,
         cell_height,
         padding_top: padding,
-        padding_bottom: padding,
+        padding_bottom: screen.height - padding - rows * cell_height,
         padding_left: padding,
-        padding_right: padding,
+        padding_right: screen.width - padding - columns * cell_width,
     })
 }
 
@@ -637,6 +637,17 @@ mod tests {
         assert!(
             orbit_protocol::session::encode_client_message(&ClientMessage::Resize(size)).is_ok()
         );
+        for screen in [PhysicalSize::new(929, 976), PhysicalSize::new(4096, 4096)] {
+            let size = surface_size(screen, metrics).unwrap();
+            assert_eq!(
+                size.padding_left + u32::from(size.cols) * size.cell_width + size.padding_right,
+                screen.width
+            );
+            assert_eq!(
+                size.padding_top + u32::from(size.rows) * size.cell_height + size.padding_bottom,
+                screen.height
+            );
+        }
         assert!(surface_size(PhysicalSize::new(1, 1), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(25, 600), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(960, 25), metrics).is_none());
