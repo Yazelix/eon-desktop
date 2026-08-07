@@ -201,20 +201,23 @@ impl InputState {
         self.scroll.1 %= 1.0;
 
         let mut messages = Vec::with_capacity(MAX_STEPS);
-        self.push_wheel_steps(
-            &mut messages,
-            vertical,
-            MouseButton::Four,
-            MouseButton::Five,
-            MAX_STEPS,
-        );
-        self.push_wheel_steps(
-            &mut messages,
-            horizontal,
-            MouseButton::Six,
-            MouseButton::Seven,
-            MAX_STEPS,
-        );
+        for (steps, positive, negative) in [
+            (vertical, MouseButton::Four, MouseButton::Five),
+            (horizontal, MouseButton::Six, MouseButton::Seven),
+        ] {
+            let button = if steps > 0.0 { positive } else { negative };
+            let count = (steps.abs().min(MAX_STEPS as f64) as usize)
+                .min(MAX_STEPS.saturating_sub(messages.len()));
+            messages.extend((0..count).map(|_| {
+                ClientMessage::Mouse(MouseEvent {
+                    action: MouseAction::Press,
+                    button: Some(button),
+                    modifiers: self.modifiers,
+                    x: self.cursor.0,
+                    y: self.cursor.1,
+                })
+            }));
+        }
         messages
     }
 
@@ -227,21 +230,18 @@ impl InputState {
         &self,
         state: ElementState,
         button: WinitMouseButton,
-        accept_press: bool,
         size: SurfaceSize,
-        frame_revision: u64,
+        frame_revision: Option<u64>,
     ) -> Option<ClientMessage> {
         if button != WinitMouseButton::Left {
             return None;
         }
         match state {
             ElementState::Pressed
-                if accept_press
-                    && self.selection_cell.is_none()
-                    && self.modifiers.contains(Modifiers::SHIFT) =>
+                if self.selection_cell.is_none() && self.modifiers.contains(Modifiers::SHIFT) =>
             {
                 Some(ClientMessage::Selection(SelectionAction::Begin {
-                    frame_revision,
+                    frame_revision: frame_revision?,
                     cell: viewport_cell(self.cursor, size, false)?,
                 }))
             }
@@ -305,28 +305,6 @@ impl InputState {
             }
             _ => false,
         }
-    }
-
-    fn push_wheel_steps(
-        &self,
-        messages: &mut Vec<ClientMessage>,
-        steps: f64,
-        positive: MouseButton,
-        negative: MouseButton,
-        maximum: usize,
-    ) {
-        let button = if steps > 0.0 { positive } else { negative };
-        let count =
-            (steps.abs().min(maximum as f64) as usize).min(maximum.saturating_sub(messages.len()));
-        messages.extend((0..count).map(|_| {
-            ClientMessage::Mouse(MouseEvent {
-                action: MouseAction::Press,
-                button: Some(button),
-                modifiers: self.modifiers,
-                x: self.cursor.0,
-                y: self.cursor.1,
-            })
-        }));
     }
 }
 
@@ -758,13 +736,13 @@ mod tests {
         input.move_pointer(16.0, 26.0).unwrap();
         assert!(
             input
-                .selection_button(ElementState::Pressed, WinitMouseButton::Left, true, size, 9)
+                .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
                 .is_none()
         );
 
         input.set_modifiers(ModifiersState::SHIFT);
         let begin = input
-            .selection_button(ElementState::Pressed, WinitMouseButton::Left, true, size, 9)
+            .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
             .unwrap();
         assert_eq!(
             begin,
@@ -787,13 +765,7 @@ mod tests {
         input.commit_selection(&update);
         assert!(input.selection_motion(size).is_none());
         assert!(matches!(
-            input.selection_button(
-                ElementState::Released,
-                WinitMouseButton::Left,
-                false,
-                size,
-                9
-            ),
+            input.selection_button(ElementState::Released, WinitMouseButton::Left, size, None),
             Some(ClientMessage::Selection(SelectionAction::Finish {
                 cell: ViewportCell { x: 3, y: 2 }
             }))

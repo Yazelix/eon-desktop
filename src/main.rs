@@ -200,7 +200,7 @@ impl Application {
             .as_ref()
             .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()))
             && self.last_resize != Some(size)
-            && !self.send(ClientMessage::Resize(size))
+            && (!self.send(ClientMessage::Resize(size)) || !can_follow_implicit_resize(&message))
         {
             return false;
         }
@@ -348,7 +348,7 @@ impl ApplicationHandler<UserEvent> for Application {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let scene_presented = presentation_is_current(
+        let presented_revision = current_presentation(
             self.model.scene().map(|scene| scene.revision),
             self.presented_revision,
         );
@@ -409,7 +409,7 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let motion = self.input.move_pointer(position.x, position.y);
-                if scene_presented {
+                if presented_revision.is_some() {
                     if self.input.is_selecting() {
                         let size = surface_size(state.renderer.size(), state.renderer.metrics());
                         if let Some(message) =
@@ -430,13 +430,8 @@ impl ApplicationHandler<UserEvent> for Application {
             } => {
                 let size = surface_size(state.renderer.size(), state.renderer.metrics());
                 let selection = size.and_then(|size| {
-                    self.input.selection_button(
-                        button_state,
-                        button,
-                        scene_presented,
-                        size,
-                        self.presented_revision.unwrap_or_default(),
-                    )
+                    self.input
+                        .selection_button(button_state, button, size, presented_revision)
                 });
                 if let Some(message) = selection {
                     if self.send(message.clone()) {
@@ -452,13 +447,13 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.input.cancel_selection();
                 } else if let Some(message) =
                     self.input
-                        .mouse_button(button_state, button, scene_presented)
+                        .mouse_button(button_state, button, presented_revision.is_some())
                     && self.send(message)
                 {
                     self.input.commit_mouse_button(button_state, button);
                 }
             }
-            WindowEvent::MouseWheel { delta, .. } if scene_presented => {
+            WindowEvent::MouseWheel { delta, .. } if presented_revision.is_some() => {
                 let metrics = state.renderer.metrics();
                 for message in self.input.wheel(delta, metrics.width, metrics.height) {
                     if !self.send(message) {
@@ -537,8 +532,15 @@ fn update_blink(
     false
 }
 
-fn presentation_is_current(scene_revision: Option<u64>, presented_revision: Option<u64>) -> bool {
-    scene_revision.is_some() && scene_revision == presented_revision
+fn current_presentation(
+    scene_revision: Option<u64>,
+    presented_revision: Option<u64>,
+) -> Option<u64> {
+    scene_revision.filter(|revision| Some(*revision) == presented_revision)
+}
+
+fn can_follow_implicit_resize(message: &ClientMessage) -> bool {
+    matches!(message, ClientMessage::Mouse(_))
 }
 
 fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
@@ -646,10 +648,28 @@ mod tests {
 
     #[test]
     fn pointer_input_requires_the_current_presented_revision() {
-        assert!(!presentation_is_current(None, None));
-        assert!(!presentation_is_current(Some(8), None));
-        assert!(!presentation_is_current(Some(8), Some(7)));
-        assert!(presentation_is_current(Some(8), Some(8)));
+        assert_eq!(current_presentation(None, None), None);
+        assert_eq!(current_presentation(Some(8), None), None);
+        assert_eq!(current_presentation(Some(8), Some(7)), None);
+        assert_eq!(current_presentation(Some(8), Some(8)), Some(8));
+    }
+
+    #[test]
+    fn revision_bound_selection_waits_for_a_recovered_surface() {
+        let mouse = ClientMessage::Mouse(orbit_protocol::session::MouseEvent {
+            action: orbit_protocol::session::MouseAction::Motion,
+            button: None,
+            modifiers: orbit_protocol::session::Modifiers::empty(),
+            x: 0.0,
+            y: 0.0,
+        });
+        let selection = ClientMessage::Selection(SelectionAction::Begin {
+            frame_revision: 7,
+            cell: orbit_protocol::session::ViewportCell { x: 0, y: 0 },
+        });
+
+        assert!(can_follow_implicit_resize(&mouse));
+        assert!(!can_follow_implicit_resize(&selection));
     }
 
     #[test]

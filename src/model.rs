@@ -138,16 +138,13 @@ impl SessionModel {
             ServerMessage::Attached { version } => {
                 self.connection = ConnectionState::Attached { version };
                 self.notices.clear();
-                Ok(None)
             }
             ServerMessage::Frame(frame) => {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
-                Ok(None)
             }
             ServerMessage::Accepted => {
                 self.clear_orbit_notice();
-                Ok(None)
             }
             ServerMessage::Failure(failure) => {
                 self.clear_orbit_notice();
@@ -155,12 +152,10 @@ impl SessionModel {
                     "Orbit rejected input: {}",
                     failure.detail
                 ))));
-                Ok(None)
             }
             ServerMessage::Busy => {
                 self.connection = ConnectionState::Busy;
                 self.notices.clear();
-                Ok(None)
             }
             ServerMessage::Incompatible {
                 minimum_version,
@@ -171,18 +166,17 @@ impl SessionModel {
                     maximum: maximum_version,
                 };
                 self.notices.clear();
-                Ok(None)
             }
             ServerMessage::Exited { code } => {
                 self.connection = ConnectionState::Exited { code };
                 self.notices.clear();
-                Ok(None)
             }
             ServerMessage::CopiedText(text) => {
                 self.clear_orbit_notice();
-                Ok(Some(text))
+                return Ok(Some(text));
             }
         }
+        Ok(None)
     }
 
     pub fn mark_lost(&mut self, detail: impl Into<String>) {
