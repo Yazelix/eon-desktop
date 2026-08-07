@@ -231,6 +231,7 @@ impl Application {
         }
         if let Some(size) = resize {
             self.last_resize = Some(size);
+            self.input.cancel_selection();
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
         let clipboard_cleared = dismisses_clipboard_notice(notice_source)
@@ -373,7 +374,6 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 self.input.reset_scroll();
-                self.input.cancel_selection();
                 state.renderer.resize(size, state.window.scale_factor());
                 self.presented_revision = None;
                 self.send_resize();
@@ -381,7 +381,6 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.input.reset_scroll();
-                self.input.cancel_selection();
                 state
                     .renderer
                     .resize(state.window.inner_size(), scale_factor);
