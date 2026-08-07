@@ -236,6 +236,15 @@ impl Scene {
                 .any(|cell| cell.style.blink && cell.style.foreground_visible(true))
     }
 
+    /// Whether the authoritative frame contains selected presentation.
+    #[must_use]
+    pub fn has_selected_content(&self) -> bool {
+        self.content
+            .iter()
+            .flat_map(|row| &row.cells)
+            .any(|cell| cell.style.selected)
+    }
+
     /// Text exposed to native accessibility, derived directly from this scene.
     #[must_use]
     pub fn accessible_text(&self) -> String {

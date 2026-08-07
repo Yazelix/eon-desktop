@@ -116,13 +116,20 @@ impl Application {
         match event {
             TransportEvent::Server(message) => {
                 let was_attached = self.model.is_attached();
+                let frame = matches!(&message, ServerMessage::Frame(_));
                 let rejected = matches!(&message, ServerMessage::Failure(_));
                 match self.model.apply(message) {
                     Ok(Some(text)) => self.write_clipboard(text),
                     Ok(None) => {}
                     Err(error) => self.model.mark_lost(error.to_string()),
                 }
-                if rejected {
+                if rejected
+                    || (frame
+                        && self
+                            .model
+                            .scene()
+                            .is_some_and(|scene| !scene.has_selected_content()))
+                {
                     self.input.cancel_selection();
                 }
                 if !was_attached && self.model.is_attached() {

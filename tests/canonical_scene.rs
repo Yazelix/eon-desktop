@@ -22,6 +22,7 @@ fn canonical_orbit_frame_becomes_one_deterministic_scene() {
     .unwrap();
 
     let scene = model.scene().unwrap();
+    assert!(!scene.has_selected_content());
     assert_eq!(scene.content[0].cells[0].text, "e\u{301}");
     assert_eq!(scene.content[0].cells[1].text, "界");
     assert_eq!(scene.content[0].cells[1].width, CellWidth::Wide);
@@ -72,6 +73,7 @@ fn orbit_selected_style_is_the_only_visual_selection_source() {
     selected.rows[0].cells[0].style.selected = true;
 
     let scene = yazelix_venus::Scene::from_frame(&selected);
+    assert!(scene.has_selected_content());
     assert!(scene.content[0].cells[0].style.selected);
     assert_eq!(scene.content[0].cells[0].style.foreground, scene.background);
     assert_eq!(scene.content[0].cells[0].style.background, scene.foreground);
