@@ -388,7 +388,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     .input
                     .consumes_copy_shortcut(event.physical_key, event.state, event.repeat)
                 {
-                    if event.state == winit::event::ElementState::Pressed && !event.repeat {
+                    if copy_is_ready(self.input.is_selecting(), event.state, event.repeat) {
                         self.send(ClientMessage::Selection(SelectionAction::Copy));
                     }
                 } else {
@@ -543,6 +543,10 @@ fn can_follow_implicit_resize(message: &ClientMessage) -> bool {
     matches!(message, ClientMessage::Mouse(_))
 }
 
+fn copy_is_ready(selecting: bool, state: winit::event::ElementState, repeat: bool) -> bool {
+    !selecting && state == winit::event::ElementState::Pressed && !repeat
+}
+
 fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
@@ -670,6 +674,16 @@ mod tests {
 
         assert!(can_follow_implicit_resize(&mouse));
         assert!(!can_follow_implicit_resize(&selection));
+    }
+
+    #[test]
+    fn copy_waits_for_selection_to_finish() {
+        use winit::event::ElementState::{Pressed, Released};
+
+        assert!(!copy_is_ready(true, Pressed, false));
+        assert!(copy_is_ready(false, Pressed, false));
+        assert!(!copy_is_ready(false, Pressed, true));
+        assert!(!copy_is_ready(false, Released, false));
     }
 
     #[test]
