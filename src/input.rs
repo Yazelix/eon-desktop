@@ -135,6 +135,9 @@ impl InputState {
         button: WinitMouseButton,
         accept_press: bool,
     ) -> Option<ClientMessage> {
+        if self.is_selecting() {
+            return None;
+        }
         match state {
             ElementState::Pressed if !accept_press || self.pressed_buttons.contains(&button) => {
                 return None;
@@ -171,6 +174,9 @@ impl InputState {
         cell_width: f32,
         cell_height: f32,
     ) -> Vec<ClientMessage> {
+        if self.is_selecting() {
+            return Vec::new();
+        }
         const MAX_STEPS: usize = 32;
         let (horizontal, vertical) = match delta {
             MouseScrollDelta::LineDelta(horizontal, vertical) => {
@@ -238,7 +244,9 @@ impl InputState {
         }
         match state {
             ElementState::Pressed
-                if self.selection_cell.is_none() && self.modifiers.contains(Modifiers::SHIFT) =>
+                if self.selection_cell.is_none()
+                    && self.pressed_buttons.is_empty()
+                    && self.modifiers.contains(Modifiers::SHIFT) =>
             {
                 Some(ClientMessage::Selection(SelectionAction::Begin {
                     frame_revision: frame_revision?,
@@ -748,6 +756,13 @@ mod tests {
         );
 
         input.set_modifiers(ModifiersState::SHIFT);
+        input.commit_mouse_button(ElementState::Pressed, WinitMouseButton::Right);
+        assert!(
+            input
+                .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
+                .is_none()
+        );
+        input.commit_mouse_button(ElementState::Released, WinitMouseButton::Right);
         let begin = input
             .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
             .unwrap();
@@ -760,6 +775,16 @@ mod tests {
         );
         input.commit_selection(&begin);
         assert!(input.is_selecting());
+        assert!(
+            input
+                .mouse_button(ElementState::Pressed, WinitMouseButton::Right, true)
+                .is_none()
+        );
+        assert!(
+            input
+                .wheel(MouseScrollDelta::LineDelta(0.0, 1.0), 10.0, 20.0)
+                .is_empty()
+        );
 
         input.move_pointer(-1.0, -1.0).unwrap();
         let update = input.selection_motion(size).unwrap();
