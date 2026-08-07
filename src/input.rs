@@ -515,8 +515,8 @@ fn unshifted_codepoint(key: Key) -> Option<char> {
 
 fn coordinates(x: f64, y: f64) -> Option<(f32, f32)> {
     let maximum = f64::from(u16::MAX);
-    (x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x <= maximum && y <= maximum)
-        .then_some((x as f32, y as f32))
+    (x.is_finite() && y.is_finite())
+        .then(|| (x.clamp(0.0, maximum) as f32, y.clamp(0.0, maximum) as f32))
 }
 
 fn key_text(text: &str) -> Option<String> {
@@ -669,11 +669,13 @@ mod tests {
 
     #[test]
     fn pointer_coordinates_stay_inside_orbit_domain() {
-        let mut input = InputState::default();
-        assert!(input.move_pointer(10.5, 20.25).is_some());
-        assert!(input.move_pointer(-1.0, 0.0).is_none());
-        assert!(input.move_pointer(f64::INFINITY, 0.0).is_none());
-        assert!(input.move_pointer(f64::from(u16::MAX) + 1.0, 0.0).is_none());
+        assert_eq!(coordinates(-1.0, -1.0), Some((0.0, 0.0)));
+        let maximum = f64::from(u16::MAX);
+        assert_eq!(
+            coordinates(maximum + 1.0, maximum + 1.0),
+            Some((f32::from(u16::MAX), f32::from(u16::MAX)))
+        );
+        assert_eq!(coordinates(f64::INFINITY, 0.0), None);
     }
 
     #[test]
@@ -733,6 +735,11 @@ mod tests {
             padding_left: 5,
             padding_right: 5,
         };
+        let expected_update = |x, y| {
+            ClientMessage::Selection(SelectionAction::Update {
+                cell: ViewportCell { x, y },
+            })
+        };
         input.move_pointer(16.0, 26.0).unwrap();
         assert!(
             input
@@ -754,14 +761,13 @@ mod tests {
         input.commit_selection(&begin);
         assert!(input.is_selecting());
 
+        input.move_pointer(-1.0, -1.0).unwrap();
+        let update = input.selection_motion(size).unwrap();
+        assert_eq!(update, expected_update(0, 0));
+
         input.move_pointer(36.0, 46.0).unwrap();
         let update = input.selection_motion(size).unwrap();
-        assert_eq!(
-            update,
-            ClientMessage::Selection(SelectionAction::Update {
-                cell: ViewportCell { x: 3, y: 2 },
-            })
-        );
+        assert_eq!(update, expected_update(3, 2));
         input.commit_selection(&update);
         assert!(input.selection_motion(size).is_none());
         assert!(matches!(
