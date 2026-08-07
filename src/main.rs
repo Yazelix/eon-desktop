@@ -225,7 +225,8 @@ impl Application {
             self.last_resize = Some(size);
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
-        let clipboard_cleared = self.model.clear_venus_notice(LocalNoticeSource::Clipboard);
+        let clipboard_cleared = dismisses_clipboard_notice(notice_source)
+            && self.model.clear_venus_notice(LocalNoticeSource::Clipboard);
         if self.model.clear_venus_notice(notice_source) || queue_recovered || clipboard_cleared {
             self.refresh_client_view();
         }
@@ -547,6 +548,10 @@ fn copy_is_ready(selecting: bool, state: winit::event::ElementState, repeat: boo
     !selecting && state == winit::event::ElementState::Pressed && !repeat
 }
 
+fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
+    source == LocalNoticeSource::Input
+}
+
 fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
@@ -684,6 +689,12 @@ mod tests {
         assert!(copy_is_ready(false, Pressed, false));
         assert!(!copy_is_ready(false, Pressed, true));
         assert!(!copy_is_ready(false, Released, false));
+    }
+
+    #[test]
+    fn resize_does_not_dismiss_clipboard_result() {
+        assert!(!dismisses_clipboard_notice(LocalNoticeSource::Resize));
+        assert!(dismisses_clipboard_notice(LocalNoticeSource::Input));
     }
 
     #[test]
