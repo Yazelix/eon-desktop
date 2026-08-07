@@ -8,7 +8,13 @@ use yazelix_venus::{ConnectionState, LocalNoticeSource, ModelError, SessionModel
 #[test]
 fn canonical_orbit_frame_becomes_one_deterministic_scene() {
     let mut model = SessionModel::new();
-    apply_wire(&mut model, ServerMessage::Attached { version: 1 }).unwrap();
+    apply_wire(
+        &mut model,
+        ServerMessage::Attached {
+            version: session::VERSION,
+        },
+    )
+    .unwrap();
     apply_wire(
         &mut model,
         ServerMessage::Frame(Box::new(frame(7, Screen::Alternate))),
@@ -58,6 +64,18 @@ fn concealed_cells_stay_out_of_drawing_and_accessibility() {
             .all(|run| !run.text.contains("secret"))
     );
     assert_eq!(scene.accessible_text(), " 界");
+}
+
+#[test]
+fn orbit_selected_style_is_the_only_visual_selection_source() {
+    let mut selected = frame(10, Screen::Primary);
+    selected.rows[0].cells[0].style.selected = true;
+
+    let scene = yazelix_venus::Scene::from_frame(&selected);
+    assert!(scene.content[0].cells[0].style.selected);
+    assert_eq!(scene.content[0].cells[0].style.foreground, scene.background);
+    assert_eq!(scene.content[0].cells[0].style.background, scene.foreground);
+    assert_eq!(scene.accessible_text(), "e\u{301}界");
 }
 
 #[test]
@@ -169,6 +187,29 @@ fn notices_recover_independently_by_source() {
     assert_eq!(model.notice(), Some("Venus input queue is full"));
     assert!(model.clear_venus_notice(LocalNoticeSource::Queue));
     assert!(model.notice().is_none());
+}
+
+#[test]
+fn copied_text_is_an_attached_one_shot_effect_not_presentation_state() {
+    let mut model = SessionModel::new();
+    assert_eq!(
+        model
+            .apply(ServerMessage::CopiedText("not attached".into()))
+            .unwrap_err(),
+        ModelError::UnexpectedMessage
+    );
+
+    let mut model = attached_model();
+    model
+        .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Primary))))
+        .unwrap();
+    assert_eq!(
+        model
+            .apply(ServerMessage::CopiedText("e\u{301}界\nsecond".into()))
+            .unwrap(),
+        Some("e\u{301}界\nsecond".into())
+    );
+    assert_eq!(model.scene().unwrap().revision, 1);
 }
 
 #[test]

@@ -1,9 +1,12 @@
 use orbit_protocol::session::{
     ClientMessage, FocusEvent, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton,
-    MouseEvent, PhysicalKey,
+    MouseEvent, PhysicalKey, SelectionAction, SurfaceSize, ViewportCell,
 };
 use winit::{
-    event::{ElementState, Ime, KeyEvent as WinitKeyEvent, MouseButton as WinitMouseButton},
+    event::{
+        ElementState, Ime, KeyEvent as WinitKeyEvent, MouseButton as WinitMouseButton,
+        MouseScrollDelta,
+    },
     keyboard::{Key, KeyCode, ModifiersState, PhysicalKey as WinitPhysicalKey},
     platform::modifier_supplement::KeyEventExtModifierSupplement,
 };
@@ -16,6 +19,9 @@ pub struct InputState {
     preedit: String,
     cursor: (f32, f32),
     pressed_buttons: Vec<WinitMouseButton>,
+    scroll: (f64, f64),
+    selection_cell: Option<ViewportCell>,
+    copy_pressed: bool,
 }
 
 impl InputState {
@@ -43,6 +49,9 @@ impl InputState {
         if !focused {
             self.modifiers = Modifiers::empty();
             self.pressed_buttons.clear();
+            self.reset_scroll();
+            self.cancel_selection();
+            self.copy_pressed = false;
             self.clear_composition();
         }
         ClientMessage::Focus(if focused {
@@ -155,27 +164,194 @@ impl InputState {
         }
     }
 
-    #[must_use]
-    pub fn wheel(&self, horizontal: f32, vertical: f32) -> Option<ClientMessage> {
-        let button = if vertical > 0.0 {
-            MouseButton::Four
-        } else if vertical < 0.0 {
-            MouseButton::Five
-        } else if horizontal > 0.0 {
-            MouseButton::Six
-        } else if horizontal < 0.0 {
-            MouseButton::Seven
-        } else {
-            return None;
+    /// Normalize one native wheel event into a bounded number of whole Orbit steps.
+    pub fn wheel(
+        &mut self,
+        delta: MouseScrollDelta,
+        cell_width: f32,
+        cell_height: f32,
+    ) -> Vec<ClientMessage> {
+        const MAX_STEPS: usize = 32;
+        let (horizontal, vertical) = match delta {
+            MouseScrollDelta::LineDelta(horizontal, vertical) => {
+                (f64::from(horizontal), f64::from(vertical))
+            }
+            MouseScrollDelta::PixelDelta(position)
+                if cell_width.is_finite()
+                    && cell_height.is_finite()
+                    && cell_width > 0.0
+                    && cell_height > 0.0 =>
+            {
+                (
+                    position.x / f64::from(cell_width),
+                    position.y / f64::from(cell_height),
+                )
+            }
+            MouseScrollDelta::PixelDelta(_) => return Vec::new(),
         };
-        Some(ClientMessage::Mouse(MouseEvent {
-            action: MouseAction::Press,
-            button: Some(button),
-            modifiers: self.modifiers,
-            x: self.cursor.0,
-            y: self.cursor.1,
-        }))
+        if !horizontal.is_finite() || !vertical.is_finite() {
+            return Vec::new();
+        }
+
+        self.scroll.0 += horizontal;
+        self.scroll.1 += vertical;
+        let horizontal = self.scroll.0.trunc();
+        let vertical = self.scroll.1.trunc();
+        self.scroll.0 %= 1.0;
+        self.scroll.1 %= 1.0;
+
+        let mut messages = Vec::with_capacity(MAX_STEPS);
+        self.push_wheel_steps(
+            &mut messages,
+            vertical,
+            MouseButton::Four,
+            MouseButton::Five,
+            MAX_STEPS,
+        );
+        self.push_wheel_steps(
+            &mut messages,
+            horizontal,
+            MouseButton::Six,
+            MouseButton::Seven,
+            MAX_STEPS,
+        );
+        messages
     }
+
+    pub fn reset_scroll(&mut self) {
+        self.scroll = (0.0, 0.0);
+    }
+
+    #[must_use]
+    pub fn selection_button(
+        &self,
+        state: ElementState,
+        button: WinitMouseButton,
+        accept_press: bool,
+        size: SurfaceSize,
+        frame_revision: u64,
+    ) -> Option<ClientMessage> {
+        if button != WinitMouseButton::Left {
+            return None;
+        }
+        match state {
+            ElementState::Pressed
+                if accept_press
+                    && self.selection_cell.is_none()
+                    && self.modifiers.contains(Modifiers::SHIFT) =>
+            {
+                Some(ClientMessage::Selection(SelectionAction::Begin {
+                    frame_revision,
+                    cell: viewport_cell(self.cursor, size, false)?,
+                }))
+            }
+            ElementState::Released if self.selection_cell.is_some() => {
+                Some(ClientMessage::Selection(SelectionAction::Finish {
+                    cell: viewport_cell(self.cursor, size, true)?,
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn selection_motion(&self, size: SurfaceSize) -> Option<ClientMessage> {
+        let previous = self.selection_cell?;
+        let cell = viewport_cell(self.cursor, size, true)?;
+        (cell != previous).then_some(ClientMessage::Selection(SelectionAction::Update { cell }))
+    }
+
+    pub fn commit_selection(&mut self, message: &ClientMessage) {
+        self.selection_cell = match message {
+            ClientMessage::Selection(SelectionAction::Begin { cell, .. })
+            | ClientMessage::Selection(SelectionAction::Update { cell }) => Some(*cell),
+            ClientMessage::Selection(SelectionAction::Finish { .. }) => None,
+            _ => self.selection_cell,
+        };
+    }
+
+    pub fn cancel_selection(&mut self) {
+        self.selection_cell = None;
+    }
+
+    #[must_use]
+    pub fn is_selecting(&self) -> bool {
+        self.selection_cell.is_some()
+    }
+
+    #[must_use]
+    pub fn consumes_copy_shortcut(
+        &mut self,
+        key: WinitPhysicalKey,
+        state: ElementState,
+        repeat: bool,
+    ) -> bool {
+        if key != WinitPhysicalKey::Code(KeyCode::KeyC) {
+            return false;
+        }
+        match state {
+            ElementState::Pressed
+                if self.copy_pressed
+                    || (!repeat
+                        && self.modifiers.contains(Modifiers::CTRL)
+                        && self.modifiers.contains(Modifiers::SHIFT)) =>
+            {
+                self.copy_pressed = true;
+                true
+            }
+            ElementState::Released if self.copy_pressed => {
+                self.copy_pressed = false;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn push_wheel_steps(
+        &self,
+        messages: &mut Vec<ClientMessage>,
+        steps: f64,
+        positive: MouseButton,
+        negative: MouseButton,
+        maximum: usize,
+    ) {
+        let button = if steps > 0.0 { positive } else { negative };
+        let count =
+            (steps.abs().min(maximum as f64) as usize).min(maximum.saturating_sub(messages.len()));
+        messages.extend((0..count).map(|_| {
+            ClientMessage::Mouse(MouseEvent {
+                action: MouseAction::Press,
+                button: Some(button),
+                modifiers: self.modifiers,
+                x: self.cursor.0,
+                y: self.cursor.1,
+            })
+        }));
+    }
+}
+
+fn viewport_cell(cursor: (f32, f32), size: SurfaceSize, clamp: bool) -> Option<ViewportCell> {
+    let axis = |coordinate: f32, padding: u32, cell: u32, count: u16| {
+        if cell == 0 || count == 0 {
+            return None;
+        }
+        let start = padding as f32;
+        let end = start + cell as f32 * f32::from(count);
+        if !clamp && !(start..end).contains(&coordinate) {
+            return None;
+        }
+        if coordinate < start {
+            Some(0)
+        } else if coordinate >= end {
+            Some(count - 1)
+        } else {
+            u16::try_from(((coordinate - start) / cell as f32) as u32).ok()
+        }
+    };
+    Some(ViewportCell {
+        x: axis(cursor.0, size.padding_left, size.cell_width, size.cols)?,
+        y: axis(cursor.1, size.padding_top, size.cell_height, size.rows)?,
+    })
 }
 
 /// Map winit's physical identity directly into Orbit's accepted semantic type.
@@ -523,19 +699,125 @@ mod tests {
     }
 
     #[test]
-    fn maps_wheel_directions() {
-        let input = InputState::default();
-        for (horizontal, vertical, expected) in [
-            (0.0, 1.0, MouseButton::Four),
-            (0.0, -1.0, MouseButton::Five),
-            (1.0, 0.0, MouseButton::Six),
-            (-1.0, 0.0, MouseButton::Seven),
-        ] {
-            let Some(ClientMessage::Mouse(event)) = input.wheel(horizontal, vertical) else {
-                panic!("expected semantic wheel input");
-            };
-            assert_eq!(event.button, Some(expected));
-        }
+    fn wheel_accumulates_fractional_deltas_caps_bursts_and_resets() {
+        let mut input = InputState::default();
+        let lines = |x, y| winit::event::MouseScrollDelta::LineDelta(x, y);
+        let pixels = |x, y| {
+            winit::event::MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(x, y))
+        };
+        let buttons = |messages: Vec<ClientMessage>| {
+            messages
+                .into_iter()
+                .map(|message| match message {
+                    ClientMessage::Mouse(event) => event.button.unwrap(),
+                    _ => panic!("expected semantic wheel input"),
+                })
+                .collect::<Vec<_>>()
+        };
+
+        assert!(input.wheel(lines(0.0, 0.4), 10.0, 20.0).is_empty());
+        assert_eq!(
+            buttons(input.wheel(lines(0.0, 0.6), 10.0, 20.0)),
+            [MouseButton::Four]
+        );
+        assert!(input.wheel(pixels(4.0, 8.0), 10.0, 20.0).is_empty());
+        assert_eq!(
+            buttons(input.wheel(pixels(6.0, 12.0), 10.0, 20.0)),
+            [MouseButton::Four, MouseButton::Six]
+        );
+
+        let burst = input.wheel(lines(0.0, -1_000.0), 10.0, 20.0);
+        assert_eq!(burst.len(), 32);
+        assert!(
+            buttons(burst)
+                .into_iter()
+                .all(|button| button == MouseButton::Five)
+        );
+        assert!(input.wheel(lines(0.0, f32::NAN), 10.0, 20.0).is_empty());
+
+        assert!(input.wheel(lines(0.0, 0.75), 10.0, 20.0).is_empty());
+        input.reset_scroll();
+        assert!(input.wheel(lines(0.0, 0.25), 10.0, 20.0).is_empty());
+    }
+
+    #[test]
+    fn shift_drag_and_copy_are_explicit_revision_bound_actions() {
+        let mut input = InputState::default();
+        let size = SurfaceSize {
+            cols: 4,
+            rows: 3,
+            screen_width: 50,
+            screen_height: 70,
+            cell_width: 10,
+            cell_height: 20,
+            padding_top: 5,
+            padding_bottom: 5,
+            padding_left: 5,
+            padding_right: 5,
+        };
+        input.move_pointer(16.0, 26.0).unwrap();
+        assert!(
+            input
+                .selection_button(ElementState::Pressed, WinitMouseButton::Left, true, size, 9)
+                .is_none()
+        );
+
+        input.set_modifiers(ModifiersState::SHIFT);
+        let begin = input
+            .selection_button(ElementState::Pressed, WinitMouseButton::Left, true, size, 9)
+            .unwrap();
+        assert_eq!(
+            begin,
+            ClientMessage::Selection(SelectionAction::Begin {
+                frame_revision: 9,
+                cell: ViewportCell { x: 1, y: 1 },
+            })
+        );
+        input.commit_selection(&begin);
+        assert!(input.is_selecting());
+
+        input.move_pointer(36.0, 46.0).unwrap();
+        let update = input.selection_motion(size).unwrap();
+        assert_eq!(
+            update,
+            ClientMessage::Selection(SelectionAction::Update {
+                cell: ViewportCell { x: 3, y: 2 },
+            })
+        );
+        input.commit_selection(&update);
+        assert!(input.selection_motion(size).is_none());
+        assert!(matches!(
+            input.selection_button(
+                ElementState::Released,
+                WinitMouseButton::Left,
+                false,
+                size,
+                9
+            ),
+            Some(ClientMessage::Selection(SelectionAction::Finish {
+                cell: ViewportCell { x: 3, y: 2 }
+            }))
+        ));
+        input.cancel_selection();
+        assert!(!input.is_selecting());
+
+        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
+        assert!(input.consumes_copy_shortcut(
+            WinitPhysicalKey::Code(KeyCode::KeyC),
+            ElementState::Pressed,
+            false
+        ));
+        input.set_modifiers(ModifiersState::empty());
+        assert!(input.consumes_copy_shortcut(
+            WinitPhysicalKey::Code(KeyCode::KeyC),
+            ElementState::Released,
+            false
+        ));
+        assert!(!input.consumes_copy_shortcut(
+            WinitPhysicalKey::Code(KeyCode::KeyX),
+            ElementState::Pressed,
+            false
+        ));
     }
 
     #[test]

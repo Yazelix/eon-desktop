@@ -3,7 +3,7 @@
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
 use orbit_protocol::{
     MAX_CELLS,
-    session::{ClientMessage, SurfaceSize},
+    session::{self, ClientMessage, SelectionAction, ServerMessage, SurfaceSize},
 };
 use std::{
     env,
@@ -17,7 +17,7 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
-    event::{MouseScrollDelta, WindowEvent},
+    event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
@@ -60,6 +60,7 @@ struct Application {
     render_notice: Option<String>,
     blink_visible: bool,
     next_blink: Option<Instant>,
+    clipboard: Option<arboard::Clipboard>,
 }
 
 impl Application {
@@ -76,6 +77,7 @@ impl Application {
             render_notice: None,
             blink_visible: true,
             next_blink: None,
+            clipboard: None,
         }
     }
 
@@ -114,10 +116,18 @@ impl Application {
         match event {
             TransportEvent::Server(message) => {
                 let was_attached = self.model.is_attached();
-                if let Err(error) = self.model.apply(message) {
-                    self.model.mark_lost(error.to_string());
+                let rejected = matches!(&message, ServerMessage::Failure(_));
+                match self.model.apply(message) {
+                    Ok(Some(text)) => self.write_clipboard(text),
+                    Ok(None) => {}
+                    Err(error) => self.model.mark_lost(error.to_string()),
+                }
+                if rejected {
+                    self.input.cancel_selection();
                 }
                 if !was_attached && self.model.is_attached() {
+                    self.input.reset_scroll();
+                    self.input.cancel_selection();
                     self.send_resize();
                 }
             }
@@ -128,6 +138,8 @@ impl Application {
                 );
             }
             TransportEvent::Lost(detail) => {
+                self.input.reset_scroll();
+                self.input.cancel_selection();
                 self.model.mark_lost(detail);
             }
         }
@@ -175,11 +187,18 @@ impl Application {
             ClientMessage::Resize(size) => Some(*size),
             _ => None,
         };
-        if matches!(&message, ClientMessage::Mouse(_))
-            && let Some(size) = self
-                .window
-                .as_ref()
-                .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()))
+        if matches!(
+            &message,
+            ClientMessage::Mouse(_)
+                | ClientMessage::Selection(
+                    SelectionAction::Begin { .. }
+                        | SelectionAction::Update { .. }
+                        | SelectionAction::Finish { .. }
+                )
+        ) && let Some(size) = self
+            .window
+            .as_ref()
+            .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()))
             && self.last_resize != Some(size)
             && !self.send(ClientMessage::Resize(size))
         {
@@ -206,10 +225,25 @@ impl Application {
             self.last_resize = Some(size);
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
-        if self.model.clear_venus_notice(notice_source) || queue_recovered {
+        let clipboard_cleared = self.model.clear_venus_notice(LocalNoticeSource::Clipboard);
+        if self.model.clear_venus_notice(notice_source) || queue_recovered || clipboard_cleared {
             self.refresh_client_view();
         }
         true
+    }
+
+    fn write_clipboard(&mut self, text: String) {
+        let result = (|| {
+            if self.clipboard.is_none() {
+                self.clipboard = Some(arboard::Clipboard::new()?);
+            }
+            self.clipboard
+                .as_mut()
+                .expect("clipboard initialized above")
+                .set_text(text)
+        })();
+        self.model
+            .set_venus_notice(LocalNoticeSource::Clipboard, clipboard_notice(result));
     }
 
     fn send_resize(&mut self) {
@@ -247,7 +281,8 @@ impl Application {
             ConnectionState::Attached { .. } => String::new(),
             ConnectionState::Busy => "Orbit already has an attached presentation client.".into(),
             ConnectionState::Incompatible { minimum, maximum } => format!(
-                "Orbit requires local-session revision {minimum} through {maximum}; Venus accepts revision 1."
+                "Orbit requires local-session revision {minimum} through {maximum}; Venus accepts revision {}.",
+                session::VERSION
             ),
             ConnectionState::Lost { detail } => format!("Orbit connection lost: {detail}"),
             ConnectionState::Exited { code } => {
@@ -328,12 +363,16 @@ impl ApplicationHandler<UserEvent> for Application {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
+                self.input.reset_scroll();
+                self.input.cancel_selection();
                 state.renderer.resize(size, state.window.scale_factor());
                 self.presented_revision = None;
                 self.send_resize();
                 self.refresh_client_view();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.input.reset_scroll();
+                self.input.cancel_selection();
                 state
                     .renderer
                     .resize(state.window.inner_size(), scale_factor);
@@ -345,7 +384,16 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::RedrawRequested => self.render(),
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => {
-                self.send(self.input.key(&event));
+                if self
+                    .input
+                    .consumes_copy_shortcut(event.physical_key, event.state, event.repeat)
+                {
+                    if event.state == winit::event::ElementState::Pressed && !event.repeat {
+                        self.send(ClientMessage::Selection(SelectionAction::Copy));
+                    }
+                } else {
+                    self.send(self.input.key(&event));
+                }
             }
             WindowEvent::Ime(event) => {
                 let message = self.input.ime(event);
@@ -360,28 +408,62 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if let Some(message) = self.input.move_pointer(position.x, position.y)
-                    && scene_presented
-                {
-                    self.send(message);
+                let motion = self.input.move_pointer(position.x, position.y);
+                if scene_presented {
+                    if self.input.is_selecting() {
+                        let size = surface_size(state.renderer.size(), state.renderer.metrics());
+                        if let Some(message) =
+                            size.and_then(|size| self.input.selection_motion(size))
+                            && self.send(message.clone())
+                        {
+                            self.input.commit_selection(&message);
+                        }
+                    } else if let Some(message) = motion {
+                        self.send(message);
+                    }
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } => {
-                if let Some(message) = self.input.mouse_button(state, button, scene_presented)
+            WindowEvent::MouseInput {
+                state: button_state,
+                button,
+                ..
+            } => {
+                let size = surface_size(state.renderer.size(), state.renderer.metrics());
+                let selection = size.and_then(|size| {
+                    self.input.selection_button(
+                        button_state,
+                        button,
+                        scene_presented,
+                        size,
+                        self.presented_revision.unwrap_or_default(),
+                    )
+                });
+                if let Some(message) = selection {
+                    if self.send(message.clone()) {
+                        self.input.commit_selection(&message);
+                    }
+                    if button_state == winit::event::ElementState::Released {
+                        self.input.cancel_selection();
+                    }
+                } else if self.input.is_selecting()
+                    && button_state == winit::event::ElementState::Released
+                    && button == winit::event::MouseButton::Left
+                {
+                    self.input.cancel_selection();
+                } else if let Some(message) =
+                    self.input
+                        .mouse_button(button_state, button, scene_presented)
                     && self.send(message)
                 {
-                    self.input.commit_mouse_button(state, button);
+                    self.input.commit_mouse_button(button_state, button);
                 }
             }
             WindowEvent::MouseWheel { delta, .. } if scene_presented => {
-                let (horizontal, vertical) = match delta {
-                    MouseScrollDelta::LineDelta(x, y) => (x, y),
-                    MouseScrollDelta::PixelDelta(position) => {
-                        (position.x as f32, position.y as f32)
+                let metrics = state.renderer.metrics();
+                for message in self.input.wheel(delta, metrics.width, metrics.height) {
+                    if !self.send(message) {
+                        break;
                     }
-                };
-                if let Some(message) = self.input.wheel(horizontal, vertical) {
-                    self.send(message);
                 }
             }
             _ => {}
@@ -457,6 +539,13 @@ fn update_blink(
 
 fn presentation_is_current(scene_revision: Option<u64>, presented_revision: Option<u64>) -> bool {
     scene_revision.is_some() && scene_revision == presented_revision
+}
+
+fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
+    result.map_or_else(
+        |error| format!("Venus could not write the native clipboard: {error}"),
+        |()| "Selection copied to the native clipboard.".into(),
+    )
 }
 
 fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
@@ -561,5 +650,17 @@ mod tests {
         assert!(!presentation_is_current(Some(8), None));
         assert!(!presentation_is_current(Some(8), Some(7)));
         assert!(presentation_is_current(Some(8), Some(8)));
+    }
+
+    #[test]
+    fn clipboard_results_are_attributed_without_copying_terminal_cells() {
+        assert_eq!(
+            clipboard_notice::<&str>(Ok(())),
+            "Selection copied to the native clipboard."
+        );
+        assert_eq!(
+            clipboard_notice(Err("display unavailable")),
+            "Venus could not write the native clipboard: display unavailable"
+        );
     }
 }

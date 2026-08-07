@@ -9,15 +9,15 @@ names an accepted immutable proof commit and its canonical checks.
 | `VEN-C2` | Venus owns native interaction collection and sends only Orbit's semantic input and resize messages. | Proved | Orbit `ORB-C5` and canonical ORBS v1 at accepted proof `c905bf9610581747f1b07565814b501ca66cfaa6` | Venus `8929c9f9d151641a343813ddeb6005cb9c771286`; semantic mapping and presentation gating checks, ordered acknowledgements across bounded frame replacement, shell/Neovim/Yazi input dogfood, and 50 targeted fullscreen cycles returning to 929x976 and coherent 100x52 state within 500 ms. | No initial-slice gap. Candidate-list IMEs and Wayland remain manual quality surfaces. |
 | `VEN-C3` | Venus is transient: closing or crashing the client does not own or terminate the Orbit session, and reopening materializes its coherent current state. | Proved | Orbit `ORB-C1` through `ORB-C4` at accepted proof `c905bf9610581747f1b07565814b501ca66cfaa6`; `ORB-C7` has partial evidence at that revision | Venus `8929c9f9d151641a343813ddeb6005cb9c771286`; transport lifecycle, reattachment, terminal-state ordering, and native attached-session loss checks plus coherent Xwayland reattachment in 122 ms while Orbit and its PTY survived client loss. | No Venus gap; Orbit retains its partial `ORB-C7` hardening gap. |
 | `VEN-C4` | Venus gives bounded, explicit client UX for attach rejection, protocol incompatibility, invalid frames, and Orbit loss rather than hanging or silently inventing state. | Proved | Orbit `ORB-C3`, `ORB-C4`, canonical ORBS v1, and partial `ORB-C7` evidence at accepted proof `c905bf9610581747f1b07565814b501ca66cfaa6` | Venus `8929c9f9d151641a343813ddeb6005cb9c771286`; bounded model, attribution, accessibility, framing, queue-capacity, revision ordering, event-ordering, terminal-state, and first-cause checks plus Xwayland resize, loss, and reattachment dogfood without stale state or an unexpected notice. | No Venus gap; Orbit retains its partial `ORB-C7` hardening gap. |
+| `VEN-C7` | Venus maps bounded native wheel movement and explicit Shift-drag selection against the last presented complete frame into canonical Orbit messages, renders and exposes only Orbit-authored selected presentation, and writes only explicit Orbit-returned copied text to the native clipboard. Orbit remains the sole owner of retained history, viewport movement, terminal input precedence, selection resolution, and copied terminal text. | Partially proved | Orbit `ORB-C8` at accepted proof `840a67c0cb32b334ed54888321d5ca77e58117b0`; `ORB-C9` and canonical ORBS v2 at accepted proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757` | Uncommitted proof candidate: canonical locked Rust checks and isolated Xwayland Orbit/Venus dogfood for history, live return, forward and reverse Unicode selection, exact clipboard text, application mouse precedence, reattachment, and client loss. | Awaiting an immutable accepted Venus proof revision. Native Wayland, macOS, real trackpad hardware, resize under a non-tiling window manager, and full Neovim/Yazi dogfood remain unproved. |
 
 The Orbit proof revisions above establish source boundaries; they do not prove
 a Venus contract. Every consumer proof records the exact Orbit revisions tested
 and reports any gap to Orbit. Test-only proof maintenance at `7fab37efa40de5f340557cc31e061f37ed43859f` passed the locked checks without changing product logic; native proof remains at `8929c9f9d151641a343813ddeb6005cb9c771286`.
 
-Orbit proof `c905bf9610581747f1b07565814b501ca66cfaa6` is published on
-`origin/edge` and remains Venus's exact `orbit-protocol` dependency. Later
-Orbit runtime proofs `838b67652c4df1979e599b9c401ee664ffac66bd` and
-`847cab1ca37495c5cd45454623bd81909b488564` are compatible: `crates/protocol`,
-`Cargo.toml`, and `Cargo.lock` are byte-identical from the pinned dependency
-through the exercised runtime revision, so no Venus manifest migration is
-required. Orbit retains its partial `ORB-C7` hardening gap.
+Orbit proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757` is published on
+`origin/edge` and is Venus's exact `orbit-protocol` dependency. Later Orbit
+Memcheck hardening at `6452a2f4f4233a7a89a17e479eda36b010516dcf` preserves the
+accepted ORBS v2 product proof. Earlier VEN-C1 through VEN-C4 remain proved
+against their indexed ORBS v1 revisions; VEN-C7 is the breaking owner-first
+consumer update and carries no adapter.

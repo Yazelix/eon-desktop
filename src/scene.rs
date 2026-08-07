@@ -101,6 +101,36 @@ pub struct Scene {
     pub content: Vec<DrawRow>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct AccessibleText {
+    pub rows: Vec<AccessibleRow>,
+    pub selection: Option<AccessibleSelection>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AccessibleRow {
+    pub value: String,
+    pub character_lengths: Vec<u8>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AccessibleSelection {
+    pub anchor: AccessiblePosition,
+    pub focus: AccessiblePosition,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AccessiblePosition {
+    pub row: usize,
+    pub character_index: usize,
+}
+
+impl AccessibleText {
+    pub fn plain_text(&self) -> String {
+        self.rows.iter().map(|row| row.value.as_str()).collect()
+    }
+}
+
 impl Scene {
     /// Materialize a validated Orbit frame without retaining a second wire schema.
     #[must_use]
@@ -209,33 +239,76 @@ impl Scene {
     /// Text exposed to native accessibility, derived directly from this scene.
     #[must_use]
     pub fn accessible_text(&self) -> String {
-        let mut text = String::new();
+        self.accessible_content().plain_text()
+    }
+
+    pub(crate) fn accessible_content(&self) -> AccessibleText {
+        let mut rows = Vec::with_capacity(self.content.len());
+        let mut anchor = None;
+        let mut focus = None;
         for (row_index, row) in self.content.iter().enumerate() {
-            if row_index > 0 {
-                text.push('\n');
-            }
+            let mut characters = Vec::with_capacity(row.cells.len());
             let mut column = 0_usize;
             while column < row.cells.len() {
                 let cell = &row.cells[column];
                 let wide = cell.width == CellWidth::Wide;
                 match cell.width {
                     CellWidth::Narrow | CellWidth::Wide => {
-                        text.push_str(if cell.style.invisible || cell.text.is_empty() {
-                            if wide { "  " } else { " " }
+                        if cell.style.invisible || cell.text.is_empty() {
+                            characters.extend(
+                                (0..if wide { 2 } else { 1 }).map(|_| (' ', cell.style.selected)),
+                            );
                         } else {
-                            &cell.text
-                        });
+                            characters.extend(
+                                cell.text
+                                    .chars()
+                                    .map(|character| (character, cell.style.selected)),
+                            );
+                        }
                     }
-                    CellWidth::SpacerHead => text.push(' '),
+                    CellWidth::SpacerHead => characters.push((' ', cell.style.selected)),
                     CellWidth::SpacerTail => {}
                 }
                 column += usize::from(wide) + 1;
             }
-            while text.ends_with(' ') {
-                text.pop();
+            while characters
+                .last()
+                .is_some_and(|(character, selected)| *character == ' ' && !selected)
+            {
+                characters.pop();
             }
+
+            let mut value = String::new();
+            let mut character_lengths = Vec::with_capacity(characters.len() + 1);
+            for (character_index, (character, selected)) in characters.into_iter().enumerate() {
+                if selected {
+                    anchor.get_or_insert(AccessiblePosition {
+                        row: row_index,
+                        character_index,
+                    });
+                    focus = Some(AccessiblePosition {
+                        row: row_index,
+                        character_index: character_index + 1,
+                    });
+                }
+                value.push(character);
+                character_lengths.push(character.len_utf8() as u8);
+            }
+            if row_index + 1 < self.content.len() {
+                value.push('\n');
+                character_lengths.push(1);
+            }
+            rows.push(AccessibleRow {
+                value,
+                character_lengths,
+            });
         }
-        text
+        AccessibleText {
+            rows,
+            selection: anchor
+                .zip(focus)
+                .map(|(anchor, focus)| AccessibleSelection { anchor, focus }),
+        }
     }
 
     /// Stable human-readable state used by focused contract checks.
@@ -336,5 +409,87 @@ fn finish_run(runs: &mut Vec<GlyphRun>, current: &mut Option<GlyphRun>) {
         && !run.text.trim_matches(' ').is_empty()
     {
         runs.push(run);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accessibility_projection_keeps_authoritative_selected_cells() {
+        let style = |selected| DrawStyle {
+            foreground: Color::default(),
+            background: Color::default(),
+            underline_color: Color::default(),
+            bold: false,
+            italic: false,
+            faint: false,
+            blink: false,
+            invisible: false,
+            strikethrough: false,
+            overline: false,
+            selected,
+            protected: false,
+            underline: Underline::None,
+        };
+        let cell = |text: &str, width, selected| DrawCell {
+            width,
+            text: text.into(),
+            hyperlink: String::new(),
+            style: style(selected),
+        };
+        let scene = Scene {
+            revision: 3,
+            columns: 4,
+            rows: 2,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: Color::default(),
+            foreground: Color::default(),
+            cursor: None,
+            content: vec![
+                DrawRow {
+                    wrapped: false,
+                    wrap_continuation: false,
+                    kitty_virtual_placeholder: false,
+                    cells: vec![
+                        cell("a", CellWidth::Narrow, false),
+                        cell("e\u{301}", CellWidth::Narrow, true),
+                        cell("", CellWidth::Narrow, true),
+                        cell("", CellWidth::Narrow, false),
+                    ],
+                },
+                DrawRow {
+                    wrapped: false,
+                    wrap_continuation: false,
+                    kitty_virtual_placeholder: false,
+                    cells: vec![
+                        cell("界", CellWidth::Wide, true),
+                        cell("", CellWidth::SpacerTail, true),
+                        cell("", CellWidth::Narrow, false),
+                        cell("", CellWidth::Narrow, false),
+                    ],
+                },
+            ],
+        };
+
+        let content = scene.accessible_content();
+        assert_eq!(content.plain_text(), "ae\u{301} \n界");
+        assert_eq!(
+            content.selection,
+            Some(AccessibleSelection {
+                anchor: AccessiblePosition {
+                    row: 0,
+                    character_index: 1,
+                },
+                focus: AccessiblePosition {
+                    row: 1,
+                    character_index: 1,
+                },
+            })
+        );
+        assert_eq!(content.rows[0].character_lengths, [1, 1, 2, 1, 1]);
     }
 }

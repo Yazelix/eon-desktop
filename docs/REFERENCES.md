@@ -89,6 +89,28 @@ wgpu 30.0.0, glyphon 0.12.0 and its cosmic-text 0.19.0 re-export, AccessKit
 0.24.1 with accesskit_winit 0.33.2, and pollster 1.0.1. `ven-upt.2` completed the
 reference and crate gates before implementing that shape.
 
+## Required for native history, selection, and copy
+
+`ven-4sn` consumed Orbit `ORB-C8` at proof
+`840a67c0cb32b334ed54888321d5ca77e58117b0` and `ORB-C9` plus canonical ORBS v2
+at proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`. The exact package defines
+revision-bound Begin, Update, Finish, and Copy actions and the bounded
+server-only `CopiedText` effect. Venus adopted those messages directly and did
+not add a protocol mirror, history cache, terminal selection, or compatibility
+adapter.
+
+Exact winit 0.30.13 line and pixel wheel events support cell-normalized bounded
+native accumulation. Exact AccessKit 0.24.1 text runs and text positions support
+selection derived from the accepted scene. Exact arboard 3.6.1 supplies the
+isolated native text write selected in `docs/CRATES.md`.
+
+Alacritty 0.15.1 at
+`0c405d53e74ace2980fc5e6c6d5b710c144bc075` was comparison-only evidence for
+wheel residuals, Shift selection precedence, Ctrl+Shift+C, and clipboard
+isolation. Venus reused no source and rejected Alacritty's terminal, grid,
+selection, configuration, auto-copy, primary-selection, search, and raw-display
+clipboard ownership.
+
 ## Rejected initial routing
 
 - Rio VT is not a Venus dependency; replacing Orbit's terminal engine is an

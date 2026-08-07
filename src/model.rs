@@ -52,6 +52,7 @@ pub enum LocalNoticeSource {
     Input,
     Queue,
     Resize,
+    Clipboard,
 }
 
 /// The sole persistent owner of accepted presentation state in one client process.
@@ -113,16 +114,17 @@ impl SessionModel {
         )
     }
 
-    pub fn apply(&mut self, message: ServerMessage) -> Result<(), ModelError> {
+    pub fn apply(&mut self, message: ServerMessage) -> Result<Option<String>, ModelError> {
         let in_order = match &message {
             ServerMessage::Attached { .. }
             | ServerMessage::Busy
             | ServerMessage::Incompatible { .. } => {
                 matches!(self.connection, ConnectionState::Connecting)
             }
-            ServerMessage::Frame(_) | ServerMessage::Accepted | ServerMessage::Exited { .. } => {
-                self.is_attached()
-            }
+            ServerMessage::Frame(_)
+            | ServerMessage::Accepted
+            | ServerMessage::CopiedText(_)
+            | ServerMessage::Exited { .. } => self.is_attached(),
             ServerMessage::Failure(_) => matches!(
                 self.connection,
                 ConnectionState::Connecting | ConnectionState::Attached { .. }
@@ -136,16 +138,16 @@ impl SessionModel {
             ServerMessage::Attached { version } => {
                 self.connection = ConnectionState::Attached { version };
                 self.notices.clear();
-                Ok(())
+                Ok(None)
             }
             ServerMessage::Frame(frame) => {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
-                Ok(())
+                Ok(None)
             }
             ServerMessage::Accepted => {
                 self.clear_orbit_notice();
-                Ok(())
+                Ok(None)
             }
             ServerMessage::Failure(failure) => {
                 self.clear_orbit_notice();
@@ -153,12 +155,12 @@ impl SessionModel {
                     "Orbit rejected input: {}",
                     failure.detail
                 ))));
-                Ok(())
+                Ok(None)
             }
             ServerMessage::Busy => {
                 self.connection = ConnectionState::Busy;
                 self.notices.clear();
-                Ok(())
+                Ok(None)
             }
             ServerMessage::Incompatible {
                 minimum_version,
@@ -169,12 +171,16 @@ impl SessionModel {
                     maximum: maximum_version,
                 };
                 self.notices.clear();
-                Ok(())
+                Ok(None)
             }
             ServerMessage::Exited { code } => {
                 self.connection = ConnectionState::Exited { code };
                 self.notices.clear();
-                Ok(())
+                Ok(None)
+            }
+            ServerMessage::CopiedText(text) => {
+                self.clear_orbit_notice();
+                Ok(Some(text))
             }
         }
     }

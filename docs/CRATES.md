@@ -2,22 +2,24 @@
 
 `ven-upt.1` records the user-selected thin winit, wgpu, glyphon, and AccessKit
 shape. `ven-upt.2` implements it with exact direct versions and features in
-`Cargo.toml`.
+`Cargo.toml`. `ven-4sn` advances the canonical session consumer to ORBS v2 and
+adds the minimum native text-clipboard owner.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
-| Orbit protocol consumer | Exact Git revision `c905bf9610581747f1b07565814b501ca66cfaa6` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v1, ORBF v1, semantic values, bounds, and revision reduction. Venus keeps no mirror or adapter. |
+| Orbit protocol consumer | Exact Git revision `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v2, ORBF v1, semantic values, history, selection, copied text, bounds, and revision reduction. Venus keeps no mirror or adapter. |
 | Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Active | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
+| Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host writes only canonical bounded `CopiedText` and retains the platform clipboard owner. It never reads or reconstructs terminal text. Native Wayland without data-control and macOS remain unproved. |
 
 ## Measured comparison
 
 Minimal Rust 2024 scratch binaries were resolved and checked on Rust 1.96.0.
 Counts include the scratch root; lock counts include cross-target entries, while
 tree counts are unique Linux normal/build output lines. The implemented lock
-contains 325 packages including Venus and `orbit-protocol`; its current Linux
-normal/build tree has 266 unique lines.
+contains 337 packages including Venus and `orbit-protocol`; its current Linux
+normal/build tree has 277 unique lines.
 
 | Complete shape | Exact releases | Lock packages | Linux tree | Disposition |
 |---|---|---:|---:|---|
@@ -60,6 +62,23 @@ authority or demo-grade game rendering. A completely owned stack would
 duplicate windowing, GPU, shaping, font fallback, accessibility, and future
 macOS work.
 
+## Native clipboard decision
+
+arboard 3.6.1 owns the one operation the existing stack and Rust standard
+library do not provide: host a native plain-text clipboard value. Image support
+and default features are disabled. The integration adds 15 Venus production
+lines and 12 all-target lock packages, introduces no separately managed native
+library or Nix package on Linux, and is removable at one retained field and one
+write method. Xwayland clipboard dogfood passed with exact UTF-8 selection text.
+
+External `wl-copy`, `xclip`, and `xsel` commands were rejected as undeclared
+runtime dependencies. Handwritten X11, Wayland, and AppKit ownership was
+rejected as unsafe platform code for one bounded write. copypasta 0.10.2 was
+rejected because its generic Unix path is X11-only and correct Wayland use
+would require Venus-owned provider dispatch from a raw display pointer. A
+future browser client replaces this isolated effect with the browser clipboard
+API rather than carrying arboard across the boundary.
+
 ## Selected owner seam
 
 One pure scene reducer maps canonical complete Orbit frames to immutable,
@@ -68,6 +87,8 @@ inputs. It owns no socket, window, GPU, or terminal handle.
 The native host maps winit events only into `orbit-protocol` values, keeps
 transport outside the renderer, and sends typed wakeups through
 `EventLoopProxy`. The selected shape adds no general async application runtime.
+The same host owns one lazy native clipboard handle and writes only the exact
+`CopiedText` effect returned by Orbit.
 
 Venus derives drawing, accessibility, and deterministic contract snapshots from
 the latest accepted scene. After a successful GPU present, the renderer

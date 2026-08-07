@@ -11,6 +11,10 @@
   new button presses, keeping held-button pairs coherent across presentation and
   queue recovery, and clearing transient input on focus loss without owning the
   session or PTY.
+- Normalize bounded wheel and trackpad input into Orbit-owned retained-history
+  movement, render Orbit-authored Shift-drag selection, expose that same
+  selection to accessibility, and place only explicit Orbit-returned text on
+  the native clipboard with Ctrl+Shift+C.
 - Explain bounded attachment, protocol, frame, input, and connection failures
   accurately in the client window and accessibility tree without letting
   unrelated presentation, resize, or response traffic erase them.

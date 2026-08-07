@@ -7,8 +7,9 @@ publish = false
 [dependencies]
 accesskit = "=0.24.1"
 accesskit_winit = { version = "=0.33.2", default-features = false, features = ["accesskit_unix", "async-io", "rwh_06"] }
+arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
 glyphon = "=0.12.0"
-orbit-protocol = { git = "https://github.com/luccahuguet/orbit.git", rev = "c905bf9610581747f1b07565814b501ca66cfaa6" }
+orbit-protocol = { git = "https://github.com/luccahuguet/orbit.git", rev = "9d6d2bb37f20ab4ad9e186c7bc715eabef43e757" }
 pollster = { version = "=1.0.1", default-features = false }
 wgpu = { version = "=30.0.0", default-features = false, features = ["std", "vulkan", "metal", "wgsl"] }
 winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
