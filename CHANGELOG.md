@@ -13,9 +13,9 @@
   Orbit's coordinate bounds, and keeping held-button pairs coherent across presentation
   and queue recovery while clearing transient input on focus loss without owning the session or PTY.
 - Normalize bounded wheel and trackpad input into Orbit-owned retained-history
-  movement, keep Shift-drag gestures coherent through queue recovery, competing
-  pointer input, and Orbit-authored cancellation, render only authoritative
-  selected presentation, and copy exact text returned by Orbit after the drag.
+  movement, keep Shift-drag gestures coherent through queue recovery, rejected
+  actions, competing pointer input, and Orbit-authored cancellation, render only
+  authoritative selected presentation, and copy exact text returned by Orbit after the drag.
 - Explain bounded attachment, frame, and connection failures in the client and
   accessibility tree, preserve Orbit's input, protocol, and terminal failure classes,
   distinguish socket failures from invalid messages, retry interrupted reads,
