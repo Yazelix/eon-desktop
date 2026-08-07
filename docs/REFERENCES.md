@@ -106,10 +106,10 @@ isolated native text write selected in `docs/CRATES.md`.
 
 Alacritty 0.15.1 at
 `0c405d53e74ace2980fc5e6c6d5b710c144bc075` was comparison-only evidence for
-wheel residuals, Shift selection precedence, Ctrl+Shift+C, and clipboard
-isolation. Venus reused no source and rejected Alacritty's terminal, grid,
-selection, configuration, auto-copy, primary-selection, search, and raw-display
-clipboard ownership.
+wheel residuals, Shift selection precedence, Ctrl+Shift+C, clipboard isolation,
+and required backend-specific IME cursor-area comparison. Venus reused no source
+and rejected Alacritty's terminal, grid, selection, configuration, auto-copy,
+primary-selection, search, and raw-display clipboard ownership.
 
 ## Rejected initial routing
 

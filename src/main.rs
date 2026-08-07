@@ -19,6 +19,7 @@ use winit::{
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+    raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{Window, WindowId},
 };
 use yazelix_venus::{
@@ -45,6 +46,7 @@ struct WindowState {
     renderer: Renderer,
     adapter: accesskit_winit::Adapter,
     accessibility: Accessibility,
+    ime_line_offset: u16,
     window: Arc<Window>,
 }
 
@@ -87,6 +89,11 @@ impl Application {
             .with_inner_size(LogicalSize::new(960.0, 600.0))
             .with_visible(false);
         let window = Arc::new(event_loop.create_window(attributes)?);
+        // X11 ignores the exclusion size, so use the cursor's bottom edge as its spot.
+        let ime_line_offset = u16::from(matches!(
+            window.window_handle()?.as_raw(),
+            RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)
+        ));
         let accessibility = Accessibility::new(window.inner_size());
         let adapter = accesskit_winit::Adapter::with_mixed_handlers(
             event_loop,
@@ -106,6 +113,7 @@ impl Application {
             renderer,
             adapter,
             accessibility,
+            ime_line_offset,
             window,
         });
         self.refresh_client_view();
@@ -170,14 +178,12 @@ impl Application {
             });
             if let Some(cursor) = scene.cursor {
                 let metrics = state.renderer.metrics();
+                let left = metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
+                let top = metrics.padding
+                    + f32::from(cursor.row + state.ime_line_offset) * metrics.height;
                 state.window.set_ime_cursor_area(
-                    PhysicalPosition::new(
-                        f64::from(
-                            metrics.padding + f32::from(cursor.leading_column()) * metrics.width,
-                        ),
-                        f64::from(metrics.padding + f32::from(cursor.row + 1) * metrics.height),
-                    ),
-                    PhysicalSize::new(f64::from(metrics.width), f64::from(metrics.height)),
+                    PhysicalPosition::new(f64::from(left), f64::from(top)),
+                    PhysicalSize::new(f64::from(metrics.width * 2.0), f64::from(metrics.height)),
                 );
             }
         } else {
