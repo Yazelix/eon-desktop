@@ -3,9 +3,9 @@
 ## Unreleased
 
 - Render one accepted Orbit session in a native Linux window with styled Unicode
-  text, input-method preedit underlines sized from shaped text, stable blink
-  timing, complete wide-cell cursor geometry, and conceal-aware drawing and
-  accessibility.
+  text, input-method preedit underlines sized from shaped text, aligned
+  wide-cell cursor and input-method geometry, stable blink timing, and
+  conceal-aware drawing and accessibility.
 - Send semantic keyboard, input-method, pointer, focus, and resize events to
   Orbit, preserving active keyboard layouts, synchronizing the latest pre-attachment focus,
   mapping all four wheel directions, requiring the current presented revision for

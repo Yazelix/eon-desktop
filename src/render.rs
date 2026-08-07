@@ -506,7 +506,7 @@ impl Renderer {
         let Some(cursor) = scene.cursor.filter(|_| !preedit.is_empty()) else {
             return;
         };
-        let left = self.metrics.padding + f32::from(cursor.column) * self.metrics.width;
+        let left = self.metrics.padding + f32::from(cursor.leading_column()) * self.metrics.width;
         let top = self.metrics.padding + f32::from(cursor.row) * self.metrics.height;
         let width = (self.config.width as f32 - left - self.metrics.padding).max(1.0);
         let preedit_width = self.push_text(
@@ -853,11 +853,7 @@ fn build_scene_rectangles(
         .cursor
         .filter(|cursor| cursor.visible && (blink_visible || !cursor.blinking))
     {
-        let column = if cursor.at_wide_tail {
-            cursor.column.saturating_sub(1)
-        } else {
-            cursor.column
-        };
+        let column = cursor.leading_column();
         let wide = cursor.at_wide_tail
             || scene
                 .content

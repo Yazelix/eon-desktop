@@ -172,7 +172,9 @@ impl Application {
                 let metrics = state.renderer.metrics();
                 state.window.set_ime_cursor_area(
                     PhysicalPosition::new(
-                        f64::from(metrics.padding + f32::from(cursor.column) * metrics.width),
+                        f64::from(
+                            metrics.padding + f32::from(cursor.leading_column()) * metrics.width,
+                        ),
                         f64::from(metrics.padding + f32::from(cursor.row + 1) * metrics.height),
                     ),
                     PhysicalSize::new(f64::from(metrics.width), f64::from(metrics.height)),

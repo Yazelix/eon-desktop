@@ -76,6 +76,14 @@ pub struct DrawCursor {
     pub color: Color,
 }
 
+impl DrawCursor {
+    /// Leading visual column occupied by the cursor.
+    #[must_use]
+    pub fn leading_column(self) -> u16 {
+        self.column.saturating_sub(u16::from(self.at_wide_tail))
+    }
+}
+
 /// A contiguous same-style text run positioned in terminal cells.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlyphRun {
