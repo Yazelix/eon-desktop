@@ -15,9 +15,10 @@
   movement, keep competing pointer input inside an active Shift-drag selection,
   render that Orbit-authored selection for sighted and accessibility users, and
   copy only explicit Orbit-returned text after the drag finishes.
-- Explain bounded attachment, protocol, frame, input, and connection failures in
-  the client and accessibility tree, retry interrupted reads, distinguish socket
-  failures from invalid messages, and keep unrelated traffic from erasing them.
+- Explain bounded attachment, frame, and connection failures in the client and
+  accessibility tree, preserve Orbit's input, protocol, and terminal failure classes,
+  distinguish socket failures from invalid messages, retry interrupted reads,
+  and keep unrelated traffic from erasing notices.
 - Preserve resize and pointer readiness across queue and surface failures, report
   exact rendered grid geometry, and render Orbit colors in its declared space.
 - Keep sustained complete-frame rendering within the accepted Linux CPU and

@@ -133,6 +133,19 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
 
     let mut attached = attached_model();
     assert!(!attached.is_terminal());
+    for (code, expected) in [
+        (FailureCode::InvalidInput, "Orbit rejected input: detail"),
+        (FailureCode::Protocol, "Orbit protocol failure: detail"),
+        (FailureCode::Terminal, "Orbit terminal failure: detail"),
+    ] {
+        attached
+            .apply(ServerMessage::Failure(Failure {
+                code,
+                detail: "detail".into(),
+            }))
+            .unwrap();
+        assert_eq!(attached.notice(), Some(expected));
+    }
     attached
         .apply(ServerMessage::Failure(Failure {
             code: FailureCode::InvalidInput,

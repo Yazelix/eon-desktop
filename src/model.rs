@@ -1,5 +1,6 @@
 use crate::scene::Scene;
-use orbit_protocol::{FrameReducer, session::ServerMessage};
+use orbit_protocol::FrameReducer;
+use orbit_protocol::session::{FailureCode, ServerMessage};
 use std::{error::Error, fmt};
 
 /// Bounded lifecycle state for one local Orbit attachment.
@@ -147,9 +148,14 @@ impl SessionModel {
                 self.clear_orbit_notice();
             }
             ServerMessage::Failure(failure) => {
+                let label = match failure.code {
+                    FailureCode::InvalidInput => "rejected input",
+                    FailureCode::Protocol => "protocol failure",
+                    FailureCode::Terminal => "terminal failure",
+                };
                 self.clear_orbit_notice();
                 self.notices.push(Notice::Orbit(bounded(format!(
-                    "Orbit rejected input: {}",
+                    "Orbit {label}: {}",
                     failure.detail
                 ))));
             }
