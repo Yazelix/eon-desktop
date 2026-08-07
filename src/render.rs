@@ -3,7 +3,7 @@ use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
     Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
-use orbit_protocol::{CursorShape, Underline};
+use orbit_protocol::{CellWidth, CursorShape, Underline};
 use std::{error::Error, fmt, sync::Arc};
 use wgpu::{
     BlendState, BufferDescriptor, BufferUsages, ColorTargetState, ColorWrites,
@@ -853,7 +853,19 @@ fn build_scene_rectangles(
         .cursor
         .filter(|cursor| cursor.visible && (blink_visible || !cursor.blinking))
     {
-        let left = metrics.padding + f32::from(cursor.column) * metrics.width;
+        let column = if cursor.at_wide_tail {
+            cursor.column.saturating_sub(1)
+        } else {
+            cursor.column
+        };
+        let wide = cursor.at_wide_tail
+            || scene
+                .content
+                .get(usize::from(cursor.row))
+                .and_then(|row| row.cells.get(usize::from(column)))
+                .is_some_and(|cell| cell.width == CellWidth::Wide);
+        let cursor_width = metrics.width * if wide { 2.0 } else { 1.0 };
+        let left = metrics.padding + f32::from(column) * metrics.width;
         let top = metrics.padding + f32::from(cursor.row) * metrics.height;
         let thickness = (metrics.width / 7.0).max(1.0);
         let (x, y, w, h, alpha) = match cursor.shape {
@@ -861,16 +873,16 @@ fn build_scene_rectangles(
             CursorShape::Underline => (
                 left,
                 top + metrics.height - thickness,
-                metrics.width,
+                cursor_width,
                 thickness,
                 1.0,
             ),
-            CursorShape::Block => (left, top, metrics.width, metrics.height, 0.55),
+            CursorShape::Block => (left, top, cursor_width, metrics.height, 0.55),
             CursorShape::BlockHollow => {
                 rectangles.push_hollow(
                     left,
                     top,
-                    metrics.width,
+                    cursor_width,
                     metrics.height,
                     thickness,
                     cursor.color,
@@ -931,25 +943,36 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DrawCell, DrawRow};
+    use crate::{DrawCell, DrawCursor, DrawRow};
     use orbit_protocol::{CellWidth, Screen};
 
-    #[test]
-    fn concealed_cells_draw_no_foreground_elements() {
-        let style = DrawStyle {
+    fn plain_style() -> DrawStyle {
+        DrawStyle {
             foreground: SceneColor::default(),
             background: DEFAULT_BACKGROUND,
             underline_color: SceneColor::default(),
             bold: false,
             italic: false,
             faint: false,
+            blink: false,
+            invisible: false,
+            strikethrough: false,
+            overline: false,
+            selected: false,
+            protected: false,
+            underline: Underline::None,
+        }
+    }
+
+    #[test]
+    fn concealed_cells_draw_no_foreground_elements() {
+        let style = DrawStyle {
             blink: true,
             invisible: true,
             strikethrough: true,
             overline: true,
-            selected: false,
-            protected: false,
             underline: Underline::Single,
+            ..plain_style()
         };
         let scene = Scene {
             revision: 1,
@@ -980,6 +1003,82 @@ mod tests {
         assert!(rectangles.bytes.is_empty());
         assert!(scene.glyph_runs().is_empty());
         assert!(!scene.has_blinking_content());
+    }
+
+    #[test]
+    fn wide_cell_cursors_cover_the_complete_glyph() {
+        let style = plain_style();
+        let mut scene = Scene {
+            revision: 1,
+            columns: 3,
+            rows: 1,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: DEFAULT_BACKGROUND,
+            foreground: SceneColor::default(),
+            cursor: None,
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells: [CellWidth::Narrow, CellWidth::Wide, CellWidth::SpacerTail]
+                    .into_iter()
+                    .map(|width| DrawCell {
+                        width,
+                        text: String::new(),
+                        hyperlink: String::new(),
+                        style,
+                    })
+                    .collect(),
+            }],
+        };
+        let metrics = CellMetrics::for_scale(1.0);
+        let cursor = DrawCursor {
+            visible: true,
+            blinking: false,
+            password_input: false,
+            shape: CursorShape::Block,
+            column: 0,
+            row: 0,
+            at_wide_tail: false,
+            color: SceneColor::default(),
+        };
+        let mut draw_cursor = |cursor| {
+            scene.cursor = Some(cursor);
+            let mut rectangles = RectangleBatch::new(100, 100);
+            build_scene_rectangles(&mut rectangles, &scene, true, metrics);
+            rectangles.bytes
+        };
+        let expected = |column: f32, columns: f32| {
+            let mut rectangles = RectangleBatch::new(100, 100);
+            rectangles.push(
+                metrics.padding + column * metrics.width,
+                metrics.padding,
+                columns * metrics.width,
+                metrics.height,
+                cursor.color,
+                0.55,
+            );
+            rectangles.bytes
+        };
+
+        assert_eq!(draw_cursor(cursor), expected(0.0, 1.0));
+        assert_eq!(
+            draw_cursor(DrawCursor {
+                column: 1,
+                ..cursor
+            }),
+            expected(1.0, 2.0)
+        );
+        assert_eq!(
+            draw_cursor(DrawCursor {
+                column: 2,
+                at_wide_tail: true,
+                ..cursor
+            }),
+            expected(1.0, 2.0)
+        );
     }
 
     #[test]
