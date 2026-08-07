@@ -2,7 +2,7 @@ use orbit_protocol::session::{self, ClientMessage, ServerMessage};
 use std::{
     collections::VecDeque,
     fmt,
-    io::{Read, Write},
+    io::{self, ErrorKind, Read, Write},
     net::Shutdown,
     os::unix::net::UnixStream,
     path::PathBuf,
@@ -236,10 +236,8 @@ fn run(
                 ));
                 return;
             }
-            Err(error) => {
-                notify(TransportEvent::Lost(format!(
-                    "Orbit sent an invalid local-session message: {error}"
-                )));
+            Err(event) => {
+                notify(event);
                 return;
             }
         }
@@ -253,13 +251,13 @@ fn write_loop(
 ) {
     while let Ok(message) = receiver.recv() {
         if let Err(error) = write_message(&mut stream, &message) {
-            let event = if error.kind() == std::io::ErrorKind::InvalidInput {
+            let event = if error.kind() == ErrorKind::InvalidInput {
                 TransportEvent::InvalidInput(error.to_string())
             } else {
                 TransportEvent::Lost(format!("Cannot send input to Orbit: {error}"))
             };
             notify(event);
-            if error.kind() != std::io::ErrorKind::InvalidInput {
+            if error.kind() != ErrorKind::InvalidInput {
                 let _ = stream.shutdown(Shutdown::Both);
                 return;
             }
@@ -268,52 +266,42 @@ fn write_loop(
     let _ = stream.shutdown(Shutdown::Both);
 }
 
-fn write_message(stream: &mut UnixStream, message: &ClientMessage) -> std::io::Result<()> {
+fn write_message(stream: &mut UnixStream, message: &ClientMessage) -> io::Result<()> {
     let encoded = session::encode_client_message(message)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        .map_err(|error| io::Error::new(ErrorKind::InvalidInput, error))?;
     stream.write_all(&encoded)
 }
 
-fn read_message(stream: &mut UnixStream) -> Result<Option<ServerMessage>, ReadError> {
+fn read_message(stream: &mut impl Read) -> Result<Option<ServerMessage>, TransportEvent> {
     let mut header = [0; session::HEADER_BYTES];
-    if stream.read(&mut header[..1])? == 0 {
-        return Ok(None);
+    match stream.read_exact(&mut header[..1]) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::UnexpectedEof => return Ok(None),
+        Err(error) => return Err(io_loss(error)),
     }
-    stream.read_exact(&mut header[1..])?;
-    let length = session::server_message_len(&header)?
+    stream.read_exact(&mut header[1..]).map_err(io_loss)?;
+    let length = session::server_message_len(&header)
+        .map_err(protocol_loss)?
         .expect("a complete ORBS header declares a message length");
     let mut bytes = Vec::with_capacity(length);
     bytes.extend_from_slice(&header);
     bytes.resize(length, 0);
-    stream.read_exact(&mut bytes[session::HEADER_BYTES..])?;
-    Ok(Some(session::decode_server_message(&bytes)?))
+    stream
+        .read_exact(&mut bytes[session::HEADER_BYTES..])
+        .map_err(io_loss)?;
+    session::decode_server_message(&bytes)
+        .map(Some)
+        .map_err(protocol_loss)
 }
 
-#[derive(Debug)]
-enum ReadError {
-    Io(std::io::Error),
-    Protocol(session::Error),
+fn io_loss(error: io::Error) -> TransportEvent {
+    TransportEvent::Lost(format!("Cannot read from Orbit: {error}"))
 }
 
-impl fmt::Display for ReadError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(error) => error.fmt(formatter),
-            Self::Protocol(error) => error.fmt(formatter),
-        }
-    }
-}
-
-impl From<std::io::Error> for ReadError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
-    }
-}
-
-impl From<session::Error> for ReadError {
-    fn from(value: session::Error) -> Self {
-        Self::Protocol(value)
-    }
+fn protocol_loss(error: session::Error) -> TransportEvent {
+    TransportEvent::Lost(format!(
+        "Orbit sent an invalid local-session message: {error}"
+    ))
 }
 
 #[cfg(test)]
@@ -330,12 +318,36 @@ mod tests {
     };
 
     #[test]
-    fn local_queue_failures_name_venus_as_the_owner() {
+    fn local_failures_name_their_owner() {
         assert_eq!(SendError::Full.to_string(), "Venus input queue is full");
         assert_eq!(
             SendError::Closed.to_string(),
             "Venus input channel is closed"
         );
+        let error = io::Error::new(ErrorKind::ConnectionReset, "socket reset");
+        assert_eq!(
+            io_loss(error),
+            TransportEvent::Lost("Cannot read from Orbit: socket reset".into())
+        );
+    }
+
+    #[test]
+    fn interrupted_first_read_retries_the_message() {
+        struct InterruptedOnce<R>(R, bool);
+
+        impl<R: Read> Read for InterruptedOnce<R> {
+            fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+                if !self.1 {
+                    self.1 = true;
+                    return Err(ErrorKind::Interrupted.into());
+                }
+                self.0.read(buffer)
+            }
+        }
+
+        let encoded = session::encode_server_message(&ServerMessage::Accepted).unwrap();
+        let mut reader = InterruptedOnce(encoded.as_slice(), false);
+        assert_eq!(read_message(&mut reader), Ok(Some(ServerMessage::Accepted)));
     }
 
     #[test]
@@ -489,10 +501,9 @@ mod tests {
         });
         receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         let event = transport.drain_events().pop().unwrap();
-        assert!(matches!(
-            event,
-            TransportEvent::Lost(detail) if detail.contains("invalid local-session message")
-        ));
+        let expected =
+            "Orbit sent an invalid local-session message: invalid local-session message magic";
+        assert_eq!(event, TransportEvent::Lost(expected.into()));
         server.join().unwrap();
     }
 
