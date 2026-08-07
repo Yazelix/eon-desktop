@@ -7,11 +7,11 @@
   timing, complete wide-cell cursor geometry, and conceal-aware drawing and
   accessibility.
 - Send semantic keyboard, input-method, pointer, focus, and resize events to
-  Orbit, preserving active keyboard layouts, mapping all four wheel directions,
-  requiring the current presented revision for pointer motion, wheel input, and
-  new button presses, clamping captured motion to Orbit's coordinate bounds, and
-  keeping held-button pairs coherent across presentation and queue recovery while
-  clearing transient input on focus loss without owning the session or PTY.
+  Orbit, preserving active keyboard layouts, synchronizing the latest pre-attachment focus,
+  mapping all four wheel directions, requiring the current presented revision for
+  pointer motion, wheel input, and new button presses, clamping captured motion to
+  Orbit's coordinate bounds, and keeping held-button pairs coherent across presentation
+  and queue recovery while clearing transient input on focus loss without owning the session or PTY.
 - Normalize bounded wheel and trackpad input into Orbit-owned retained-history
   movement, keep competing pointer input inside an active Shift-drag selection,
   render that Orbit-authored selection for sighted and accessibility users, and

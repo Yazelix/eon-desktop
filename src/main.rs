@@ -129,6 +129,9 @@ impl Application {
                     self.input.reset_scroll();
                     self.input.cancel_selection();
                     self.send_resize();
+                    if let Some(message) = self.input.latest_focus() {
+                        self.send(message);
+                    }
                 }
             }
             TransportEvent::InvalidInput(detail) => {

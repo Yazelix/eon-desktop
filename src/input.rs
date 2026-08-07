@@ -15,6 +15,7 @@ use winit::{
 #[derive(Clone, Debug, Default)]
 pub struct InputState {
     modifiers: Modifiers,
+    focus_event: Option<FocusEvent>,
     composing: bool,
     preedit: String,
     cursor: (f32, f32),
@@ -46,6 +47,11 @@ impl InputState {
     }
 
     pub fn focus(&mut self, focused: bool) -> ClientMessage {
+        let event = if focused {
+            FocusEvent::Gained
+        } else {
+            FocusEvent::Lost
+        };
         if !focused {
             self.modifiers = Modifiers::empty();
             self.pressed_buttons.clear();
@@ -54,11 +60,13 @@ impl InputState {
             self.copy_pressed = false;
             self.clear_composition();
         }
-        ClientMessage::Focus(if focused {
-            FocusEvent::Gained
-        } else {
-            FocusEvent::Lost
-        })
+        self.focus_event = Some(event);
+        ClientMessage::Focus(event)
+    }
+
+    #[must_use]
+    pub fn latest_focus(&self) -> Option<ClientMessage> {
+        self.focus_event.map(ClientMessage::Focus)
     }
 
     #[must_use]
@@ -595,11 +603,17 @@ mod tests {
     #[test]
     fn focus_loss_clears_transient_native_input_state() {
         let mut input = InputState::default();
+        assert_eq!(input.latest_focus(), None);
+        let gained = ClientMessage::Focus(FocusEvent::Gained);
+        assert_eq!(input.focus(true), gained);
+        assert_eq!(input.latest_focus(), Some(gained));
         input.set_modifiers(ModifiersState::CONTROL);
         input.ime(Ime::Preedit("compose".into(), None));
         input.commit_mouse_button(ElementState::Pressed, WinitMouseButton::Left);
 
-        assert_eq!(input.focus(false), ClientMessage::Focus(FocusEvent::Lost));
+        let lost = ClientMessage::Focus(FocusEvent::Lost);
+        assert_eq!(input.focus(false), lost);
+        assert_eq!(input.latest_focus(), Some(lost));
         assert!(input.preedit().is_empty());
         assert!(!input.composing);
         let Some(ClientMessage::Mouse(event)) = input.move_pointer(10.0, 20.0) else {
