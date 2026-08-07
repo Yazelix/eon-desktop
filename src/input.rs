@@ -809,13 +809,17 @@ mod tests {
         assert_eq!(update, expected_update(3, 2));
         input.commit_selection(&update);
         assert!(input.selection_motion(size).is_none());
-        assert!(matches!(
-            input.selection_button(ElementState::Released, WinitMouseButton::Left, size, None),
-            Some(ClientMessage::Selection(SelectionAction::Finish {
+        let finish = input
+            .selection_button(ElementState::Released, WinitMouseButton::Left, size, None)
+            .unwrap();
+        assert_eq!(
+            finish,
+            ClientMessage::Selection(SelectionAction::Finish {
                 cell: ViewportCell { x: 3, y: 2 }
-            }))
-        ));
-        input.cancel_selection();
+            })
+        );
+        assert!(input.is_selecting());
+        input.commit_selection(&finish);
         assert!(!input.is_selecting());
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);

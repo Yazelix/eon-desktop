@@ -441,14 +441,6 @@ impl ApplicationHandler<UserEvent> for Application {
                     if self.send(message.clone()) {
                         self.input.commit_selection(&message);
                     }
-                    if button_state == winit::event::ElementState::Released {
-                        self.input.cancel_selection();
-                    }
-                } else if self.input.is_selecting()
-                    && button_state == winit::event::ElementState::Released
-                    && button == winit::event::MouseButton::Left
-                {
-                    self.input.cancel_selection();
                 } else if let Some(message) =
                     self.input
                         .mouse_button(button_state, button, presented_revision.is_some())
