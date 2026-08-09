@@ -14,6 +14,8 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+#[cfg(target_os = "linux")]
+use winit::platform::wayland::{ActiveEventLoopExtWayland, WindowAttributesExtWayland};
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
@@ -88,6 +90,12 @@ impl Application {
             .with_title("Venus")
             .with_inner_size(LogicalSize::new(960.0, 600.0))
             .with_visible(false);
+        #[cfg(target_os = "linux")]
+        let attributes = if event_loop.is_wayland() {
+            attributes.with_name("eon", "yazelix-venus")
+        } else {
+            attributes
+        };
         let window = Arc::new(event_loop.create_window(attributes)?);
         // X11 ignores the exclusion size, so use the cursor's bottom edge as its spot.
         let ime_line_offset = u16::from(matches!(
