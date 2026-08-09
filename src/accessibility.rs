@@ -1,10 +1,10 @@
 use crate::{
-    Scene,
+    Scene, WorkspaceFocus, WorkspaceScene,
     scene::{AccessiblePosition, AccessibleRow, AccessibleSelection, AccessibleText},
 };
 use accesskit::{
-    ActivationHandler, Node, NodeId, Rect, Role, TextDirection, TextPosition, TextSelection, Tree,
-    TreeId, TreeUpdate,
+    Action, ActivationHandler, Node, NodeId, Orientation, Rect, Role, TextDirection, TextPosition,
+    TextSelection, Tree, TreeId, TreeUpdate,
 };
 use accesskit_winit::Adapter;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -13,6 +13,8 @@ use winit::dpi::PhysicalSize;
 const WINDOW: NodeId = NodeId(0);
 const CONTENT: NodeId = NodeId(1);
 const STATUS: NodeId = NodeId(2);
+const TAB_LIST: NodeId = NodeId(3);
+const PANE_PANEL: NodeId = NodeId(4);
 
 #[derive(Clone, Debug)]
 struct Snapshot {
@@ -21,6 +23,8 @@ struct Snapshot {
     status: String,
     size: PhysicalSize<u32>,
     terminal: bool,
+    workspace: Option<WorkspaceScene>,
+    workspace_focus: WorkspaceFocus,
 }
 
 impl Snapshot {
@@ -28,7 +32,14 @@ impl Snapshot {
         let mut root = Node::new(Role::Window);
         root.set_label(self.title.as_str());
         root.set_bounds(bounds(self.size));
-        root.set_children(if self.terminal && !self.status.is_empty() {
+        let status_alert = self.terminal && !self.status.is_empty();
+        root.set_children(if self.workspace.is_some() {
+            let mut children = vec![TAB_LIST, PANE_PANEL];
+            if status_alert {
+                children.push(STATUS);
+            }
+            children
+        } else if status_alert {
             vec![CONTENT, STATUS]
         } else {
             vec![CONTENT]
@@ -57,14 +68,69 @@ impl Snapshot {
         } else {
             content.set_value(self.status.as_str());
         }
-        content.set_bounds(bounds(self.size));
+        let terminal_layout_bounds = self
+            .workspace
+            .as_ref()
+            .map_or_else(|| bounds(self.size), |workspace| rect(workspace.terminal));
+        let terminal_bounds = self
+            .workspace
+            .as_ref()
+            .map_or(terminal_layout_bounds, |workspace| {
+                rect(workspace.visible_terminal().unwrap_or(workspace.terminal))
+            });
+        content.set_bounds(terminal_bounds);
 
         let mut nodes = vec![(WINDOW, root), (CONTENT, content)];
+        if let Some(workspace) = &self.workspace {
+            let mut tab_list = Node::new(Role::TabList);
+            tab_list.set_label("Eon workspace tabs");
+            tab_list.set_orientation(Orientation::Horizontal);
+            tab_list.set_bounds(rect(workspace.tab_viewport));
+            tab_list.set_children((0..workspace.tabs.len()).map(tab_id).collect::<Vec<_>>());
+            nodes.push((TAB_LIST, tab_list));
+            for (index, tab) in workspace.tabs.iter().enumerate() {
+                let mut node = Node::new(Role::Tab);
+                node.set_label(tab.id.as_str());
+                node.set_selected(tab.selected);
+                node.set_bounds(rect(tab.rect));
+                node.add_action(Action::Click);
+                node.add_action(Action::Focus);
+                nodes.push((tab_id(index), node));
+            }
+
+            let mut panel = Node::new(Role::TabPanel);
+            panel.set_label("Active tab panes");
+            panel.set_orientation(Orientation::Vertical);
+            panel.set_bounds(rect(workspace.pane_viewport));
+            let mut children = Vec::with_capacity(workspace.panes.len() + 1);
+            for (index, pane) in workspace.panes.iter().enumerate() {
+                children.push(pane_id(index));
+                if pane.selected {
+                    children.push(CONTENT);
+                }
+            }
+            panel.set_children(children);
+            nodes.push((PANE_PANEL, panel));
+            for (index, pane) in workspace.panes.iter().enumerate() {
+                let mut node = Node::new(Role::Button);
+                node.set_label(if pane.live {
+                    format!("{} {}", pane.id, pane.session)
+                } else {
+                    format!("{} {} offline", pane.id, pane.session)
+                });
+                node.set_selected(pane.selected);
+                node.set_expanded(pane.selected);
+                node.set_bounds(rect(pane.rect));
+                node.add_action(Action::Click);
+                node.add_action(Action::Focus);
+                nodes.push((pane_id(index), node));
+            }
+        }
         if self.terminal {
             for (index, row) in self.content.rows.iter().enumerate() {
                 nodes.push((
                     text_run_id(index),
-                    text_run(row, self.size, index, self.content.rows.len()),
+                    text_run(row, terminal_layout_bounds, index, self.content.rows.len()),
                 ));
             }
         }
@@ -79,7 +145,21 @@ impl Snapshot {
             nodes,
             tree: Some(Tree::new(WINDOW)),
             tree_id: TreeId::ROOT,
-            focus: CONTENT,
+            focus: self.workspace.as_ref().map_or(CONTENT, |workspace| {
+                match self.workspace_focus {
+                    WorkspaceFocus::Terminal => CONTENT,
+                    WorkspaceFocus::Tabs => workspace
+                        .tabs
+                        .iter()
+                        .position(|tab| tab.selected)
+                        .map_or(CONTENT, tab_id),
+                    WorkspaceFocus::Panes => workspace
+                        .panes
+                        .iter()
+                        .position(|pane| pane.selected)
+                        .map_or(CONTENT, pane_id),
+                }
+            }),
         }
     }
 }
@@ -110,6 +190,8 @@ impl Accessibility {
                 status: "Connecting to Orbit".into(),
                 size,
                 terminal: false,
+                workspace: None,
+                workspace_focus: WorkspaceFocus::Terminal,
             })),
         }
     }
@@ -125,6 +207,8 @@ impl Accessibility {
         &self,
         adapter: &mut Adapter,
         scene: Option<&Scene>,
+        workspace: Option<&WorkspaceScene>,
+        workspace_focus: WorkspaceFocus,
         status: &str,
         size: PhysicalSize<u32>,
     ) {
@@ -132,6 +216,8 @@ impl Accessibility {
             let mut snapshot = lock(&self.snapshot);
             snapshot.size = size;
             snapshot.status = status.to_owned();
+            snapshot.workspace = workspace.cloned();
+            snapshot.workspace_focus = workspace_focus;
             if let Some(scene) = scene {
                 snapshot.title = if scene.title.is_empty() {
                     "Venus".into()
@@ -148,6 +234,37 @@ impl Accessibility {
         }
         adapter.update_if_active(|| lock(&self.snapshot).tree());
     }
+
+    #[must_use]
+    pub fn workspace_target(&self, target: NodeId) -> Option<AccessibilityTarget> {
+        let snapshot = lock(&self.snapshot);
+        let workspace = snapshot.workspace.as_ref()?;
+        if target == CONTENT {
+            return Some(AccessibilityTarget::Terminal);
+        }
+        if let Some((_, tab)) = workspace
+            .tabs
+            .iter()
+            .enumerate()
+            .find(|(index, _)| tab_id(*index) == target)
+        {
+            return Some(AccessibilityTarget::Tab(tab.id.clone()));
+        }
+        workspace
+            .panes
+            .iter()
+            .enumerate()
+            .find(|(index, _)| pane_id(*index) == target)
+            .map(|(_, pane)| AccessibilityTarget::Pane(pane.id.clone()))
+    }
+}
+
+/// Accessible workspace activation routed back through Eon semantics.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AccessibilityTarget {
+    Terminal,
+    Tab(String),
+    Pane(String),
 }
 
 fn bounds(size: PhysicalSize<u32>) -> Rect {
@@ -159,8 +276,25 @@ fn bounds(size: PhysicalSize<u32>) -> Rect {
     }
 }
 
+fn rect(rect: crate::SceneRect) -> Rect {
+    Rect {
+        x0: f64::from(rect.left),
+        y0: f64::from(rect.top),
+        x1: f64::from(rect.right()),
+        y1: f64::from(rect.bottom()),
+    }
+}
+
+fn tab_id(index: usize) -> NodeId {
+    NodeId(100 + index as u64)
+}
+
+fn pane_id(index: usize) -> NodeId {
+    NodeId(1_000 + index as u64)
+}
+
 fn text_run_id(index: usize) -> NodeId {
-    NodeId(10 + index as u64)
+    NodeId(10_000 + index as u64)
 }
 
 fn text_position(position: AccessiblePosition) -> TextPosition {
@@ -177,17 +311,17 @@ fn text_selection(selection: AccessibleSelection) -> TextSelection {
     }
 }
 
-fn text_run(row: &AccessibleRow, size: PhysicalSize<u32>, index: usize, count: usize) -> Node {
+fn text_run(row: &AccessibleRow, bounds: Rect, index: usize, count: usize) -> Node {
     let mut node = Node::new(Role::TextRun);
     node.set_value(row.value.as_str());
     node.set_character_lengths(row.character_lengths.clone());
     node.set_text_direction(TextDirection::LeftToRight);
-    let height = f64::from(size.height) / count.max(1) as f64;
+    let height = (bounds.y1 - bounds.y0) / count.max(1) as f64;
     node.set_bounds(Rect {
-        x0: 0.0,
-        y0: height * index as f64,
-        x1: f64::from(size.width),
-        y1: height * (index + 1) as f64,
+        x0: bounds.x0,
+        y0: bounds.y0 + height * index as f64,
+        x1: bounds.x1,
+        y1: bounds.y0 + height * (index + 1) as f64,
     });
     node
 }
@@ -201,6 +335,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CellMetrics;
+    use eon_workspace_protocol::{Pane, Snapshot as WorkspaceSnapshot, Tab};
 
     #[test]
     fn scene_notice_preserves_terminal_content_and_adds_an_alert() {
@@ -219,6 +355,8 @@ mod tests {
             status: "renderer failure".into(),
             size: PhysicalSize::new(800, 600),
             terminal: true,
+            workspace: None,
+            workspace_focus: WorkspaceFocus::Terminal,
         }
         .tree();
         let node = |id| {
@@ -266,6 +404,8 @@ mod tests {
             status: String::new(),
             size: PhysicalSize::new(800, 600),
             terminal: true,
+            workspace: None,
+            workspace_focus: WorkspaceFocus::Terminal,
         }
         .tree();
         let node = |id| {
@@ -293,5 +433,87 @@ mod tests {
                 },
             })
         );
+    }
+
+    #[test]
+    fn workspace_accessibility_order_matches_tabs_then_one_expanded_pane() {
+        let workspace = WorkspaceScene::from_snapshot(
+            &WorkspaceSnapshot {
+                active_tab: "tab-1".into(),
+                tabs: vec![
+                    Tab {
+                        id: "tab-1".into(),
+                        selected_pane: "pane-2".into(),
+                        panes: vec![
+                            Pane {
+                                id: "pane-1".into(),
+                                session: "session-1".into(),
+                                endpoint: b"/run/eon/one.sock".to_vec(),
+                                live: true,
+                            },
+                            Pane {
+                                id: "pane-2".into(),
+                                session: "session-2".into(),
+                                endpoint: b"/run/eon/two.sock".to_vec(),
+                                live: true,
+                            },
+                        ],
+                    },
+                    Tab {
+                        id: "tab-2".into(),
+                        selected_pane: "pane-3".into(),
+                        panes: vec![Pane {
+                            id: "pane-3".into(),
+                            session: "session-3".into(),
+                            endpoint: b"/run/eon/three.sock".to_vec(),
+                            live: false,
+                        }],
+                    },
+                ],
+            },
+            PhysicalSize::new(800, 600),
+            CellMetrics::for_scale(1.0),
+            0.0,
+            0.0,
+        );
+        let terminal_layout_bounds = rect(workspace.terminal);
+        let terminal_bounds = rect(workspace.visible_terminal().unwrap());
+        let update = Snapshot {
+            title: "shell".into(),
+            content: AccessibleText {
+                rows: vec![AccessibleRow {
+                    value: "terminal".into(),
+                    character_lengths: vec![1; 8],
+                }],
+                selection: None,
+            },
+            status: String::new(),
+            size: PhysicalSize::new(800, 600),
+            terminal: true,
+            workspace: Some(workspace),
+            workspace_focus: WorkspaceFocus::Panes,
+        }
+        .tree();
+        let node = |id| {
+            &update
+                .nodes
+                .iter()
+                .find(|(node_id, _)| *node_id == id)
+                .unwrap()
+                .1
+        };
+
+        assert_eq!(node(WINDOW).children(), &[TAB_LIST, PANE_PANEL]);
+        assert_eq!(node(TAB_LIST).children(), &[tab_id(0), tab_id(1)]);
+        assert_eq!(
+            node(PANE_PANEL).children(),
+            &[pane_id(0), pane_id(1), CONTENT]
+        );
+        assert_eq!(node(tab_id(0)).role(), Role::Tab);
+        assert_eq!(node(pane_id(1)).role(), Role::Button);
+        assert_eq!(node(pane_id(1)).is_expanded(), Some(true));
+        assert_eq!(node(CONTENT).bounds(), Some(terminal_bounds));
+        assert_eq!(node(text_run_id(0)).bounds(), Some(terminal_layout_bounds));
+        assert_eq!(update.focus, pane_id(1));
     }
 }

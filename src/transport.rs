@@ -1,3 +1,7 @@
+use eon_workspace_protocol::{
+    self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
+    Response as WorkspaceResponse,
+};
 use orbit_protocol::session::{self, ClientMessage, ServerMessage};
 use std::{
     collections::VecDeque,
@@ -5,9 +9,10 @@ use std::{
     io::{self, ErrorKind, Read, Write},
     net::Shutdown,
     os::unix::net::UnixStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
     thread,
+    time::{Duration, SystemTime},
 };
 
 /// Events delivered from the local-session worker to the native event loop.
@@ -40,6 +45,149 @@ impl std::error::Error for SendError {}
 pub struct Transport {
     messages: mpsc::SyncSender<ClientMessage>,
     events: Arc<EventQueue>,
+}
+
+/// One complete result from the Eon-owned workspace request boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceEvent {
+    Response(WorkspaceResponse),
+    Unavailable(String),
+}
+
+/// Bounded semantic-action handle for EONW v1.
+pub struct WorkspaceTransport {
+    actions: mpsc::SyncSender<WorkspaceAction>,
+    events: Arc<WorkspaceEventQueue>,
+}
+
+impl WorkspaceTransport {
+    #[must_use]
+    pub fn start(socket: PathBuf, wake: impl Fn() + Send + Sync + 'static) -> Self {
+        let (actions, receiver) = mpsc::sync_channel(32);
+        let events = Arc::new(WorkspaceEventQueue::default());
+        let notify = workspace_notifier(Arc::clone(&events), wake);
+        let worker_notify = Arc::clone(&notify);
+        if let Err(error) = thread::Builder::new()
+            .name("venus-eon-workspace".into())
+            .spawn(move || run_workspace(socket, receiver, worker_notify))
+        {
+            notify(WorkspaceEvent::Unavailable(format!(
+                "Cannot start the Eon workspace worker: {error}"
+            )));
+        }
+        Self { actions, events }
+    }
+
+    pub fn send(&self, action: WorkspaceAction) -> Result<(), SendError> {
+        self.actions.try_send(action).map_err(|error| match error {
+            mpsc::TrySendError::Full(_) => SendError::Full,
+            mpsc::TrySendError::Disconnected(_) => SendError::Closed,
+        })
+    }
+
+    pub fn drain_events(&self) -> Vec<WorkspaceEvent> {
+        self.events.drain()
+    }
+}
+
+#[derive(Default)]
+struct WorkspaceEventQueue(Mutex<VecDeque<WorkspaceEvent>>);
+
+impl WorkspaceEventQueue {
+    fn push(&self, event: WorkspaceEvent) -> bool {
+        const CAPACITY: usize = 64;
+        let mut events = self.0.lock().expect("workspace event queue lock poisoned");
+        let wake = events.is_empty();
+        if events.len() == CAPACITY {
+            events.clear();
+            events.push_back(WorkspaceEvent::Unavailable(
+                "Eon workspace event queue exceeded its bounded capacity".into(),
+            ));
+        } else {
+            events.push_back(event);
+        }
+        wake
+    }
+
+    fn drain(&self) -> Vec<WorkspaceEvent> {
+        self.0
+            .lock()
+            .expect("workspace event queue lock poisoned")
+            .drain(..)
+            .collect()
+    }
+}
+
+fn workspace_notifier(
+    events: Arc<WorkspaceEventQueue>,
+    wake: impl Fn() + Send + Sync + 'static,
+) -> Arc<dyn Fn(WorkspaceEvent) + Send + Sync> {
+    Arc::new(move |event| {
+        if events.push(event) {
+            wake();
+        }
+    })
+}
+
+fn run_workspace(
+    socket: PathBuf,
+    receiver: mpsc::Receiver<WorkspaceAction>,
+    notify: Arc<dyn Fn(WorkspaceEvent) + Send + Sync>,
+) {
+    let nonce = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    for (counter, action) in std::iter::once(WorkspaceAction::Inspect)
+        .chain(receiver)
+        .enumerate()
+    {
+        let event = workspace_exchange(&socket, nonce, counter, action)
+            .map(WorkspaceEvent::Response)
+            .unwrap_or_else(WorkspaceEvent::Unavailable);
+        notify(event);
+    }
+}
+
+fn workspace_exchange(
+    socket: &Path,
+    nonce: u128,
+    counter: usize,
+    action: WorkspaceAction,
+) -> Result<WorkspaceResponse, String> {
+    let request = WorkspaceRequest {
+        id: format!("venus-{}-{nonce}-{counter}", std::process::id()),
+        action,
+    };
+    let encoded = workspace::encode_request(&request)
+        .map_err(|error| format!("Cannot encode Eon workspace action: {error}"))?;
+    let mut stream = UnixStream::connect(socket).map_err(|error| {
+        format!(
+            "Cannot connect to Eon workspace at {}: {error}",
+            socket.display()
+        )
+    })?;
+    let timeout = Some(Duration::from_secs(2));
+    stream
+        .set_read_timeout(timeout)
+        .and_then(|()| stream.set_write_timeout(timeout))
+        .map_err(|error| format!("Cannot bound Eon workspace I/O: {error}"))?;
+    stream
+        .write_all(&encoded)
+        .map_err(|error| format!("Cannot send Eon workspace action: {error}"))?;
+
+    let mut response = vec![0; workspace::HEADER_BYTES];
+    stream
+        .read_exact(&mut response)
+        .map_err(|error| format!("Cannot read Eon workspace response header: {error}"))?;
+    let length = workspace::declared_message_len(&response)
+        .map_err(|error| format!("Eon sent an invalid workspace response: {error}"))?;
+    response.resize(length, 0);
+    stream
+        .read_exact(&mut response[workspace::HEADER_BYTES..])
+        .map_err(|error| format!("Cannot read complete Eon workspace response: {error}"))?;
+    workspace::decode_response(&response)
+        .map_err(|error| format!("Eon sent an invalid workspace response: {error}"))
 }
 
 impl Transport {
@@ -307,6 +455,7 @@ fn protocol_loss(error: session::Error) -> TransportEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eon_workspace_protocol::{Pane, Snapshot, Tab};
     use orbit_protocol::{
         Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         session::FocusEvent,
@@ -504,6 +653,99 @@ mod tests {
         let expected =
             "Orbit sent an invalid local-session message: invalid local-session message magic";
         assert_eq!(event, TransportEvent::Lost(expected.into()));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn workspace_worker_sends_exact_pointer_and_directional_actions() {
+        let socket = TestSocket::new();
+        let listener = UnixListener::bind(&socket.path).unwrap();
+        let expected = WorkspaceResponse::Snapshot(Snapshot {
+            active_tab: "tab-1".into(),
+            tabs: vec![Tab {
+                id: "tab-1".into(),
+                selected_pane: "pane-1".into(),
+                panes: vec![Pane {
+                    id: "pane-1".into(),
+                    session: "session-1".into(),
+                    endpoint: b"/run/eon/orbit.sock".to_vec(),
+                    live: true,
+                }],
+            }],
+        });
+        let encoded = workspace::encode_response(&expected).unwrap();
+        let server = thread::spawn(move || {
+            for expected_action in std::iter::once(WorkspaceAction::Inspect).chain([
+                WorkspaceAction::FocusId("pane-1".into()),
+                WorkspaceAction::Focus(workspace::Direction::Left),
+                WorkspaceAction::Focus(workspace::Direction::Right),
+                WorkspaceAction::Focus(workspace::Direction::Up),
+                WorkspaceAction::Focus(workspace::Direction::Down),
+            ]) {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut header = [0; workspace::HEADER_BYTES];
+                stream.read_exact(&mut header).unwrap();
+                let length = workspace::declared_message_len(&header).unwrap();
+                let mut request = Vec::from(header);
+                request.resize(length, 0);
+                stream
+                    .read_exact(&mut request[workspace::HEADER_BYTES..])
+                    .unwrap();
+                assert_eq!(
+                    workspace::decode_request(&request).unwrap().action,
+                    expected_action
+                );
+                stream.write_all(&encoded).unwrap();
+            }
+        });
+        let (wakes, receiver) = mpsc::channel();
+        let transport = WorkspaceTransport::start(socket.path.clone(), move || {
+            let _ = wakes.send(());
+        });
+
+        receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(
+            transport.drain_events(),
+            [WorkspaceEvent::Response(expected.clone())]
+        );
+        for action in [
+            WorkspaceAction::FocusId("pane-1".into()),
+            WorkspaceAction::Focus(workspace::Direction::Left),
+            WorkspaceAction::Focus(workspace::Direction::Right),
+            WorkspaceAction::Focus(workspace::Direction::Up),
+            WorkspaceAction::Focus(workspace::Direction::Down),
+        ] {
+            transport.send(action).unwrap();
+            receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(
+                transport.drain_events(),
+                [WorkspaceEvent::Response(expected.clone())]
+            );
+        }
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn incompatible_workspace_response_is_rejected_before_model_state() {
+        let socket = TestSocket::new();
+        let listener = UnixListener::bind(&socket.path).unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; workspace::HEADER_BYTES];
+            stream.read_exact(&mut request).unwrap();
+            let mut response =
+                workspace::encode_response(&WorkspaceResponse::Failure(workspace::Failure {
+                    code: "unused".into(),
+                    detail: "unused".into(),
+                }))
+                .unwrap();
+            response[4..6].copy_from_slice(&(workspace::VERSION + 1).to_le_bytes());
+            stream.write_all(&response).unwrap();
+        });
+
+        let error = workspace_exchange(&socket.path, 1, 0, WorkspaceAction::Inspect).unwrap_err();
+
+        assert!(error.contains("unsupported EONW version"));
         server.join().unwrap();
     }
 

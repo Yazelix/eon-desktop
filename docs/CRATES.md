@@ -3,10 +3,12 @@
 `ven-upt.1` records the user-selected thin winit, wgpu, glyphon, and AccessKit
 shape. `ven-upt.2` implements it with exact direct versions and features in
 `Cargo.toml`. `ven-4sn` advances the canonical session consumer to ORBS v2 and
-adds the minimum native text-clipboard owner.
+adds the minimum native text-clipboard owner. `ven-c87` adds the exact Eon-owned
+EONW v1 consumer without a local protocol mirror.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
+| Eon workspace protocol consumer | Exact Git revision `4af395aea06c230ee6b18cf0755ae25915c0b88d` of the dependency-free, publish-false `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v1 values, validation, topology, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. The user authorized Apache-2.0, matching Nova, if Eon needs a public license; the exact Eon revision has no durable license record, so public distribution remains blocked until Eon records it. |
 | Orbit protocol consumer | Exact Git revision `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v2, ORBF v1, semantic values, history, selection, copied text, bounds, and revision reduction. Venus keeps no mirror or adapter. |
 | Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Active | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
@@ -18,7 +20,8 @@ adds the minimum native text-clipboard owner.
 Minimal Rust 2024 scratch binaries were resolved and checked on Rust 1.96.0.
 Counts include the scratch root; lock counts include cross-target entries, while
 tree counts are unique Linux normal/build output lines. The implemented lock
-contains 337 packages including Venus and `orbit-protocol`; its current Linux
+contains 338 packages including Venus, `eon-workspace-protocol`, and
+`orbit-protocol`; its current Linux
 normal/build tree has 277 unique lines.
 
 | Complete shape | Exact releases | Lock packages | Linux tree | Disposition |
@@ -78,6 +81,15 @@ rejected because its generic Unix path is X11-only and correct Wayland use
 would require Venus-owned provider dispatch from a raw display pointer. A
 future browser client replaces this isolated effect with the browser clipboard
 API rather than carrying arboard across the boundary.
+
+## Eon workspace protocol decision
+
+The exact Eon owner package adds one direct lock entry and no transitive, native,
+or build dependency. Its 496 production lines replace no acceptable Venus code:
+copying them would duplicate every EONW tag, bound, identity rule, and snapshot
+invariant. Parsing Eon CLI output, shelling out, and consuming the older private
+control format remain rejected. Replacement is one source-pin edit if EONW is
+later published unchanged; an adapter or local mirror is not a replacement path.
 
 ## Selected owner seam
 

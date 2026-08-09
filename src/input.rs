@@ -598,6 +598,9 @@ mod tests {
         assert_eq!(event.text.as_deref(), Some("啊"));
         assert!(!event.composing);
         assert!(input.preedit().is_empty());
+        input.ime(Ime::Preedit("stale".into(), None));
+        assert!(input.ime(Ime::Disabled).is_none());
+        assert!(input.preedit().is_empty());
     }
 
     #[test]

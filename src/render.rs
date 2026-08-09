@@ -1,4 +1,4 @@
-use crate::{Color as SceneColor, DrawStyle, Scene};
+use crate::{Color as SceneColor, DrawStyle, Scene, SceneRect, WorkspaceFocus, WorkspaceScene};
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
     Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
@@ -110,12 +110,16 @@ struct PlacedText {
     top: f32,
     right: i32,
     bottom: i32,
+    bound_left: i32,
+    bound_top: i32,
     color: Color,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 struct ContentKey {
     revision: Option<u64>,
+    workspace: Option<WorkspaceScene>,
+    workspace_focus: WorkspaceFocus,
     blink_visible: bool,
     preedit: String,
     status: String,
@@ -302,11 +306,20 @@ impl Renderer {
     pub fn render(
         &mut self,
         scene: Option<&Scene>,
+        workspace: Option<&WorkspaceScene>,
+        workspace_focus: WorkspaceFocus,
         status: &str,
         blink_visible: bool,
         preedit: &str,
     ) -> Result<PresentOutcome, RenderError> {
-        self.rebuild_if_needed(scene, status, blink_visible, preedit);
+        self.rebuild_if_needed(
+            scene,
+            workspace,
+            workspace_focus,
+            status,
+            blink_visible,
+            preedit,
+        );
         self.viewport.update(
             &self.queue,
             Resolution {
@@ -411,12 +424,16 @@ impl Renderer {
     fn rebuild_if_needed(
         &mut self,
         scene: Option<&Scene>,
+        workspace: Option<&WorkspaceScene>,
+        workspace_focus: WorkspaceFocus,
         status: &str,
         blink_visible: bool,
         preedit: &str,
     ) {
         let key = ContentKey {
             revision: scene.map(|scene| scene.revision),
+            workspace: workspace.cloned(),
+            workspace_focus,
             blink_visible,
             preedit: preedit.to_owned(),
             status: status.to_owned(),
@@ -427,26 +444,76 @@ impl Renderer {
 
         self.text.clear();
         let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
-        if let Some(scene) = scene {
-            self.clear = color(scene.background, self.config.format.is_srgb());
-            self.build_scene_text(scene, blink_visible);
-            build_scene_rectangles(&mut rectangles, scene, blink_visible, self.metrics);
-            self.build_preedit(scene, preedit, &mut rectangles);
-            if !status.is_empty() {
-                build_notice_rectangles(&mut rectangles, self.metrics);
-                self.push_text(
-                    status,
-                    self.metrics.padding * 2.0,
-                    self.config.height as f32 - self.metrics.height * 1.7,
-                    self.config.width as f32 - self.metrics.padding * 4.0,
-                    self.metrics.height,
-                    SceneColor {
-                        r: 245,
-                        g: 192,
-                        b: 94,
-                    },
-                    DrawStyleKind::Status,
+        if let Some(workspace) = workspace {
+            self.clear = color(DEFAULT_BACKGROUND, self.config.format.is_srgb());
+            self.build_workspace(workspace, workspace_focus, &mut rectangles);
+            if let Some(scene) = scene
+                && let Some(terminal) = workspace.visible_terminal()
+            {
+                rectangles.push(
+                    terminal.left,
+                    terminal.top,
+                    terminal.width,
+                    terminal.height,
+                    scene.background,
+                    1.0,
                 );
+                rectangles.clip = Some(terminal);
+                self.build_scene_text(scene, blink_visible, workspace.terminal, terminal);
+                build_scene_rectangles(
+                    &mut rectangles,
+                    scene,
+                    blink_visible,
+                    self.metrics,
+                    workspace.terminal,
+                );
+                self.build_preedit(
+                    scene,
+                    preedit,
+                    &mut rectangles,
+                    workspace.terminal,
+                    terminal,
+                );
+                rectangles.clip = None;
+            }
+            if workspace_focus == WorkspaceFocus::Terminal
+                && let Some(terminal) = workspace.visible_terminal()
+            {
+                rectangles.push_hollow(
+                    terminal.left,
+                    terminal.top,
+                    terminal.width,
+                    terminal.height,
+                    1.0,
+                    SceneColor {
+                        r: 58,
+                        g: 75,
+                        b: 91,
+                    },
+                );
+            }
+            if !status.is_empty() {
+                self.build_notice(status, &mut rectangles);
+            }
+        } else if let Some(scene) = scene {
+            self.clear = color(scene.background, self.config.format.is_srgb());
+            let viewport = SceneRect {
+                left: 0.0,
+                top: 0.0,
+                width: self.config.width as f32,
+                height: self.config.height as f32,
+            };
+            self.build_scene_text(scene, blink_visible, viewport, viewport);
+            build_scene_rectangles(
+                &mut rectangles,
+                scene,
+                blink_visible,
+                self.metrics,
+                viewport,
+            );
+            self.build_preedit(scene, preedit, &mut rectangles, viewport, viewport);
+            if !status.is_empty() {
+                self.build_notice(status, &mut rectangles);
             }
         } else {
             self.clear = color(DEFAULT_BACKGROUND, self.config.format.is_srgb());
@@ -481,16 +548,181 @@ impl Renderer {
         self.content_key = Some(key);
     }
 
-    fn build_scene_text(&mut self, scene: &Scene, blink_visible: bool) {
+    fn build_workspace(
+        &mut self,
+        workspace: &WorkspaceScene,
+        focus: WorkspaceFocus,
+        rectangles: &mut RectangleBatch,
+    ) {
+        let accent = SceneColor {
+            r: 126,
+            g: 231,
+            b: 185,
+        };
+        let selected = SceneColor {
+            r: 28,
+            g: 43,
+            b: 58,
+        };
+        let idle = SceneColor {
+            r: 16,
+            g: 22,
+            b: 32,
+        };
+        rectangles.push(
+            workspace.tab_viewport.left,
+            workspace.tab_viewport.top,
+            workspace.tab_viewport.width,
+            workspace.tab_viewport.height,
+            idle,
+            1.0,
+        );
+        for tab in &workspace.tabs {
+            let Some(rect) = tab.rect.intersection(workspace.tab_viewport) else {
+                continue;
+            };
+            rectangles.push(
+                rect.left,
+                rect.top,
+                rect.width,
+                rect.height,
+                if tab.selected { selected } else { idle },
+                1.0,
+            );
+            if tab.selected {
+                rectangles.push(rect.left, rect.bottom() - 3.0, rect.width, 3.0, accent, 1.0);
+                if focus == WorkspaceFocus::Tabs {
+                    rectangles.push_hollow(
+                        rect.left + 2.0,
+                        rect.top + 2.0,
+                        rect.width - 4.0,
+                        rect.height - 4.0,
+                        1.0,
+                        accent,
+                    );
+                }
+            }
+            self.push_text_clipped(
+                &tab.id,
+                tab.rect.left + self.metrics.padding,
+                tab.rect.top + (tab.rect.height - self.metrics.height) / 2.0,
+                tab.rect.width - self.metrics.padding * 2.0,
+                self.metrics.height,
+                if tab.selected {
+                    SceneColor {
+                        r: 239,
+                        g: 244,
+                        b: 248,
+                    }
+                } else {
+                    SceneColor {
+                        r: 162,
+                        g: 174,
+                        b: 190,
+                    }
+                },
+                DrawStyleKind::Status,
+                workspace.tab_viewport,
+            );
+        }
+        for pane in &workspace.panes {
+            let Some(rect) = pane.rect.intersection(workspace.pane_viewport) else {
+                continue;
+            };
+            rectangles.push(
+                rect.left,
+                rect.top,
+                rect.width,
+                rect.height,
+                if pane.selected { selected } else { idle },
+                1.0,
+            );
+            rectangles.push(
+                rect.left,
+                rect.bottom() - 1.0,
+                rect.width,
+                1.0,
+                SceneColor {
+                    r: 43,
+                    g: 53,
+                    b: 67,
+                },
+                1.0,
+            );
+            if pane.selected && focus == WorkspaceFocus::Panes {
+                rectangles.push_hollow(
+                    rect.left + 2.0,
+                    rect.top + 2.0,
+                    rect.width - 4.0,
+                    rect.height - 4.0,
+                    1.0,
+                    accent,
+                );
+            }
+            let label = if pane.live {
+                format!("{}  {}", pane.id, pane.session)
+            } else {
+                format!("{}  {}  offline", pane.id, pane.session)
+            };
+            self.push_text_clipped(
+                &label,
+                pane.rect.left + self.metrics.padding,
+                pane.rect.top + (pane.rect.height - self.metrics.height) / 2.0,
+                pane.rect.width - self.metrics.padding * 2.0,
+                self.metrics.height,
+                if pane.live {
+                    SceneColor {
+                        r: 214,
+                        g: 222,
+                        b: 232,
+                    }
+                } else {
+                    SceneColor {
+                        r: 221,
+                        g: 126,
+                        b: 126,
+                    }
+                },
+                DrawStyleKind::Status,
+                workspace.pane_viewport,
+            );
+        }
+    }
+
+    fn build_notice(&mut self, status: &str, rectangles: &mut RectangleBatch) {
+        build_notice_rectangles(rectangles, self.metrics);
+        self.push_text(
+            status,
+            self.metrics.padding * 2.0,
+            self.config.height as f32 - self.metrics.height * 1.7,
+            self.config.width as f32 - self.metrics.padding * 4.0,
+            self.metrics.height,
+            SceneColor {
+                r: 245,
+                g: 192,
+                b: 94,
+            },
+            DrawStyleKind::Status,
+        );
+    }
+
+    fn build_scene_text(
+        &mut self,
+        scene: &Scene,
+        blink_visible: bool,
+        origin: SceneRect,
+        clip: SceneRect,
+    ) {
         for run in scene
             .glyph_runs()
             .into_iter()
             .filter(|run| run.style.foreground_visible(blink_visible))
         {
-            let left = self.metrics.padding + f32::from(run.column) * self.metrics.width;
-            let top = self.metrics.padding + f32::from(run.row) * self.metrics.height;
+            let left =
+                origin.left + self.metrics.padding + f32::from(run.column) * self.metrics.width;
+            let top = origin.top + self.metrics.padding + f32::from(run.row) * self.metrics.height;
             let width = f32::from(run.columns) * self.metrics.width;
-            self.push_text(
+            self.push_text_clipped(
                 &run.text,
                 left,
                 top,
@@ -498,18 +730,28 @@ impl Renderer {
                 self.metrics.height,
                 run.style.foreground,
                 DrawStyleKind::Cell(run.style),
+                clip,
             );
         }
     }
 
-    fn build_preedit(&mut self, scene: &Scene, preedit: &str, rectangles: &mut RectangleBatch) {
+    fn build_preedit(
+        &mut self,
+        scene: &Scene,
+        preedit: &str,
+        rectangles: &mut RectangleBatch,
+        origin: SceneRect,
+        clip: SceneRect,
+    ) {
         let Some(cursor) = scene.cursor.filter(|_| !preedit.is_empty()) else {
             return;
         };
-        let left = self.metrics.padding + f32::from(cursor.leading_column()) * self.metrics.width;
-        let top = self.metrics.padding + f32::from(cursor.row) * self.metrics.height;
-        let width = (self.config.width as f32 - left - self.metrics.padding).max(1.0);
-        let preedit_width = self.push_text(
+        let left = origin.left
+            + self.metrics.padding
+            + f32::from(cursor.leading_column()) * self.metrics.width;
+        let top = origin.top + self.metrics.padding + f32::from(cursor.row) * self.metrics.height;
+        let width = (origin.right() - left - self.metrics.padding).max(1.0);
+        let preedit_width = self.push_text_clipped(
             preedit,
             left,
             top,
@@ -517,6 +759,7 @@ impl Renderer {
             self.metrics.height,
             scene.foreground,
             DrawStyleKind::Preedit,
+            clip,
         );
         rectangles.push(
             left,
@@ -526,6 +769,48 @@ impl Renderer {
             scene.foreground,
             1.0,
         );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_text_clipped(
+        &mut self,
+        text: &str,
+        left: f32,
+        top: f32,
+        layout_width: f32,
+        layout_height: f32,
+        foreground: SceneColor,
+        kind: DrawStyleKind,
+        clip: SceneRect,
+    ) -> f32 {
+        let Some(bounds) = (SceneRect {
+            left,
+            top,
+            width: layout_width.max(1.0),
+            height: layout_height.max(1.0),
+        })
+        .intersection(clip) else {
+            return 0.0;
+        };
+        let previous_len = self.text.len();
+        let width = self.push_text(
+            text,
+            left,
+            top,
+            layout_width,
+            layout_height,
+            foreground,
+            kind,
+        );
+        if self.text.len() > previous_len
+            && let Some(text) = self.text.last_mut()
+        {
+            text.bound_left = bounds.left.floor() as i32;
+            text.bound_top = bounds.top.floor() as i32;
+            text.right = bounds.right().ceil() as i32;
+            text.bottom = bounds.bottom().ceil() as i32;
+        }
+        width
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -600,6 +885,8 @@ impl Renderer {
             top,
             right: (left + layout_width).ceil() as i32,
             bottom: (top + layout_height).ceil() as i32,
+            bound_left: left.floor() as i32,
+            bound_top: top.floor() as i32,
             color: Color::rgba(foreground.r, foreground.g, foreground.b, alpha),
         });
         measured_width
@@ -654,8 +941,8 @@ fn text_areas(text: &[PlacedText]) -> impl Iterator<Item = TextArea<'_>> {
         top: text.top,
         scale: 1.0,
         bounds: TextBounds {
-            left: text.left.floor() as i32,
-            top: text.top.floor() as i32,
+            left: text.bound_left,
+            top: text.bound_top,
             right: text.right,
             bottom: text.bottom,
         },
@@ -668,6 +955,7 @@ struct RectangleBatch {
     bytes: Vec<u8>,
     width: u32,
     height: u32,
+    clip: Option<SceneRect>,
 }
 
 impl RectangleBatch {
@@ -676,19 +964,32 @@ impl RectangleBatch {
             bytes: Vec::new(),
             width,
             height,
+            clip: None,
         }
     }
 
     fn push(&mut self, x: f32, y: f32, width: f32, height: f32, color: SceneColor, alpha: f32) {
-        if width <= 0.0 || height <= 0.0 {
+        let mut rect = SceneRect {
+            left: x,
+            top: y,
+            width,
+            height,
+        };
+        if let Some(clip) = self.clip {
+            let Some(clipped) = rect.intersection(clip) else {
+                return;
+            };
+            rect = clipped;
+        }
+        if rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
         let to_x = |value: f32| value / self.width as f32 * 2.0 - 1.0;
         let to_y = |value: f32| 1.0 - value / self.height as f32 * 2.0;
-        let left = to_x(x);
-        let right = to_x(x + width);
-        let top = to_y(y);
-        let bottom = to_y(y + height);
+        let left = to_x(rect.left);
+        let right = to_x(rect.right());
+        let top = to_y(rect.top);
+        let bottom = to_y(rect.bottom());
         let rgba = [
             f32::from(color.r) / 255.0,
             f32::from(color.g) / 255.0,
@@ -734,6 +1035,7 @@ fn build_scene_rectangles(
     scene: &Scene,
     blink_visible: bool,
     metrics: CellMetrics,
+    viewport: SceneRect,
 ) {
     for (row_index, row) in scene.content.iter().enumerate() {
         let mut start = 0_usize;
@@ -745,8 +1047,8 @@ fn build_scene_rectangles(
             }
             if background != scene.background {
                 rectangles.push(
-                    metrics.padding + start as f32 * metrics.width,
-                    metrics.padding + row_index as f32 * metrics.height,
+                    viewport.left + metrics.padding + start as f32 * metrics.width,
+                    viewport.top + metrics.padding + row_index as f32 * metrics.height,
                     (end - start) as f32 * metrics.width,
                     metrics.height,
                     background,
@@ -759,8 +1061,8 @@ fn build_scene_rectangles(
             if !cell.style.foreground_visible(blink_visible) {
                 continue;
             }
-            let left = metrics.padding + column as f32 * metrics.width;
-            let top = metrics.padding + row_index as f32 * metrics.height;
+            let left = viewport.left + metrics.padding + column as f32 * metrics.width;
+            let top = viewport.top + metrics.padding + row_index as f32 * metrics.height;
             let thickness = (metrics.height / 14.0).max(1.0);
             match cell.style.underline {
                 Underline::None => {}
@@ -861,8 +1163,8 @@ fn build_scene_rectangles(
                 .and_then(|row| row.cells.get(usize::from(column)))
                 .is_some_and(|cell| cell.width == CellWidth::Wide);
         let cursor_width = metrics.width * if wide { 2.0 } else { 1.0 };
-        let left = metrics.padding + f32::from(column) * metrics.width;
-        let top = metrics.padding + f32::from(cursor.row) * metrics.height;
+        let left = viewport.left + metrics.padding + f32::from(column) * metrics.width;
+        let top = viewport.top + metrics.padding + f32::from(cursor.row) * metrics.height;
         let thickness = (metrics.width / 7.0).max(1.0);
         let (x, y, w, h, alpha) = match cursor.shape {
             CursorShape::Bar => (left, top, thickness, metrics.height, 1.0),
@@ -994,7 +1296,18 @@ mod tests {
         };
         let mut rectangles = RectangleBatch::new(100, 100);
 
-        build_scene_rectangles(&mut rectangles, &scene, true, CellMetrics::for_scale(1.0));
+        build_scene_rectangles(
+            &mut rectangles,
+            &scene,
+            true,
+            CellMetrics::for_scale(1.0),
+            SceneRect {
+                left: 0.0,
+                top: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+        );
 
         assert!(rectangles.bytes.is_empty());
         assert!(scene.glyph_runs().is_empty());
@@ -1043,7 +1356,18 @@ mod tests {
         let mut draw_cursor = |cursor| {
             scene.cursor = Some(cursor);
             let mut rectangles = RectangleBatch::new(100, 100);
-            build_scene_rectangles(&mut rectangles, &scene, true, metrics);
+            build_scene_rectangles(
+                &mut rectangles,
+                &scene,
+                true,
+                metrics,
+                SceneRect {
+                    left: 0.0,
+                    top: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+            );
             rectangles.bytes
         };
         let expected = |column: f32, columns: f32| {

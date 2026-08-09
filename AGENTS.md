@@ -215,25 +215,31 @@ authority; Eon owns product orchestration, policy, composition, and distribution
 
 ## Status
 
-This repository implements the accepted `ven-upt.2` first Linux slice using the
-`ven-upt.1` architecture and dependency selection. Further product expansion
-remains inactive.
+This repository implements the accepted `ven-upt.2` standalone Linux slice and
+the approved `ven-c87` Eon workspace slice as a mechanically verified candidate.
+`VEN-C8` remains partially proved pending revised native Linux proof and an
+accepted proof-bearing commit. Further product expansion remains inactive.
 
 ## Product boundary
 
-Venus consumes one exact accepted Orbit protocol revision. It may validate and
-render structured presentation frames, collect native input, send semantic
-events and resize requests, and explain client-visible failures.
+Venus consumes one exact accepted Orbit protocol revision and, in workspace
+mode, one exact accepted Eon workspace protocol revision. It may validate and
+render structured presentation frames, materialize Eon-authored workspace
+topology, collect native input, send semantic actions and resize requests, and
+explain client-visible failures.
 
 Venus must not own a PTY, parse raw PTY output, instantiate another terminal
 emulator, answer terminal queries, reconstruct hidden terminal state, or keep a
 second protocol schema. Report an insufficient Orbit contract to Orbit instead
 of compensating in the client.
 
-The initial slice is one Linux window attached to one local Orbit session. It
-does not include tabs, panes, sidebars, popups, settings, visual effects,
-configuration, remote or web access, plugins, shell integration, compatibility,
-macOS implementation, packaging, or distribution.
+The current Linux slice is one native window. It supports either one standalone
+local Orbit session or Eon-authored horizontal tabs and per-active-tab vertical
+accordion panes with exactly one expanded Orbit surface. It does not include
+arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
+popups, settings, visual effects, configuration, remote or web access, plugins,
+shell integration, compatibility windows, macOS implementation, packaging, or
+distribution.
 
 A new Venus module is product scope, not an implementation detail.
 

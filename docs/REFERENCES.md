@@ -111,6 +111,25 @@ and backend-specific IME cursor-area comparison. Venus reused no source
 and rejected Alacritty's terminal, grid, selection, configuration, auto-copy,
 primary-selection, search, and raw-display clipboard ownership.
 
+## Required for native Eon workspace materialization
+
+`ven-c87` consumes `EON-C10` and dependency-free EONW v1 from exact Eon proof
+`4af395aea06c230ee6b18cf0755ae25915c0b88d`; proof documentation is recorded at
+`93c3c723e5da95c92882571b2904d4c9a4b9f2ff`. The owner package supplies complete
+ordered snapshots, stable tab, pane, and Session identities, exact opaque Orbit
+endpoints, liveness, structured failures, and pointer or four-direction semantic
+actions. Venus consumes those values directly and adds no polling, CLI adapter,
+hidden-state reader, or second workspace schema.
+
+Canario/Rio at `3e41b8b19a1cad9cd9bdfc8f7900cf61ce5a9098`
+was MIT-licensed comparison-only evidence for bounded header scrolling, direct
+labeled-row activation, distinct selected state, and one selected content
+surface. Venus reused no source and rejected its terminal ownership, split and
+reorder behavior, previews, sidebar, persistence, command palette, and effects.
+Exact winit, wgpu, glyphon, and AccessKit versions already selected above own the
+native event, clipping, drawing, tab semantics, expanded state, and accessibility
+action mechanisms used by the workspace projection.
+
 ## Rejected initial routing
 
 - Rio VT is not a Venus dependency; replacing Orbit's terminal engine is an

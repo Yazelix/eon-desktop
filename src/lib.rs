@@ -9,9 +9,12 @@ mod render;
 mod scene;
 mod transport;
 
-pub use accessibility::{Accessibility, Activation};
+pub use accessibility::{Accessibility, AccessibilityTarget, Activation};
 pub use input::InputState;
-pub use model::{ConnectionState, LocalNoticeSource, ModelError, SessionModel};
+pub use model::{ConnectionState, LocalNoticeSource, ModelError, SessionModel, WorkspaceModel};
 pub use render::{CellMetrics, PresentOutcome, RenderError, Renderer};
-pub use scene::{Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene};
-pub use transport::{SendError, Transport, TransportEvent};
+pub use scene::{
+    Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene, SceneRect, WorkspaceFocus,
+    WorkspaceHit, WorkspacePane, WorkspaceScene, WorkspaceTab,
+};
+pub use transport::{SendError, Transport, TransportEvent, WorkspaceEvent, WorkspaceTransport};

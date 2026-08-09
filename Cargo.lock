@@ -724,6 +724,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "eon-workspace-protocol"
+version = "0.1.0"
+source = "git+https://github.com/Yazelix/eon.git?rev=4af395aea06c230ee6b18cf0755ae25915c0b88d#4af395aea06c230ee6b18cf0755ae25915c0b88d"
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3251,6 +3256,7 @@ dependencies = [
  "accesskit",
  "accesskit_winit",
  "arboard",
+ "eon-workspace-protocol",
  "glyphon",
  "orbit-protocol",
  "pollster",

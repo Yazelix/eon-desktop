@@ -1,4 +1,5 @@
 use crate::scene::Scene;
+use eon_workspace_protocol::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{FailureCode, ServerMessage};
 use std::{error::Error, fmt};
@@ -63,6 +64,61 @@ pub struct SessionModel {
     scene: Option<Scene>,
     connection: ConnectionState,
     notices: Vec<Notice>,
+}
+
+/// The last complete Eon-authored workspace accepted by Venus.
+#[derive(Debug, Default)]
+pub struct WorkspaceModel {
+    snapshot: Option<Snapshot>,
+    notice: Option<String>,
+}
+
+impl WorkspaceModel {
+    #[must_use]
+    pub fn snapshot(&self) -> Option<&Snapshot> {
+        self.snapshot.as_ref()
+    }
+
+    #[must_use]
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
+    }
+
+    /// Replace workspace state only with a complete accepted snapshot.
+    pub fn apply(&mut self, response: WorkspaceResponse) -> bool {
+        match response {
+            WorkspaceResponse::Snapshot(snapshot) => {
+                let changed = self.snapshot.as_ref() != Some(&snapshot);
+                self.snapshot = Some(snapshot);
+                self.notice = None;
+                changed
+            }
+            WorkspaceResponse::Failure(failure) => {
+                self.notice = Some(bounded(format!(
+                    "Eon workspace {}: {}",
+                    failure.code, failure.detail
+                )));
+                false
+            }
+        }
+    }
+
+    pub fn mark_unavailable(&mut self, detail: impl Into<String>) {
+        self.notice = Some(bounded(detail.into()));
+    }
+
+    #[must_use]
+    pub fn active_endpoint(&self) -> Option<&[u8]> {
+        let snapshot = self.snapshot.as_ref()?;
+        let tab = snapshot
+            .tabs
+            .iter()
+            .find(|tab| tab.id == snapshot.active_tab)?;
+        tab.panes
+            .iter()
+            .find(|pane| pane.id == tab.selected_pane)
+            .map(|pane| pane.endpoint.as_slice())
+    }
 }
 
 impl Default for SessionModel {
@@ -195,6 +251,12 @@ impl SessionModel {
         self.notices.clear();
     }
 
+    pub fn prepare_reconnect(&mut self) {
+        self.reducer = FrameReducer::default();
+        self.connection = ConnectionState::Connecting;
+        self.notices.clear();
+    }
+
     pub fn set_venus_notice(&mut self, source: LocalNoticeSource, detail: impl Into<String>) {
         if self.is_terminal() {
             return;
@@ -224,4 +286,41 @@ fn bounded(mut detail: String) -> String {
         detail.push('…');
     }
     detail
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eon_workspace_protocol::{Failure, Pane, Tab};
+
+    #[test]
+    fn rejected_workspace_action_preserves_the_last_complete_snapshot() {
+        let snapshot = Snapshot {
+            active_tab: "tab-1".into(),
+            tabs: vec![Tab {
+                id: "tab-1".into(),
+                selected_pane: "pane-1".into(),
+                panes: vec![Pane {
+                    id: "pane-1".into(),
+                    session: "session-1".into(),
+                    endpoint: b"/run/eon/orbit.sock".to_vec(),
+                    live: true,
+                }],
+            }],
+        };
+        let mut model = WorkspaceModel::default();
+
+        assert!(model.apply(WorkspaceResponse::Snapshot(snapshot.clone())));
+        assert!(!model.apply(WorkspaceResponse::Failure(Failure {
+            code: "edge".into(),
+            detail: "there is no pane above the selected pane".into(),
+        })));
+
+        assert_eq!(model.snapshot(), Some(&snapshot));
+        assert_eq!(model.active_endpoint(), Some(&b"/run/eon/orbit.sock"[..]));
+        assert_eq!(
+            model.notice(),
+            Some("Eon workspace edge: there is no pane above the selected pane")
+        );
+    }
 }

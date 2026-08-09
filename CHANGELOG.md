@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Materialize accepted Eon workspace snapshots as a horizontally scrollable tab
+  strip and vertically scrollable one-expanded pane accordion, route pointer and
+  direct keyboard traversal through EONW v1, attach only the selected Orbit
+  endpoint, preserve the last coherent view on failures, and expose matching
+  AccessKit order and actions.
 - Render one accepted Orbit session in a native Linux window with styled Unicode
   text, input-method preedit underlines sized from shaped text, aligned
   wide-cell cursor and input-method geometry, stable blink timing, and

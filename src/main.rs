@@ -1,6 +1,10 @@
 #![forbid(unsafe_code)]
 
+use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
+use eon_workspace_protocol::{
+    Action as WorkspaceAction, Direction as WorkspaceDirection, Response as WorkspaceResponse,
+};
 use orbit_protocol::{
     MAX_CELLS,
     session::{self, ClientMessage, SelectionAction, ServerMessage, SurfaceSize},
@@ -8,7 +12,9 @@ use orbit_protocol::{
 use std::{
     env,
     error::Error,
+    ffi::OsString,
     fs,
+    os::unix::ffi::OsStringExt,
     os::unix::fs::MetadataExt,
     path::PathBuf,
     sync::Arc,
@@ -19,14 +25,17 @@ use winit::platform::wayland::{ActiveEventLoopExtWayland, WindowAttributesExtWay
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
-    event::WindowEvent,
+    event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+    keyboard::{KeyCode, PhysicalKey},
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{Window, WindowId},
 };
 use yazelix_venus::{
-    Accessibility, CellMetrics, ConnectionState, InputState, LocalNoticeSource, PresentOutcome,
-    Renderer, SessionModel, Transport, TransportEvent,
+    Accessibility, AccessibilityTarget, CellMetrics, ConnectionState, InputState,
+    LocalNoticeSource, PresentOutcome, Renderer, SessionModel, Transport, TransportEvent,
+    WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene,
+    WorkspaceTransport,
 };
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
@@ -36,6 +45,7 @@ const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 enum UserEvent {
     AccessKit(AccessKitEvent),
     Transport,
+    Workspace,
 }
 
 impl From<AccessKitEvent> for UserEvent {
@@ -53,11 +63,14 @@ struct WindowState {
 }
 
 struct Application {
-    socket: PathBuf,
+    orbit_socket: PathBuf,
+    workspace_socket: Option<PathBuf>,
     proxy: EventLoopProxy<UserEvent>,
     window: Option<WindowState>,
     transport: Option<Transport>,
+    workspace_transport: Option<WorkspaceTransport>,
     model: SessionModel,
+    workspace_model: WorkspaceModel,
     input: InputState,
     last_resize: Option<SurfaceSize>,
     presented_revision: Option<u64>,
@@ -65,16 +78,29 @@ struct Application {
     blink_visible: bool,
     next_blink: Option<Instant>,
     clipboard: Option<arboard::Clipboard>,
+    active_endpoint: Option<Vec<u8>>,
+    window_focused: bool,
+    workspace_focus: WorkspaceFocus,
+    tab_scroll: f32,
+    pane_scroll: f32,
+    cursor: PhysicalPosition<f64>,
 }
 
 impl Application {
-    fn new(socket: PathBuf, proxy: EventLoopProxy<UserEvent>) -> Self {
+    fn new(
+        orbit_socket: PathBuf,
+        workspace_socket: Option<PathBuf>,
+        proxy: EventLoopProxy<UserEvent>,
+    ) -> Self {
         Self {
-            socket,
+            orbit_socket,
+            workspace_socket,
             proxy,
             window: None,
             transport: None,
+            workspace_transport: None,
             model: SessionModel::new(),
+            workspace_model: WorkspaceModel::default(),
             input: InputState::default(),
             last_resize: None,
             presented_revision: None,
@@ -82,6 +108,12 @@ impl Application {
             blink_visible: true,
             next_blink: None,
             clipboard: None,
+            active_endpoint: None,
+            window_focused: false,
+            workspace_focus: WorkspaceFocus::Terminal,
+            tab_scroll: 0.0,
+            pane_scroll: 0.0,
+            cursor: PhysicalPosition::new(0.0, 0.0),
         }
     }
 
@@ -113,10 +145,6 @@ impl Application {
         window.set_ime_allowed(true);
         window.set_visible(true);
 
-        let proxy = self.proxy.clone();
-        self.transport = Some(Transport::start(self.socket.clone(), move || {
-            let _ = proxy.send_event(UserEvent::Transport);
-        }));
         self.window = Some(WindowState {
             renderer,
             adapter,
@@ -124,8 +152,199 @@ impl Application {
             ime_line_offset,
             window,
         });
+        if let Some(socket) = self.workspace_socket.clone() {
+            let proxy = self.proxy.clone();
+            self.workspace_transport = Some(WorkspaceTransport::start(socket, move || {
+                let _ = proxy.send_event(UserEvent::Workspace);
+            }));
+        } else {
+            self.start_orbit(self.orbit_socket.clone());
+        }
         self.refresh_client_view();
         Ok(())
+    }
+
+    fn start_orbit(&mut self, socket: PathBuf) {
+        let proxy = self.proxy.clone();
+        self.orbit_socket = socket.clone();
+        self.transport = Some(Transport::start(socket, move || {
+            let _ = proxy.send_event(UserEvent::Transport);
+        }));
+    }
+
+    fn workspace_scene(&self) -> Option<WorkspaceScene> {
+        let state = self.window.as_ref()?;
+        self.workspace_model.snapshot().map(|snapshot| {
+            WorkspaceScene::from_snapshot(
+                snapshot,
+                state.renderer.size(),
+                state.renderer.metrics(),
+                self.tab_scroll,
+                self.pane_scroll,
+            )
+        })
+    }
+
+    fn terminal_size(&self) -> Option<PhysicalSize<u32>> {
+        let state = self.window.as_ref()?;
+        Some(terminal_screen(
+            self.workspace_scene().as_ref(),
+            state.renderer.size(),
+        ))
+    }
+
+    fn reveal_workspace_selection(&mut self) {
+        let Some(state) = &self.window else {
+            return;
+        };
+        let Some(snapshot) = self.workspace_model.snapshot() else {
+            return;
+        };
+        let scene = WorkspaceScene::from_snapshot(
+            snapshot,
+            state.renderer.size(),
+            state.renderer.metrics(),
+            0.0,
+            0.0,
+        );
+        self.tab_scroll = scene.active_tab_scroll();
+        self.pane_scroll = scene.selected_pane_scroll();
+    }
+
+    fn set_workspace_focus(&mut self, focus: WorkspaceFocus) {
+        if self.workspace_focus == focus {
+            return;
+        }
+        let was_focused = terminal_focused(self.window_focused, self.workspace_focus);
+        self.workspace_focus = focus;
+        let is_focused = terminal_focused(self.window_focused, self.workspace_focus);
+        if was_focused != is_focused {
+            let message = self.input.focus(is_focused);
+            self.send(message);
+        }
+        self.refresh_client_view();
+    }
+
+    fn switch_orbit_endpoint(&mut self, endpoint: Vec<u8>) {
+        let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
+        if same_endpoint && self.transport.is_some() {
+            return;
+        }
+        self.active_endpoint = Some(endpoint.clone());
+        self.transport = None;
+        if same_endpoint {
+            self.model.prepare_reconnect();
+        } else {
+            self.model = SessionModel::new();
+        }
+        self.input.reset_scroll();
+        self.input.cancel_selection();
+        self.last_resize = None;
+        self.presented_revision = None;
+        self.start_orbit(PathBuf::from(OsString::from_vec(endpoint)));
+    }
+
+    fn handle_workspace(&mut self, event: WorkspaceEvent) {
+        match event {
+            WorkspaceEvent::Response(response) => {
+                let accepted_snapshot = matches!(&response, WorkspaceResponse::Snapshot(_));
+                if self.workspace_model.apply(response) {
+                    self.reveal_workspace_selection();
+                }
+                if accepted_snapshot && let Some(endpoint) = self.workspace_model.active_endpoint()
+                {
+                    self.switch_orbit_endpoint(endpoint.to_vec());
+                }
+            }
+            WorkspaceEvent::Unavailable(detail) => {
+                self.workspace_model.mark_unavailable(detail);
+            }
+        }
+        self.refresh_client_view();
+    }
+
+    fn send_workspace(&mut self, action: WorkspaceAction) {
+        let Some(transport) = &self.workspace_transport else {
+            return;
+        };
+        if let Err(error) = transport.send(action) {
+            self.workspace_model
+                .mark_unavailable(format!("Cannot queue Eon workspace action: {error}"));
+            self.refresh_client_view();
+        }
+    }
+
+    fn handle_workspace_key(&mut self, event: &winit::event::KeyEvent) -> bool {
+        if self.workspace_model.snapshot().is_none() {
+            return false;
+        }
+        let code = match event.physical_key {
+            PhysicalKey::Code(code) => code,
+            PhysicalKey::Unidentified(_) => {
+                return self.workspace_focus != WorkspaceFocus::Terminal;
+            }
+        };
+        if code == KeyCode::F6 {
+            if event.state == ElementState::Pressed && !event.repeat {
+                let focus = match self.workspace_focus {
+                    WorkspaceFocus::Terminal => WorkspaceFocus::Tabs,
+                    WorkspaceFocus::Tabs => WorkspaceFocus::Panes,
+                    WorkspaceFocus::Panes => WorkspaceFocus::Terminal,
+                };
+                self.set_workspace_focus(focus);
+            }
+            return true;
+        }
+        if self.workspace_focus == WorkspaceFocus::Terminal {
+            return false;
+        }
+        if code == KeyCode::Escape {
+            if event.state == ElementState::Pressed {
+                self.set_workspace_focus(WorkspaceFocus::Terminal);
+            }
+            return true;
+        }
+        if event.state == ElementState::Pressed {
+            let direction = match (self.workspace_focus, code) {
+                (WorkspaceFocus::Tabs, KeyCode::ArrowLeft) => Some(WorkspaceDirection::Left),
+                (WorkspaceFocus::Tabs, KeyCode::ArrowRight) => Some(WorkspaceDirection::Right),
+                (WorkspaceFocus::Panes, KeyCode::ArrowUp) => Some(WorkspaceDirection::Up),
+                (WorkspaceFocus::Panes, KeyCode::ArrowDown) => Some(WorkspaceDirection::Down),
+                _ => None,
+            };
+            if let Some(direction) = direction {
+                self.send_workspace(WorkspaceAction::Focus(direction));
+            }
+        }
+        true
+    }
+
+    fn scroll_workspace(&mut self, delta: MouseScrollDelta, tabs: bool, metrics: CellMetrics) {
+        let (horizontal, vertical) = match delta {
+            MouseScrollDelta::LineDelta(x, y) => {
+                (x * metrics.width * 3.0, y * metrics.height * 3.0)
+            }
+            MouseScrollDelta::PixelDelta(position) => (position.x as f32, position.y as f32),
+        };
+        if !horizontal.is_finite() || !vertical.is_finite() {
+            return;
+        }
+        let Some(scene) = self.workspace_scene() else {
+            return;
+        };
+        self.input.reset_scroll();
+        if tabs {
+            let movement = if horizontal == 0.0 {
+                vertical
+            } else {
+                horizontal
+            };
+            self.tab_scroll = (scene.tab_scroll() - movement).clamp(0.0, scene.tab_scroll_limit());
+        } else {
+            self.pane_scroll =
+                (scene.pane_scroll() - vertical).clamp(0.0, scene.pane_scroll_limit());
+        }
+        self.refresh_client_view();
     }
 
     fn handle_transport(&mut self, event: TransportEvent) {
@@ -175,6 +394,7 @@ impl Application {
 
     fn refresh_client_view(&mut self) {
         let status = self.status();
+        let workspace = self.workspace_scene();
         let Some(state) = &mut self.window else {
             return;
         };
@@ -186,8 +406,13 @@ impl Application {
             });
             if let Some(cursor) = scene.cursor {
                 let metrics = state.renderer.metrics();
-                let left = metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
-                let top = metrics.padding
+                let origin = workspace.as_ref().map_or((0.0, 0.0), |workspace| {
+                    (workspace.terminal.left, workspace.terminal.top)
+                });
+                let left =
+                    origin.0 + metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
+                let top = origin.1
+                    + metrics.padding
                     + f32::from(cursor.row + state.ime_line_offset) * metrics.height;
                 state.window.set_ime_cursor_area(
                     PhysicalPosition::new(f64::from(left), f64::from(top)),
@@ -197,9 +422,14 @@ impl Application {
         } else {
             state.window.set_title("Venus");
         }
+        state
+            .window
+            .set_ime_allowed(self.workspace_focus == WorkspaceFocus::Terminal);
         state.accessibility.update(
             &mut state.adapter,
             self.model.scene(),
+            workspace.as_ref(),
+            self.workspace_focus,
             &status,
             state.renderer.size(),
         );
@@ -219,11 +449,11 @@ impl Application {
                         | SelectionAction::Update { .. }
                         | SelectionAction::Finish { .. }
                 )
-        ) && let Some(size) = self
-            .window
-            .as_ref()
-            .and_then(|state| surface_size(state.renderer.size(), state.renderer.metrics()))
-            && self.last_resize != Some(size)
+        ) && let Some(size) = self.terminal_size().and_then(|screen| {
+            self.window
+                .as_ref()
+                .and_then(|state| surface_size(screen, state.renderer.metrics()))
+        }) && self.last_resize != Some(size)
             && (!self.send(ClientMessage::Resize(size)) || !can_follow_implicit_resize(&message))
         {
             return false;
@@ -276,7 +506,10 @@ impl Application {
         let Some(state) = &self.window else {
             return;
         };
-        let Some(size) = surface_size(state.renderer.size(), state.renderer.metrics()) else {
+        let Some(screen) = self.terminal_size() else {
+            return;
+        };
+        let Some(size) = surface_size(screen, state.renderer.metrics()) else {
             self.model.set_venus_notice(
                 LocalNoticeSource::Resize,
                 "Window dimensions are outside Orbit's accepted surface range",
@@ -294,12 +527,20 @@ impl Application {
         if let Some(notice) = &self.render_notice {
             return notice.clone();
         }
+        if let Some(notice) = self.workspace_model.notice() {
+            return notice.to_owned();
+        }
         if let Some(notice) = self.model.notice() {
             return notice.to_owned();
         }
+        if let Some(socket) = &self.workspace_socket
+            && self.workspace_model.snapshot().is_none()
+        {
+            return format!("Connecting to Eon workspace at {}", socket.display());
+        }
         match self.model.connection() {
             ConnectionState::Connecting => {
-                format!("Connecting to Orbit at {}", self.socket.display())
+                format!("Connecting to Orbit at {}", self.orbit_socket.display())
             }
             ConnectionState::Attached { .. } if self.model.scene().is_none() => {
                 "Attached to Orbit. Waiting for its current frame.".into()
@@ -320,19 +561,24 @@ impl Application {
     fn render(&mut self) {
         let status = self.status();
         let preedit = self.input.preedit();
+        let workspace = self.workspace_scene();
         let mut refresh = false;
         let Some(state) = &mut self.window else {
             return;
         };
-        match state
-            .renderer
-            .render(self.model.scene(), &status, self.blink_visible, preedit)
-        {
+        match state.renderer.render(
+            self.model.scene(),
+            workspace.as_ref(),
+            self.workspace_focus,
+            &status,
+            self.blink_visible,
+            preedit,
+        ) {
             Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
                 self.presented_revision = self.model.scene().and_then(|scene| {
-                    surface_size(state.renderer.size(), state.renderer.metrics())
-                        .map(|_| scene.revision)
+                    let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
+                    surface_size(screen, state.renderer.metrics()).map(|_| scene.revision)
                 });
             }
             Ok(PresentOutcome::Deferred) => {}
@@ -347,6 +593,8 @@ impl Application {
                 state.accessibility.update(
                     &mut state.adapter,
                     self.model.scene(),
+                    workspace.as_ref(),
+                    self.workspace_focus,
                     &notice,
                     state.renderer.size(),
                 );
@@ -378,6 +626,7 @@ impl ApplicationHandler<UserEvent> for Application {
             self.model.scene().map(|scene| scene.revision),
             self.presented_revision,
         );
+        let workspace = self.workspace_scene();
         let Some(state) = &mut self.window else {
             return;
         };
@@ -387,10 +636,11 @@ impl ApplicationHandler<UserEvent> for Application {
         state.adapter.process_event(&state.window, &event);
 
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested | WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 self.input.reset_scroll();
                 state.renderer.resize(size, state.window.scale_factor());
+                self.reveal_workspace_selection();
                 self.presented_revision = None;
                 self.send_resize();
                 self.refresh_client_view();
@@ -400,6 +650,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 state
                     .renderer
                     .resize(state.window.inner_size(), scale_factor);
+                self.reveal_workspace_selection();
                 self.presented_revision = None;
                 self.send_resize();
                 self.refresh_client_view();
@@ -408,10 +659,12 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::RedrawRequested => self.render(),
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => {
-                if self
-                    .input
-                    .consumes_copy_shortcut(event.physical_key, event.state, event.repeat)
-                {
+                if self.handle_workspace_key(&event) {
+                } else if self.input.consumes_copy_shortcut(
+                    event.physical_key,
+                    event.state,
+                    event.repeat,
+                ) {
                     if copy_is_ready(self.input.is_selecting(), event.state, event.repeat) {
                         self.send(ClientMessage::Selection(SelectionAction::Copy));
                     }
@@ -420,29 +673,50 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
             }
             WindowEvent::Ime(event) => {
-                let message = self.input.ime(event);
-                if let Some(message) = message {
-                    self.send(message);
+                if ime_reaches_terminal(self.workspace_focus, &event) {
+                    let message = self.input.ime(event);
+                    if let Some(message) = message {
+                        self.send(message);
+                    }
                 }
                 self.refresh_client_view();
             }
             WindowEvent::Focused(focused) => {
-                let message = self.input.focus(focused);
+                self.window_focused = focused;
+                let message = self
+                    .input
+                    .focus(terminal_focused(focused, self.workspace_focus));
                 self.send(message);
                 self.refresh_client_view();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let motion = self.input.move_pointer(position.x, position.y);
+                self.cursor = position;
+                let (x, y) = workspace
+                    .as_ref()
+                    .map_or((position.x, position.y), |workspace| {
+                        (
+                            position.x - f64::from(workspace.terminal.left),
+                            position.y - f64::from(workspace.terminal.top),
+                        )
+                    });
+                let motion = self.input.move_pointer(x, y);
                 if presented_revision.is_some() {
                     if self.input.is_selecting() {
-                        let size = surface_size(state.renderer.size(), state.renderer.metrics());
+                        let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
+                        let size = surface_size(screen, state.renderer.metrics());
                         if let Some(message) =
                             size.and_then(|size| self.input.selection_motion(size))
                             && self.send(message.clone())
                         {
                             self.input.commit_selection(&message);
                         }
-                    } else if let Some(message) = motion {
+                    } else if workspace.as_ref().is_none_or(|workspace| {
+                        matches!(
+                            workspace.hit_test(position.x as f32, position.y as f32),
+                            Some(WorkspaceHit::Terminal)
+                        )
+                    }) && let Some(message) = motion
+                    {
                         self.send(message);
                     }
                 }
@@ -452,7 +726,47 @@ impl ApplicationHandler<UserEvent> for Application {
                 button,
                 ..
             } => {
-                let size = surface_size(state.renderer.size(), state.renderer.metrics());
+                let renderer_size = state.renderer.size();
+                let metrics = state.renderer.metrics();
+                let hit = workspace.as_ref().and_then(|workspace| {
+                    workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
+                });
+                if button_state == ElementState::Pressed && button == MouseButton::Left {
+                    let target = match hit {
+                        Some(WorkspaceHit::Tab(id)) => {
+                            self.set_workspace_focus(WorkspaceFocus::Tabs);
+                            Some(id.to_owned())
+                        }
+                        Some(WorkspaceHit::Pane(id)) => {
+                            self.set_workspace_focus(WorkspaceFocus::Panes);
+                            Some(id.to_owned())
+                        }
+                        Some(WorkspaceHit::Terminal) => {
+                            self.set_workspace_focus(WorkspaceFocus::Terminal);
+                            None
+                        }
+                        None => None,
+                    };
+                    if let Some(id) = target {
+                        self.send_workspace(WorkspaceAction::FocusId(id));
+                        return;
+                    }
+                }
+                if !button_reaches_terminal(
+                    workspace.is_some(),
+                    matches!(hit, Some(WorkspaceHit::Terminal)),
+                    button_state,
+                ) {
+                    return;
+                }
+                if let Some(workspace) = &workspace {
+                    let _ = self.input.move_pointer(
+                        self.cursor.x - f64::from(workspace.terminal.left),
+                        self.cursor.y - f64::from(workspace.terminal.top),
+                    );
+                }
+                let screen = terminal_screen(workspace.as_ref(), renderer_size);
+                let size = surface_size(screen, metrics);
                 let selection = size.and_then(|size| {
                     self.input
                         .selection_button(button_state, button, size, presented_revision)
@@ -469,8 +783,34 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.input.commit_mouse_button(button_state, button);
                 }
             }
-            WindowEvent::MouseWheel { delta, .. } if presented_revision.is_some() => {
+            WindowEvent::MouseWheel { delta, .. } => {
+                if self.input.is_selecting() {
+                    return;
+                }
                 let metrics = state.renderer.metrics();
+                let hit = workspace.as_ref().and_then(|workspace| {
+                    workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
+                });
+                if matches!(hit, Some(WorkspaceHit::Tab(_))) {
+                    self.scroll_workspace(delta, true, metrics);
+                    return;
+                }
+                if matches!(hit, Some(WorkspaceHit::Pane(_))) {
+                    self.scroll_workspace(delta, false, metrics);
+                    return;
+                }
+                if workspace.is_some() && !matches!(hit, Some(WorkspaceHit::Terminal)) {
+                    return;
+                }
+                if presented_revision.is_none() {
+                    return;
+                }
+                if let Some(workspace) = &workspace {
+                    let _ = self.input.move_pointer(
+                        self.cursor.x - f64::from(workspace.terminal.left),
+                        self.cursor.y - f64::from(workspace.terminal.top),
+                    );
+                }
                 for message in self.input.wheel(delta, metrics.width, metrics.height) {
                     if !self.send(message) {
                         break;
@@ -492,6 +832,15 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.handle_transport(event);
                 }
             }
+            UserEvent::Workspace => {
+                let events = self
+                    .workspace_transport
+                    .as_ref()
+                    .map_or_else(Vec::new, WorkspaceTransport::drain_events);
+                for event in events {
+                    self.handle_workspace(event);
+                }
+            }
             UserEvent::AccessKit(event) => {
                 let Some(state) = &mut self.window else {
                     return;
@@ -501,6 +850,27 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 match event.window_event {
                     AccessKitWindowEvent::InitialTreeRequested => self.refresh_client_view(),
+                    AccessKitWindowEvent::ActionRequested(request)
+                        if matches!(
+                            request.action,
+                            AccessibilityAction::Click | AccessibilityAction::Focus
+                        ) =>
+                    {
+                        match state.accessibility.workspace_target(request.target_node) {
+                            Some(AccessibilityTarget::Terminal) => {
+                                self.set_workspace_focus(WorkspaceFocus::Terminal);
+                            }
+                            Some(AccessibilityTarget::Tab(id)) => {
+                                self.set_workspace_focus(WorkspaceFocus::Tabs);
+                                self.send_workspace(WorkspaceAction::FocusId(id));
+                            }
+                            Some(AccessibilityTarget::Pane(id)) => {
+                                self.set_workspace_focus(WorkspaceFocus::Panes);
+                                self.send_workspace(WorkspaceAction::FocusId(id));
+                            }
+                            None => {}
+                        }
+                    }
                     AccessKitWindowEvent::ActionRequested(_)
                     | AccessKitWindowEvent::AccessibilityDeactivated => {}
                 }
@@ -567,6 +937,30 @@ fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
     source == LocalNoticeSource::Input
 }
 
+fn terminal_screen(
+    workspace: Option<&WorkspaceScene>,
+    fallback: PhysicalSize<u32>,
+) -> PhysicalSize<u32> {
+    workspace.map_or(fallback, |workspace| {
+        PhysicalSize::new(
+            workspace.terminal.width.max(0.0).round() as u32,
+            workspace.terminal.height.max(0.0).round() as u32,
+        )
+    })
+}
+
+fn button_reaches_terminal(workspace: bool, terminal_hit: bool, state: ElementState) -> bool {
+    !workspace || terminal_hit || state == ElementState::Released
+}
+
+fn ime_reaches_terminal(focus: WorkspaceFocus, event: &Ime) -> bool {
+    focus == WorkspaceFocus::Terminal || matches!(event, Ime::Disabled)
+}
+
+fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bool {
+    window_focused && workspace_focus == WorkspaceFocus::Terminal
+}
+
 fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
@@ -611,20 +1005,22 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 }
 
 fn main() -> Result {
-    let socket = socket_argument()?;
+    let (orbit_socket, workspace_socket) = socket_arguments()?;
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
-    let mut application = Application::new(socket, event_loop.create_proxy());
+    let mut application =
+        Application::new(orbit_socket, workspace_socket, event_loop.create_proxy());
     event_loop.run_app(&mut application)?;
     Ok(())
 }
 
-fn socket_argument() -> Result<PathBuf> {
+fn socket_arguments() -> Result<(PathBuf, Option<PathBuf>)> {
     let mut arguments = env::args_os().skip(1);
-    let socket = arguments.next().map(PathBuf::from);
+    let orbit = arguments.next().map(PathBuf::from);
+    let workspace = arguments.next().map(PathBuf::from);
     if arguments.next().is_some() {
-        return Err("usage: yazelix-venus [SOCKET]".into());
+        return Err("usage: yazelix-venus [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]".into());
     }
-    socket.map_or_else(default_socket_path, Ok)
+    Ok((orbit.map_or_else(default_socket_path, Ok)?, workspace))
 }
 
 fn default_socket_path() -> Result<PathBuf> {
@@ -687,6 +1083,35 @@ mod tests {
         assert_eq!(current_presentation(Some(8), None), None);
         assert_eq!(current_presentation(Some(8), Some(7)), None);
         assert_eq!(current_presentation(Some(8), Some(8)), Some(8));
+    }
+
+    #[test]
+    fn workspace_chrome_preserves_terminal_release_pairing() {
+        assert!(!button_reaches_terminal(true, false, ElementState::Pressed));
+        assert!(button_reaches_terminal(true, false, ElementState::Released));
+        assert!(button_reaches_terminal(true, true, ElementState::Pressed));
+        assert!(button_reaches_terminal(false, false, ElementState::Pressed));
+    }
+
+    #[test]
+    fn ime_disable_cleanup_reaches_input_outside_terminal() {
+        assert!(ime_reaches_terminal(WorkspaceFocus::Tabs, &Ime::Disabled));
+        assert!(!ime_reaches_terminal(
+            WorkspaceFocus::Panes,
+            &Ime::Commit("ignored".into())
+        ));
+        assert!(ime_reaches_terminal(
+            WorkspaceFocus::Terminal,
+            &Ime::Commit("accepted".into())
+        ));
+    }
+
+    #[test]
+    fn orbit_focus_requires_window_and_terminal_focus() {
+        assert!(terminal_focused(true, WorkspaceFocus::Terminal));
+        assert!(!terminal_focused(false, WorkspaceFocus::Terminal));
+        assert!(!terminal_focused(true, WorkspaceFocus::Tabs));
+        assert!(!terminal_focused(true, WorkspaceFocus::Panes));
     }
 
     #[test]

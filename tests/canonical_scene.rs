@@ -1,9 +1,146 @@
+use eon_workspace_protocol::{Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::{self, Failure, FailureCode, ServerMessage},
 };
-use yazelix_venus::{ConnectionState, LocalNoticeSource, ModelError, SessionModel};
+use winit::dpi::PhysicalSize;
+use yazelix_venus::{
+    CellMetrics, ConnectionState, LocalNoticeSource, ModelError, SessionModel, WorkspaceHit,
+    WorkspaceScene,
+};
+
+#[test]
+fn eon_workspace_becomes_one_bounded_native_accordion() {
+    let snapshot = Snapshot {
+        active_tab: "tab-1".into(),
+        tabs: vec![
+            Tab {
+                id: "tab-1".into(),
+                selected_pane: "pane-2".into(),
+                panes: vec![
+                    Pane {
+                        id: "pane-1".into(),
+                        session: "session-1".into(),
+                        endpoint: b"/run/eon/orbit.sock".to_vec(),
+                        live: true,
+                    },
+                    Pane {
+                        id: "pane-2".into(),
+                        session: "session-2".into(),
+                        endpoint: b"/run/eon/session-2.sock".to_vec(),
+                        live: true,
+                    },
+                ],
+            },
+            Tab {
+                id: "tab-2".into(),
+                selected_pane: "pane-3".into(),
+                panes: vec![Pane {
+                    id: "pane-3".into(),
+                    session: "session-3".into(),
+                    endpoint: b"/run/eon/session-3.sock".to_vec(),
+                    live: false,
+                }],
+            },
+        ],
+    };
+    let size = PhysicalSize::new(800, 600);
+    let metrics = CellMetrics::for_scale(1.0);
+    let initial = WorkspaceScene::from_snapshot(&snapshot, size, metrics, 0.0, 0.0);
+    let scene = WorkspaceScene::from_snapshot(
+        &snapshot,
+        size,
+        metrics,
+        initial.active_tab_scroll(),
+        initial.selected_pane_scroll(),
+    );
+
+    assert_eq!(
+        scene
+            .tabs
+            .iter()
+            .map(|tab| tab.id.as_str())
+            .collect::<Vec<_>>(),
+        ["tab-1", "tab-2"]
+    );
+    assert_eq!(
+        scene
+            .panes
+            .iter()
+            .map(|pane| pane.id.as_str())
+            .collect::<Vec<_>>(),
+        ["pane-1", "pane-2"]
+    );
+    assert_eq!(scene.panes.iter().filter(|pane| pane.selected).count(), 1);
+    assert!(scene.terminal.height > metrics.height);
+    assert_eq!(scene.terminal.top, scene.panes[1].rect.bottom());
+    assert_eq!(
+        initial.hit_test(
+            initial.panes[0].rect.left + 1.0,
+            initial.panes[0].rect.top + 1.0
+        ),
+        Some(WorkspaceHit::Pane("pane-1"))
+    );
+    assert_eq!(
+        scene.hit_test(scene.terminal.left + 1.0, scene.terminal.top + 1.0),
+        Some(WorkspaceHit::Terminal)
+    );
+    assert!(scene.tab_scroll_limit().is_finite());
+    assert!(scene.pane_scroll_limit().is_finite());
+
+    let mut overflow_snapshot = snapshot.clone();
+    overflow_snapshot.tabs[0].selected_pane = "pane-1".into();
+    overflow_snapshot.tabs[0].panes.push(Pane {
+        id: "pane-4".into(),
+        session: "session-4".into(),
+        endpoint: b"/run/eon/session-4.sock".to_vec(),
+        live: true,
+    });
+    let unscrolled = WorkspaceScene::from_snapshot(&overflow_snapshot, size, metrics, 0.0, 0.0);
+    let scrolled = WorkspaceScene::from_snapshot(
+        &overflow_snapshot,
+        size,
+        metrics,
+        0.0,
+        unscrolled.pane_scroll_limit(),
+    );
+    assert!(scrolled.terminal.top < scrolled.pane_viewport.top);
+    assert_eq!(
+        scrolled.hit_test(1.0, scrolled.pane_viewport.top + 1.0),
+        Some(WorkspaceHit::Terminal)
+    );
+    assert!(matches!(
+        scrolled.hit_test(1.0, scrolled.tab_viewport.bottom() - 1.0),
+        Some(WorkspaceHit::Tab(_))
+    ));
+
+    let mut second_tab = snapshot.clone();
+    second_tab.active_tab = "tab-2".into();
+    let narrow =
+        WorkspaceScene::from_snapshot(&second_tab, PhysicalSize::new(100, 600), metrics, 0.0, 0.0);
+    let revealed = WorkspaceScene::from_snapshot(
+        &second_tab,
+        PhysicalSize::new(100, 600),
+        metrics,
+        narrow.active_tab_scroll(),
+        narrow.selected_pane_scroll(),
+    );
+    assert_eq!(
+        revealed.hit_test(1.0, 1.0),
+        Some(WorkspaceHit::Tab("tab-2"))
+    );
+
+    let tiny = WorkspaceScene::from_snapshot(
+        &snapshot,
+        PhysicalSize::new(1, 1),
+        metrics,
+        f32::NAN,
+        f32::INFINITY,
+    );
+    assert_eq!((tiny.tab_scroll(), tiny.pane_scroll()), (0.0, 0.0));
+    assert!(tiny.terminal.bottom() <= 1.0);
+}
 
 #[test]
 fn canonical_orbit_frame_becomes_one_deterministic_scene() {
@@ -107,6 +244,30 @@ fn a_new_attachment_replaces_state_without_a_compatibility_window() {
         .unwrap();
     assert_eq!(reopened.scene().unwrap().revision, 1);
     assert_eq!(reopened.scene().unwrap().screen, Screen::Alternate);
+}
+
+#[test]
+fn reconnect_preserves_the_last_scene_and_accepts_a_fresh_revision() {
+    let mut model = attached_model();
+    model
+        .apply(ServerMessage::Frame(Box::new(frame(42, Screen::Primary))))
+        .unwrap();
+    model.mark_lost("Orbit closed the local session");
+
+    model.prepare_reconnect();
+    assert_eq!(model.connection(), &ConnectionState::Connecting);
+    assert_eq!(model.scene().unwrap().revision, 42);
+
+    model
+        .apply(ServerMessage::Attached {
+            version: session::VERSION,
+        })
+        .unwrap();
+    model
+        .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Alternate))))
+        .unwrap();
+    assert_eq!(model.scene().unwrap().revision, 1);
+    assert_eq!(model.scene().unwrap().screen, Screen::Alternate);
 }
 
 #[test]

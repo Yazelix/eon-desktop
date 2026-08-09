@@ -1,7 +1,277 @@
+use crate::render::CellMetrics;
+use eon_workspace_protocol::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Screen, StyleColor, Underline,
 };
 use std::fmt::Write;
+use winit::dpi::PhysicalSize;
+
+/// Physical rectangle shared by workspace drawing, hit testing, and accessibility.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SceneRect {
+    pub left: f32,
+    pub top: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl SceneRect {
+    #[must_use]
+    pub fn right(self) -> f32 {
+        self.left + self.width
+    }
+
+    #[must_use]
+    pub fn bottom(self) -> f32 {
+        self.top + self.height
+    }
+
+    fn contains(self, x: f32, y: f32) -> bool {
+        (self.left..self.right()).contains(&x) && (self.top..self.bottom()).contains(&y)
+    }
+
+    pub(crate) fn intersection(self, other: Self) -> Option<Self> {
+        let left = self.left.max(other.left);
+        let top = self.top.max(other.top);
+        let right = self.right().min(other.right());
+        let bottom = self.bottom().min(other.bottom());
+        (left < right && top < bottom).then_some(Self {
+            left,
+            top,
+            width: right - left,
+            height: bottom - top,
+        })
+    }
+}
+
+/// One Eon-authored tab projected into native geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorkspaceTab {
+    pub id: String,
+    pub selected: bool,
+    pub rect: SceneRect,
+}
+
+/// One Eon-authored pane header projected into native accordion geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorkspacePane {
+    pub id: String,
+    pub session: String,
+    pub live: bool,
+    pub selected: bool,
+    pub rect: SceneRect,
+}
+
+/// Native workspace target at one physical point.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceHit<'a> {
+    Tab(&'a str),
+    Pane(&'a str),
+    Terminal,
+}
+
+/// Native focus region inside the one-window workspace.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WorkspaceFocus {
+    #[default]
+    Terminal,
+    Tabs,
+    Panes,
+}
+
+/// Deterministic native projection of one complete accepted Eon snapshot.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorkspaceScene {
+    pub tabs: Vec<WorkspaceTab>,
+    pub panes: Vec<WorkspacePane>,
+    pub terminal: SceneRect,
+    pub tab_viewport: SceneRect,
+    pub pane_viewport: SceneRect,
+    tab_scroll: f32,
+    pane_scroll: f32,
+    tab_scroll_limit: f32,
+    pane_scroll_limit: f32,
+    active_tab_scroll: f32,
+    selected_pane_scroll: f32,
+}
+
+impl WorkspaceScene {
+    #[must_use]
+    pub fn from_snapshot(
+        snapshot: &Snapshot,
+        size: PhysicalSize<u32>,
+        metrics: CellMetrics,
+        tab_scroll: f32,
+        pane_scroll: f32,
+    ) -> Self {
+        let width = size.width as f32;
+        let height = size.height as f32;
+        let tab_height = (metrics.height * 1.75).round().max(1.0).min(height);
+        let tab_width = (metrics.width * 14.0).round().max(72.0);
+        let tab_viewport = SceneRect {
+            left: 0.0,
+            top: 0.0,
+            width,
+            height: tab_height,
+        };
+        let pane_viewport = SceneRect {
+            left: 0.0,
+            top: tab_height,
+            width,
+            height: (height - tab_height).max(0.0),
+        };
+        let pane_height = (metrics.height * 1.5)
+            .round()
+            .max(1.0)
+            .min(pane_viewport.height);
+        let active_tab = snapshot
+            .tabs
+            .iter()
+            .position(|tab| tab.id == snapshot.active_tab)
+            .expect("EONW validates the active tab");
+        let active = &snapshot.tabs[active_tab];
+        let selected_pane = active
+            .panes
+            .iter()
+            .position(|pane| pane.id == active.selected_pane)
+            .expect("EONW validates the selected pane");
+        let terminal_height = (pane_viewport.height - pane_height).max(0.0);
+        let tab_scroll_limit = (snapshot.tabs.len() as f32 * tab_width - width).max(0.0);
+        let pane_scroll_limit =
+            ((active.panes.len().saturating_sub(1)) as f32 * pane_height).max(0.0);
+        let tab_scroll = if tab_scroll.is_finite() {
+            tab_scroll.clamp(0.0, tab_scroll_limit)
+        } else {
+            0.0
+        };
+        let pane_scroll = if pane_scroll.is_finite() {
+            pane_scroll.clamp(0.0, pane_scroll_limit)
+        } else {
+            0.0
+        };
+        let tabs = snapshot
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(index, tab)| WorkspaceTab {
+                id: tab.id.clone(),
+                selected: index == active_tab,
+                rect: SceneRect {
+                    left: index as f32 * tab_width - tab_scroll,
+                    top: 0.0,
+                    width: tab_width,
+                    height: tab_height,
+                },
+            })
+            .collect();
+        let panes = active
+            .panes
+            .iter()
+            .enumerate()
+            .map(|(index, pane)| WorkspacePane {
+                id: pane.id.clone(),
+                session: pane.session.clone(),
+                live: pane.live,
+                selected: index == selected_pane,
+                rect: SceneRect {
+                    left: 0.0,
+                    top: tab_height
+                        + index as f32 * pane_height
+                        + if index > selected_pane {
+                            terminal_height
+                        } else {
+                            0.0
+                        }
+                        - pane_scroll,
+                    width,
+                    height: pane_height,
+                },
+            })
+            .collect();
+        let terminal = SceneRect {
+            left: 0.0,
+            top: tab_height + (selected_pane + 1) as f32 * pane_height - pane_scroll,
+            width,
+            height: terminal_height,
+        };
+
+        Self {
+            tabs,
+            panes,
+            terminal,
+            tab_viewport,
+            pane_viewport,
+            tab_scroll,
+            pane_scroll,
+            tab_scroll_limit,
+            pane_scroll_limit,
+            active_tab_scroll: (active_tab as f32 * tab_width - (width - tab_width).max(0.0) / 2.0)
+                .clamp(0.0, tab_scroll_limit),
+            selected_pane_scroll: (selected_pane as f32 * pane_height)
+                .clamp(0.0, pane_scroll_limit),
+        }
+    }
+
+    #[must_use]
+    pub fn hit_test(&self, x: f32, y: f32) -> Option<WorkspaceHit<'_>> {
+        for tab in &self.tabs {
+            if tab
+                .rect
+                .intersection(self.tab_viewport)
+                .is_some_and(|rect| rect.contains(x, y))
+            {
+                return Some(WorkspaceHit::Tab(&tab.id));
+            }
+        }
+        for pane in &self.panes {
+            if pane
+                .rect
+                .intersection(self.pane_viewport)
+                .is_some_and(|rect| rect.contains(x, y))
+            {
+                return Some(WorkspaceHit::Pane(&pane.id));
+            }
+        }
+        self.visible_terminal()
+            .filter(|rect| rect.contains(x, y))
+            .map(|_| WorkspaceHit::Terminal)
+    }
+
+    #[must_use]
+    pub(crate) fn visible_terminal(&self) -> Option<SceneRect> {
+        self.terminal.intersection(self.pane_viewport)
+    }
+
+    #[must_use]
+    pub fn active_tab_scroll(&self) -> f32 {
+        self.active_tab_scroll
+    }
+
+    #[must_use]
+    pub fn selected_pane_scroll(&self) -> f32 {
+        self.selected_pane_scroll
+    }
+
+    #[must_use]
+    pub fn tab_scroll_limit(&self) -> f32 {
+        self.tab_scroll_limit
+    }
+
+    #[must_use]
+    pub fn pane_scroll_limit(&self) -> f32 {
+        self.pane_scroll_limit
+    }
+
+    #[must_use]
+    pub fn tab_scroll(&self) -> f32 {
+        self.tab_scroll
+    }
+
+    #[must_use]
+    pub fn pane_scroll(&self) -> f32 {
+        self.pane_scroll
+    }
+}
 
 /// Renderer-ready color with no protocol-relative palette reference left.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

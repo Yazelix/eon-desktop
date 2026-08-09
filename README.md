@@ -6,12 +6,12 @@ and sends semantic interaction back to the authoritative session runtime.
 
 ## Status
 
-The Venus client implements one Linux window attached to one already-running
-local Orbit session. It renders the accepted Orbit frame contract, sends
-semantic native input and resize events, detaches without ending the Orbit
-session, scrolls Orbit-owned retained history, presents Orbit-owned selection,
-writes explicit copied text to the native clipboard, and reports bounded
-attachment or server failures. It does not own a PTY or terminal emulator.
+The Venus client implements one Linux window for an Eon workspace or one
+standalone already-running local Orbit session. In workspace mode it renders
+Eon-authored horizontal tabs and a one-expanded vertical pane accordion, routes
+selection back as semantic Eon actions, and attaches only the selected Orbit
+endpoint. It detaches without ending any Session and does not own a PTY,
+terminal emulator, or workspace topology.
 
 ## Ownership
 
@@ -21,7 +21,10 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes `orbit-protocol` 0.1.0, ORBF v1, and ORBS v2 at exact Orbit proof
+Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
+`4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
+selection, identities, actions, and pane-to-Session mappings. Venus consumes
+`orbit-protocol` 0.1.0, ORBF v1, and ORBS v2 at exact Orbit proof
 `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
@@ -40,6 +43,18 @@ Without an argument, Venus uses
 `$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
 `/tmp/yazelix-orbit-$UID/orbit.sock` when the runtime directory is unavailable.
 Only one presentation client can attach to an Orbit session at a time.
+
+For an Eon workspace, pass the initial Orbit socket followed by the EONW socket:
+
+```sh
+cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
+```
+
+The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
+Click a tab or pane header to select it. Press F6 to cycle terminal, tab, and
+pane keyboard focus; use Left/Right on tabs, Up/Down on panes, and Escape to
+return to the terminal. Wheel over the tab strip or a pane header to reach
+clipped headers without scrolling the terminal.
 
 Wheel or trackpad movement scrolls through Orbit-owned retained history. Hold
 Shift while dragging the left mouse button to select cells, then press
@@ -60,11 +75,11 @@ cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
-## Initial exclusions
+## Exclusions
 
-Tabs, panes, sidebars, popups, settings, visual effects, configuration, plugins,
-remote and web access, macOS implementation, packaging, and distribution are
-outside the first slice.
+Arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
+popups, settings, visual effects, configuration, plugins, remote and web access,
+macOS implementation, packaging, and distribution are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
 text-clipboard effect. macOS remains an architectural target, not an
@@ -80,12 +95,12 @@ Beads data, lock files, and generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 188 |
-| README | 91 |
-| Contracts and references | 145 |
-| Crate decisions | 109 |
-| Changelog | 27 |
-| Rust source, including unit tests | 4,367 |
-| Rust integration tests | 363 |
-| Cargo manifest | 19 |
-| **Total** | **5,309** |
+| Agent policy | 404 |
+| README | 106 |
+| Contracts and references | 165 |
+| Crate decisions | 121 |
+| Changelog | 32 |
+| Rust source, including unit tests | 5,955 |
+| Rust integration tests | 524 |
+| Cargo manifest | 20 |
+| **Total** | **7,327** |
