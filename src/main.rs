@@ -267,40 +267,28 @@ impl Application {
         self.refresh_client_view();
     }
 
-    fn switch_orbit_endpoint(&mut self, endpoint: Vec<u8>) {
+    fn set_orbit_attachment(&mut self, endpoint: Vec<u8>, live: bool) {
         let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
         self.active_endpoint = Some(endpoint.clone());
-        self.active_endpoint_live = true;
+        self.active_endpoint_live = live;
         self.transport = None;
         self.orbit_retry.reset();
-        self.retry_suppressed = false;
+        self.retry_suppressed = !live;
         if same_endpoint {
             self.model.prepare_reconnect();
         } else {
             self.model = SessionModel::new();
         }
-        self.input.reset_scroll();
-        self.input.cancel_selection();
-        self.last_resize = None;
-        self.presented_revision = None;
-        self.start_orbit(PathBuf::from(OsString::from_vec(endpoint)));
-    }
-
-    fn suspend_orbit_endpoint(&mut self, endpoint: Vec<u8>) {
-        let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
-        self.active_endpoint = Some(endpoint);
-        self.active_endpoint_live = false;
-        self.transport = None;
-        self.orbit_retry.reset();
-        self.retry_suppressed = true;
-        if !same_endpoint {
-            self.model = SessionModel::new();
+        if !live {
+            self.model.mark_lost("The selected Eon pane is offline");
         }
-        self.model.mark_lost("The selected Eon pane is offline");
         self.input.reset_scroll();
         self.input.cancel_selection();
         self.last_resize = None;
         self.presented_revision = None;
+        if live {
+            self.start_orbit(PathBuf::from(OsString::from_vec(endpoint)));
+        }
     }
 
     fn retry_allowed(&self) -> bool {
@@ -340,12 +328,7 @@ impl Application {
                 && (self.active_endpoint.as_deref() != Some(endpoint)
                     || self.active_endpoint_live != live)
             {
-                let endpoint = endpoint.to_vec();
-                if live {
-                    self.switch_orbit_endpoint(endpoint);
-                } else {
-                    self.suspend_orbit_endpoint(endpoint);
-                }
+                self.set_orbit_attachment(endpoint.to_vec(), live);
             }
         }
         if view_changed {

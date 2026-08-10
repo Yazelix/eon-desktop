@@ -287,6 +287,16 @@ fn reconnect_preserves_the_last_scene_and_accepts_a_fresh_revision() {
     assert_eq!(model.scene().unwrap().revision, 42);
     assert!(model.awaiting_current_frame());
 
+    model.mark_lost("The selected Eon pane is offline");
+    assert_eq!(
+        model.connection(),
+        &ConnectionState::Lost {
+            detail: "The selected Eon pane is offline".into()
+        }
+    );
+    assert_eq!(model.scene().unwrap().revision, 42);
+    model.prepare_reconnect();
+
     model
         .apply(ServerMessage::Attached {
             version: session::VERSION,
