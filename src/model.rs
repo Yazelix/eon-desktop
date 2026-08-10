@@ -84,27 +84,28 @@ impl WorkspaceModel {
         self.notice.as_deref()
     }
 
-    /// Replace workspace state only with a complete accepted snapshot.
-    pub fn apply(&mut self, response: WorkspaceResponse) -> bool {
+    /// Apply a response and report `(view changed, snapshot changed)`.
+    pub fn apply(&mut self, response: WorkspaceResponse) -> (bool, bool) {
         match response {
             WorkspaceResponse::Snapshot(snapshot) => {
-                let changed = self.snapshot.as_ref() != Some(&snapshot);
+                let snapshot_changed = self.snapshot.as_ref() != Some(&snapshot);
+                let view_changed = snapshot_changed || self.notice.is_some();
                 self.snapshot = Some(snapshot);
                 self.notice = None;
-                changed
+                (view_changed, snapshot_changed)
             }
-            WorkspaceResponse::Failure(failure) => {
-                self.notice = Some(bounded(format!(
+            WorkspaceResponse::Failure(failure) => (
+                self.set_notice(bounded(format!(
                     "Eon workspace {}: {}",
                     failure.code, failure.detail
-                )));
-                false
-            }
+                ))),
+                false,
+            ),
         }
     }
 
-    pub fn mark_unavailable(&mut self, detail: impl Into<String>) {
-        self.notice = Some(bounded(detail.into()));
+    pub fn mark_unavailable(&mut self, detail: impl Into<String>) -> bool {
+        self.set_notice(bounded(detail.into()))
     }
 
     #[must_use]
@@ -118,6 +119,12 @@ impl WorkspaceModel {
             .iter()
             .find(|pane| pane.id == tab.selected_pane)
             .map(|pane| pane.endpoint.as_slice())
+    }
+
+    fn set_notice(&mut self, notice: String) -> bool {
+        let changed = self.notice.as_ref() != Some(&notice);
+        self.notice = Some(notice);
+        changed
     }
 }
 
@@ -310,11 +317,21 @@ mod tests {
         };
         let mut model = WorkspaceModel::default();
 
-        assert!(model.apply(WorkspaceResponse::Snapshot(snapshot.clone())));
-        assert!(!model.apply(WorkspaceResponse::Failure(Failure {
-            code: "edge".into(),
-            detail: "there is no pane above the selected pane".into(),
-        })));
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
+            (true, true)
+        );
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
+            (false, false)
+        );
+        assert_eq!(
+            model.apply(WorkspaceResponse::Failure(Failure {
+                code: "edge".into(),
+                detail: "there is no pane above the selected pane".into(),
+            })),
+            (true, false)
+        );
 
         assert_eq!(model.snapshot(), Some(&snapshot));
         assert_eq!(model.active_endpoint(), Some(&b"/run/eon/orbit.sock"[..]));
@@ -322,5 +339,17 @@ mod tests {
             model.notice(),
             Some("Eon workspace edge: there is no pane above the selected pane")
         );
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
+            (true, false)
+        );
+        assert_eq!(model.notice(), None);
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(snapshot)),
+            (false, false)
+        );
+
+        assert!(model.mark_unavailable("Cannot connect to Eon"));
+        assert!(!model.mark_unavailable("Cannot connect to Eon"));
     }
 }

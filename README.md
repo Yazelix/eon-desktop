@@ -51,6 +51,8 @@ cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
 ```
 
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
+While the window is open, Venus re-inspects Eon every 250 ms so accepted
+workspace changes from another client appear without a click or restart.
 Click a tab or pane header to select it. Press F6 to cycle terminal, tab, and
 pane keyboard focus; use Left/Right on tabs, Up/Down on panes, and Escape to
 return to the terminal. Wheel over the tab strip or a pane header to reach
@@ -96,11 +98,11 @@ Beads data, lock files, and generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 404 |
-| README | 106 |
-| Contracts and references | 165 |
+| README | 108 |
+| Contracts and references | 178 |
 | Crate decisions | 121 |
-| Changelog | 32 |
-| Rust source, including unit tests | 5,955 |
+| Changelog | 33 |
+| Rust source, including unit tests | 6,062 |
 | Rust integration tests | 524 |
 | Cargo manifest | 20 |
-| **Total** | **7,327** |
+| **Total** | **7,450** |

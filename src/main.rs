@@ -2,9 +2,7 @@
 
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::{
-    Action as WorkspaceAction, Direction as WorkspaceDirection, Response as WorkspaceResponse,
-};
+use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDirection};
 use orbit_protocol::{
     MAX_CELLS,
     session::{self, ClientMessage, SelectionAction, ServerMessage, SurfaceSize},
@@ -245,31 +243,32 @@ impl Application {
     }
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
-        match event {
-            WorkspaceEvent::Response(response) => {
-                let accepted_snapshot = matches!(&response, WorkspaceResponse::Snapshot(_));
-                if self.workspace_model.apply(response) {
-                    self.reveal_workspace_selection();
-                }
-                if accepted_snapshot && let Some(endpoint) = self.workspace_model.active_endpoint()
-                {
-                    self.switch_orbit_endpoint(endpoint.to_vec());
-                }
-            }
+        let (view_changed, snapshot_changed) = match event {
+            WorkspaceEvent::Response(response) => self.workspace_model.apply(response),
             WorkspaceEvent::Unavailable(detail) => {
-                self.workspace_model.mark_unavailable(detail);
+                (self.workspace_model.mark_unavailable(detail), false)
+            }
+        };
+        if snapshot_changed {
+            self.reveal_workspace_selection();
+            if let Some(endpoint) = self.workspace_model.active_endpoint() {
+                self.switch_orbit_endpoint(endpoint.to_vec());
             }
         }
-        self.refresh_client_view();
+        if view_changed {
+            self.refresh_client_view();
+        }
     }
 
     fn send_workspace(&mut self, action: WorkspaceAction) {
         let Some(transport) = &self.workspace_transport else {
             return;
         };
-        if let Err(error) = transport.send(action) {
-            self.workspace_model
-                .mark_unavailable(format!("Cannot queue Eon workspace action: {error}"));
+        if let Err(error) = transport.send(action)
+            && self
+                .workspace_model
+                .mark_unavailable(format!("Cannot queue Eon workspace action: {error}"))
+        {
             self.refresh_client_view();
         }
     }

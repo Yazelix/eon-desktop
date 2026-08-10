@@ -63,6 +63,18 @@ remain separate license and user-approval gates.
   Its [cosmic-text 0.19.0](https://docs.rs/cosmic-text/0.19.0/cosmic_text/)
   re-export supplies advanced shaping and font fallback. Corpus and native
   checks must still prove terminal-cell fidelity and atlas failure behavior.
+- [COSMIC Terminal](https://github.com/pop-os/cosmic-term/tree/7daf10e3b540f612cbc48973469656ecd1635dfc)
+  at `7daf10e3b540f612cbc48973469656ecd1635dfc` is conditional comparison-only
+  evidence for terminal shaping, bidirectional or ligature behavior, wide-cell
+  projection, decoration geometry, input methods, and renderer backend parity.
+  Its pinned [`terminal.rs`](https://github.com/pop-os/cosmic-term/blob/7daf10e3b540f612cbc48973469656ecd1635dfc/src/terminal.rs)
+  and [`terminal_box.rs`](https://github.com/pop-os/cosmic-term/blob/7daf10e3b540f612cbc48973469656ecd1635dfc/src/terminal_box.rs)
+  demonstrate measured monospace width, bounded shape-run caching, and glyph-run
+  decoration projection. Venus rejects its PTY, parser, terminal-grid, workspace,
+  selection, clipboard, search, configuration, and unfinished damage ownership.
+  COSMIC Terminal is [GPL-3.0-only](https://github.com/pop-os/cosmic-term/blob/7daf10e3b540f612cbc48973469656ecd1635dfc/LICENSE):
+  inspection does not authorize copying, adaptation, incorporation, or dependency
+  selection, each of which requires its own license and dependency gate.
 - [Sugarloaf](https://github.com/raphamorim/rio/tree/main/sugarloaf) is
   conditional on a demonstrated need for its renderer shape.
 - [AccessKit 0.24.1](https://docs.rs/accesskit/0.24.1/accesskit/) and
@@ -118,8 +130,9 @@ primary-selection, search, and raw-display clipboard ownership.
 `93c3c723e5da95c92882571b2904d4c9a4b9f2ff`. The owner package supplies complete
 ordered snapshots, stable tab, pane, and Session identities, exact opaque Orbit
 endpoints, liveness, structured failures, and pointer or four-direction semantic
-actions. Venus consumes those values directly and adds no polling, CLI adapter,
-hidden-state reader, or second workspace schema.
+actions. Venus consumes those values directly. The `ven-c87.1` refresh hardening
+reuses bounded `Inspect` every 250 ms without adding a protocol message, CLI
+adapter, hidden-state reader, or second workspace schema.
 
 Canario/Rio at `3e41b8b19a1cad9cd9bdfc8f7900cf61ce5a9098`
 was MIT-licensed comparison-only evidence for bounded header scrolling, direct

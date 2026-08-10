@@ -60,16 +60,26 @@ pub struct WorkspaceTransport {
     events: Arc<WorkspaceEventQueue>,
 }
 
+const WORKSPACE_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
+
 impl WorkspaceTransport {
     #[must_use]
     pub fn start(socket: PathBuf, wake: impl Fn() + Send + Sync + 'static) -> Self {
+        Self::start_with_refresh(socket, WORKSPACE_REFRESH_INTERVAL, wake)
+    }
+
+    fn start_with_refresh(
+        socket: PathBuf,
+        refresh_interval: Duration,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         let (actions, receiver) = mpsc::sync_channel(32);
         let events = Arc::new(WorkspaceEventQueue::default());
         let notify = workspace_notifier(Arc::clone(&events), wake);
         let worker_notify = Arc::clone(&notify);
         if let Err(error) = thread::Builder::new()
             .name("venus-eon-workspace".into())
-            .spawn(move || run_workspace(socket, receiver, worker_notify))
+            .spawn(move || run_workspace(socket, receiver, refresh_interval, worker_notify))
         {
             notify(WorkspaceEvent::Unavailable(format!(
                 "Cannot start the Eon workspace worker: {error}"
@@ -132,20 +142,26 @@ fn workspace_notifier(
 fn run_workspace(
     socket: PathBuf,
     receiver: mpsc::Receiver<WorkspaceAction>,
+    refresh_interval: Duration,
     notify: Arc<dyn Fn(WorkspaceEvent) + Send + Sync>,
 ) {
     let nonce = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    for (counter, action) in std::iter::once(WorkspaceAction::Inspect)
-        .chain(receiver)
-        .enumerate()
-    {
+    let mut counter = 0;
+    let mut action = WorkspaceAction::Inspect;
+    loop {
         let event = workspace_exchange(&socket, nonce, counter, action)
             .map(WorkspaceEvent::Response)
             .unwrap_or_else(WorkspaceEvent::Unavailable);
         notify(event);
+        counter = counter.wrapping_add(1);
+        action = match receiver.recv_timeout(refresh_interval) {
+            Ok(action) => action,
+            Err(mpsc::RecvTimeoutError::Timeout) => WorkspaceAction::Inspect,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        };
     }
 }
 
@@ -660,19 +676,7 @@ mod tests {
     fn workspace_worker_sends_exact_pointer_and_directional_actions() {
         let socket = TestSocket::new();
         let listener = UnixListener::bind(&socket.path).unwrap();
-        let expected = WorkspaceResponse::Snapshot(Snapshot {
-            active_tab: "tab-1".into(),
-            tabs: vec![Tab {
-                id: "tab-1".into(),
-                selected_pane: "pane-1".into(),
-                panes: vec![Pane {
-                    id: "pane-1".into(),
-                    session: "session-1".into(),
-                    endpoint: b"/run/eon/orbit.sock".to_vec(),
-                    live: true,
-                }],
-            }],
-        });
+        let expected = WorkspaceResponse::Snapshot(workspace_snapshot());
         let encoded = workspace::encode_response(&expected).unwrap();
         let server = thread::spawn(move || {
             for expected_action in std::iter::once(WorkspaceAction::Inspect).chain([
@@ -682,26 +686,19 @@ mod tests {
                 WorkspaceAction::Focus(workspace::Direction::Up),
                 WorkspaceAction::Focus(workspace::Direction::Down),
             ]) {
-                let (mut stream, _) = listener.accept().unwrap();
-                let mut header = [0; workspace::HEADER_BYTES];
-                stream.read_exact(&mut header).unwrap();
-                let length = workspace::declared_message_len(&header).unwrap();
-                let mut request = Vec::from(header);
-                request.resize(length, 0);
-                stream
-                    .read_exact(&mut request[workspace::HEADER_BYTES..])
-                    .unwrap();
-                assert_eq!(
-                    workspace::decode_request(&request).unwrap().action,
-                    expected_action
-                );
+                let (mut stream, action) = accept_workspace_action(&listener);
+                assert_eq!(action, expected_action);
                 stream.write_all(&encoded).unwrap();
             }
         });
         let (wakes, receiver) = mpsc::channel();
-        let transport = WorkspaceTransport::start(socket.path.clone(), move || {
-            let _ = wakes.send(());
-        });
+        let transport = WorkspaceTransport::start_with_refresh(
+            socket.path.clone(),
+            Duration::from_secs(5),
+            move || {
+                let _ = wakes.send(());
+            },
+        );
 
         receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(
@@ -722,6 +719,59 @@ mod tests {
                 [WorkspaceEvent::Response(expected.clone())]
             );
         }
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn workspace_worker_refreshes_without_a_queued_action() {
+        let socket = TestSocket::new();
+        let listener = UnixListener::bind(&socket.path).unwrap();
+        let first = workspace_snapshot();
+        let mut second = first.clone();
+        second.active_tab = "tab-2".into();
+        second.tabs.push(Tab {
+            id: "tab-2".into(),
+            selected_pane: "pane-2".into(),
+            panes: vec![Pane {
+                id: "pane-2".into(),
+                session: "session-2".into(),
+                endpoint: b"/run/eon/session-2.sock".to_vec(),
+                live: true,
+            }],
+        });
+        let snapshots = [first, second];
+        let expected = snapshots.clone();
+        let server = thread::spawn(move || {
+            for snapshot in snapshots {
+                let (mut stream, action) = accept_workspace_action(&listener);
+                assert_eq!(action, WorkspaceAction::Inspect);
+                stream
+                    .write_all(
+                        &workspace::encode_response(&WorkspaceResponse::Snapshot(snapshot))
+                            .unwrap(),
+                    )
+                    .unwrap();
+            }
+        });
+        let (wakes, receiver) = mpsc::channel();
+        let transport = WorkspaceTransport::start_with_refresh(
+            socket.path.clone(),
+            Duration::from_millis(10),
+            move || {
+                let _ = wakes.send(());
+            },
+        );
+
+        for snapshot in expected {
+            receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(
+                transport.drain_events(),
+                [WorkspaceEvent::Response(WorkspaceResponse::Snapshot(
+                    snapshot
+                ))]
+            );
+        }
+        drop(transport);
         server.join().unwrap();
     }
 
@@ -759,6 +809,35 @@ mod tests {
             .read_exact(&mut bytes[session::HEADER_BYTES..])
             .unwrap();
         session::decode_client_message(&bytes).unwrap()
+    }
+
+    fn accept_workspace_action(listener: &UnixListener) -> (UnixStream, WorkspaceAction) {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut header = [0; workspace::HEADER_BYTES];
+        stream.read_exact(&mut header).unwrap();
+        let length = workspace::declared_message_len(&header).unwrap();
+        let mut request = Vec::from(header);
+        request.resize(length, 0);
+        stream
+            .read_exact(&mut request[workspace::HEADER_BYTES..])
+            .unwrap();
+        (stream, workspace::decode_request(&request).unwrap().action)
+    }
+
+    fn workspace_snapshot() -> Snapshot {
+        Snapshot {
+            active_tab: "tab-1".into(),
+            tabs: vec![Tab {
+                id: "tab-1".into(),
+                selected_pane: "pane-1".into(),
+                panes: vec![Pane {
+                    id: "pane-1".into(),
+                    session: "session-1".into(),
+                    endpoint: b"/run/eon/orbit.sock".to_vec(),
+                    live: true,
+                }],
+            }],
+        }
     }
 
     fn server_frame(revision: u64) -> TransportEvent {
