@@ -9,10 +9,11 @@
   attach only the selected Orbit endpoint, re-inspect Eon every 250 ms so
   external workspace changes appear without native input, preserve the last
   coherent view on failures, and expose matching AccessKit order and actions.
-- Render one accepted Orbit session in a native Linux window with styled Unicode
-  text, input-method preedit underlines sized from shaped text, aligned
-  wide-cell cursor and input-method geometry, stable blink timing, and
-  conceal-aware drawing and accessibility.
+- Render one accepted Orbit session in a native Linux window with exact
+  cell-grid advances for plain and styled Unicode text, connected table borders,
+  shaped input-method preedit underlines, aligned wide-cell cursor and
+  input-method geometry, stable blink timing, and conceal-aware drawing and
+  accessibility.
 - Send semantic keyboard, input-method, pointer, focus, and resize events to
   Orbit, preserving active keyboard layouts, synchronizing the latest pre-attachment focus,
   mapping all four wheel directions, requiring the current presented revision for

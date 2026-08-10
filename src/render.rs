@@ -145,6 +145,7 @@ pub struct Renderer {
     content_key: Option<ContentKey>,
     clear: wgpu::Color,
     metrics: CellMetrics,
+    cell_font_size: f32,
     window: Arc<Window>,
 }
 
@@ -248,7 +249,9 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        let font_system = FontSystem::new();
+        let mut font_system = FontSystem::new();
+        let metrics = CellMetrics::for_scale(window.scale_factor());
+        let cell_font_size = fitted_cell_font_size(&mut font_system, metrics);
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
@@ -279,7 +282,8 @@ impl Renderer {
             text: Vec::new(),
             content_key: None,
             clear: color(DEFAULT_BACKGROUND, srgb_target),
-            metrics: CellMetrics::for_scale(window.scale_factor()),
+            metrics,
+            cell_font_size,
             window,
         })
     }
@@ -299,6 +303,7 @@ impl Renderer {
         self.config.width = size.width;
         self.config.height = size.height;
         self.metrics = CellMetrics::for_scale(scale_factor);
+        self.cell_font_size = fitted_cell_font_size(&mut self.font_system, self.metrics);
         self.surface.configure(&self.device, &self.config);
         self.content_key = None;
     }
@@ -837,7 +842,7 @@ impl Renderer {
                     attrs = attrs.style(Style::Italic);
                 }
                 (
-                    self.metrics.font_size,
+                    self.cell_font_size,
                     self.metrics.height,
                     attrs,
                     Some(self.metrics.width),
@@ -854,7 +859,7 @@ impl Renderer {
                 255,
             ),
             DrawStyleKind::Preedit => (
-                self.metrics.font_size,
+                self.cell_font_size,
                 self.metrics.height,
                 Attrs::new().family(Family::Monospace),
                 Some(self.metrics.width),
@@ -924,6 +929,27 @@ fn shaped_width(buffer: &Buffer) -> f32 {
     buffer
         .layout_runs()
         .fold(0.0_f32, |width, run| width.max(run.line_w))
+}
+
+fn fitted_cell_font_size(font_system: &mut FontSystem, metrics: CellMetrics) -> f32 {
+    let mut buffer = Buffer::new(font_system, Metrics::new(metrics.font_size, metrics.height));
+    buffer.set_wrap(Wrap::None);
+    buffer.set_text(
+        " ",
+        &Attrs::new().family(Family::Monospace),
+        Shaping::Advanced,
+        None,
+    );
+    let advance = buffer
+        .line_layout(font_system, 0)
+        .and_then(|lines| lines.first())
+        .map(|line| line.w)
+        .filter(|width| width.is_finite() && *width > 0.0);
+    advance.map_or(metrics.font_size, |advance| {
+        (metrics.font_size * metrics.width / advance)
+            .round()
+            .max(1.0)
+    })
 }
 
 fn shaping(text: &str) -> Shaping {
@@ -1465,6 +1491,97 @@ mod tests {
 
         assert!(base > 0.0);
         assert!((base - decomposed).abs() < 0.01);
+    }
+
+    #[test]
+    fn text_runs_follow_the_cell_grid_and_box_borders_connect() {
+        fn grid_buffer(
+            font_system: &mut FontSystem,
+            metrics: CellMetrics,
+            text: &str,
+            attrs: Attrs<'_>,
+        ) -> Buffer {
+            let mut buffer =
+                Buffer::new(font_system, Metrics::new(metrics.font_size, metrics.height));
+            buffer.set_size(
+                Some(metrics.width * text.chars().count() as f32),
+                Some(metrics.height),
+            );
+            buffer.set_wrap(Wrap::None);
+            buffer.set_monospace_width(Some(metrics.width));
+            buffer.set_text(text, &attrs, shaping(text), None);
+            buffer.shape_until_scroll(font_system, false);
+            buffer
+        }
+
+        let mut font_system = FontSystem::new();
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let mut metrics = CellMetrics::for_scale(scale);
+            metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
+            for (text, attrs) in [
+                ("narrow text", Attrs::new().family(Family::Monospace)),
+                (
+                    "┌──┬──┐",
+                    Attrs::new()
+                        .family(Family::Monospace)
+                        .weight(Weight::BOLD)
+                        .color(Color::rgb(80, 200, 160)),
+                ),
+                (
+                    "│ab│cd│",
+                    Attrs::new().family(Family::Monospace).style(Style::Italic),
+                ),
+            ] {
+                let buffer = grid_buffer(&mut font_system, metrics, text, attrs);
+                let glyphs = buffer
+                    .layout_runs()
+                    .next()
+                    .expect("the terminal run should shape")
+                    .glyphs;
+                assert_eq!(glyphs.len(), text.chars().count());
+                for (column, glyph) in glyphs.iter().enumerate() {
+                    assert!((glyph.x - column as f32 * metrics.width).abs() < 0.01);
+                    assert!(
+                        (glyph.w - metrics.width).abs() < 0.01,
+                        "{text:?} column {column} at scale {scale} has width {} instead of {}",
+                        glyph.w,
+                        metrics.width
+                    );
+                }
+            }
+        }
+
+        let mut metrics = CellMetrics::for_scale(1.0);
+        metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
+        let buffer = grid_buffer(
+            &mut font_system,
+            metrics,
+            "─────",
+            Attrs::new().family(Family::Monospace),
+        );
+        let glyphs = buffer
+            .layout_runs()
+            .next()
+            .expect("the table border should shape")
+            .glyphs;
+        let mut swash_cache = SwashCache::new();
+        let ink = glyphs
+            .iter()
+            .map(|glyph| {
+                let physical = glyph.physical((0.0, 0.0), 1.0);
+                let image = swash_cache
+                    .get_image_uncached(&mut font_system, physical.cache_key)
+                    .expect("the table border glyph should rasterize");
+                let left = physical.x + image.placement.left;
+                (left, left + image.placement.width as i32)
+            })
+            .collect::<Vec<_>>();
+        for pair in ink.windows(2) {
+            assert!(
+                pair[0].1 >= pair[1].0,
+                "adjacent table-border cells must not expose a gap: {pair:?}"
+            );
+        }
     }
 
     #[test]
