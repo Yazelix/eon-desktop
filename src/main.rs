@@ -336,16 +336,14 @@ impl Application {
         };
         if snapshot_changed {
             self.reveal_workspace_selection();
-            if let Some((endpoint, live)) = self.workspace_model.active_attachment() {
+            if let Some((endpoint, live)) = self.workspace_model.active_attachment()
+                && (self.active_endpoint.as_deref() != Some(endpoint)
+                    || self.active_endpoint_live != live)
+            {
                 let endpoint = endpoint.to_vec();
-                if should_start_endpoint(
-                    self.active_endpoint.as_deref(),
-                    self.active_endpoint_live,
-                    &endpoint,
-                    live,
-                ) {
+                if live {
                     self.switch_orbit_endpoint(endpoint);
-                } else if !live {
+                } else {
                     self.suspend_orbit_endpoint(endpoint);
                 }
             }
@@ -1057,15 +1055,6 @@ fn retry_is_allowed(
     !workspace || selected.is_some_and(|(endpoint, live)| live && active == Some(endpoint))
 }
 
-fn should_start_endpoint(
-    active: Option<&[u8]>,
-    active_live: bool,
-    selected: &[u8],
-    selected_live: bool,
-) -> bool {
-    selected_live && (active != Some(selected) || !active_live)
-}
-
 fn server_failure_suppresses_retry(message: &ServerMessage) -> bool {
     matches!(
         message,
@@ -1284,10 +1273,6 @@ mod tests {
         assert!(retry_is_allowed(true, Some((first, true)), Some(first)));
         assert!(!retry_is_allowed(true, Some((first, false)), Some(first)));
         assert!(!retry_is_allowed(true, Some((second, true)), Some(first)));
-        assert!(!should_start_endpoint(Some(first), true, first, true));
-        assert!(should_start_endpoint(Some(first), false, first, true));
-        assert!(should_start_endpoint(Some(first), true, second, true));
-        assert!(!should_start_endpoint(Some(first), true, second, false));
     }
 
     #[test]
