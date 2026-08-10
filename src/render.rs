@@ -302,8 +302,11 @@ impl Renderer {
         let size = nonzero(size);
         self.config.width = size.width;
         self.config.height = size.height;
-        self.metrics = CellMetrics::for_scale(scale_factor);
-        self.cell_font_size = fitted_cell_font_size(&mut self.font_system, self.metrics);
+        let metrics = CellMetrics::for_scale(scale_factor);
+        if metrics != self.metrics {
+            self.cell_font_size = fitted_cell_font_size(&mut self.font_system, metrics);
+            self.metrics = metrics;
+        }
         self.surface.configure(&self.device, &self.config);
         self.content_key = None;
     }
@@ -1479,10 +1482,10 @@ mod tests {
 
     #[test]
     fn shaped_preedit_follows_emitted_glyphs_without_charging_combining_marks() {
-        fn text_width(text: &str) -> (f32, f32, f32) {
-            let mut font_system = FontSystem::new();
-            let mut metrics = CellMetrics::for_scale(1.25);
-            metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
+        let mut font_system = FontSystem::new();
+        let mut metrics = CellMetrics::for_scale(1.25);
+        metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
+        let mut text_width = |text: &str| {
             let mut buffer = Buffer::new(
                 &mut font_system,
                 Metrics::new(metrics.font_size, metrics.height),
@@ -1508,17 +1511,18 @@ mod tests {
             );
             let (left_offset, width) = shaped_preedit_placement(&buffer);
             (width, right - left, left + left_offset)
-        }
+        };
 
-        for text in ["e", "eee", "e\u{301}", "אבג"] {
+        let widths = ["e", "eee", "e\u{301}", "אבג"].map(|text| {
             let (width, emitted_width, left) = text_width(text);
             assert!(
                 (width - emitted_width).abs() < 0.01,
                 "{text:?} measured {width} but emitted {emitted_width}"
             );
             assert!(left.abs() < 0.01, "{text:?} starts at {left}");
-        }
-        assert!((text_width("e").0 - text_width("e\u{301}").0).abs() < 0.01);
+            width
+        });
+        assert!((widths[0] - widths[2]).abs() < 0.01);
     }
 
     #[test]
