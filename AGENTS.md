@@ -216,9 +216,9 @@ authority; Eon owns product orchestration, policy, composition, and distribution
 ## Status
 
 This repository implements the accepted `ven-upt.2` standalone Linux slice and
-the accepted `ven-c87` Eon workspace slice. `VEN-C8` is proved at Venus
-`932be5ce68a42b72e8b0bf5953c74f7a8af51f1e` on Linux/Xwayland; native Wayland
-and macOS remain unproved. Further product expansion remains inactive.
+the accepted `ven-c87` Eon workspace slice. `VEN-C8` is proved through Venus
+`2dfe364fdc6a86ec183bf846d1b233e7a64de0dd`: base Linux/Xwayland and focused
+native Wayland refresh; broader native Wayland and macOS remain unproved.
 
 ## Product boundary
 
