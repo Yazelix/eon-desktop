@@ -294,6 +294,18 @@ impl Application {
             }
             return true;
         }
+        let shortcut = workspace_shortcut(code, self.input.modifiers());
+        if self
+            .input
+            .consumes_workspace_shortcut(code, event.state, shortcut.is_some())
+        {
+            if let Some(action) = shortcut
+                .filter(|action| sends_workspace_shortcut(action, event.state, event.repeat))
+            {
+                self.send_workspace(action);
+            }
+            return true;
+        }
         if self.workspace_focus == WorkspaceFocus::Terminal {
             return false;
         }
@@ -960,6 +972,27 @@ fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bo
     window_focused && workspace_focus == WorkspaceFocus::Terminal
 }
 
+fn workspace_shortcut(
+    code: KeyCode,
+    modifiers: orbit_protocol::session::Modifiers,
+) -> Option<WorkspaceAction> {
+    use orbit_protocol::session::Modifiers;
+
+    match (modifiers, code) {
+        (Modifiers::ALT, KeyCode::KeyH) => Some(WorkspaceAction::Focus(WorkspaceDirection::Left)),
+        (Modifiers::ALT, KeyCode::KeyL) => Some(WorkspaceAction::Focus(WorkspaceDirection::Right)),
+        (Modifiers::ALT, KeyCode::KeyK) => Some(WorkspaceAction::Focus(WorkspaceDirection::Up)),
+        (Modifiers::ALT, KeyCode::KeyJ) => Some(WorkspaceAction::Focus(WorkspaceDirection::Down)),
+        (Modifiers::ALT, KeyCode::KeyM) => Some(WorkspaceAction::CreatePane),
+        (Modifiers::CTRL, KeyCode::KeyT) => Some(WorkspaceAction::CreateTab),
+        _ => None,
+    }
+}
+
+fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repeat: bool) -> bool {
+    state == ElementState::Pressed && (!repeat || matches!(action, WorkspaceAction::Focus(_)))
+}
+
 fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
@@ -1090,6 +1123,62 @@ mod tests {
         assert!(button_reaches_terminal(true, false, ElementState::Released));
         assert!(button_reaches_terminal(true, true, ElementState::Pressed));
         assert!(button_reaches_terminal(false, false, ElementState::Pressed));
+    }
+
+    #[test]
+    fn direct_workspace_shortcuts_use_existing_eon_actions() {
+        use orbit_protocol::session::Modifiers;
+
+        for (key, modifiers, action) in [
+            (
+                KeyCode::KeyH,
+                Modifiers::ALT,
+                WorkspaceAction::Focus(WorkspaceDirection::Left),
+            ),
+            (
+                KeyCode::KeyL,
+                Modifiers::ALT,
+                WorkspaceAction::Focus(WorkspaceDirection::Right),
+            ),
+            (
+                KeyCode::KeyK,
+                Modifiers::ALT,
+                WorkspaceAction::Focus(WorkspaceDirection::Up),
+            ),
+            (
+                KeyCode::KeyJ,
+                Modifiers::ALT,
+                WorkspaceAction::Focus(WorkspaceDirection::Down),
+            ),
+            (KeyCode::KeyM, Modifiers::ALT, WorkspaceAction::CreatePane),
+            (KeyCode::KeyT, Modifiers::CTRL, WorkspaceAction::CreateTab),
+        ] {
+            assert_eq!(workspace_shortcut(key, modifiers), Some(action));
+        }
+        assert_eq!(workspace_shortcut(KeyCode::KeyT, Modifiers::ALT), None);
+        assert_eq!(
+            workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT)),
+            None
+        );
+    }
+
+    #[test]
+    fn creation_shortcuts_ignore_repeat_while_traversal_may_repeat() {
+        assert!(!sends_workspace_shortcut(
+            &WorkspaceAction::CreateTab,
+            ElementState::Pressed,
+            true
+        ));
+        assert!(sends_workspace_shortcut(
+            &WorkspaceAction::Focus(WorkspaceDirection::Right),
+            ElementState::Pressed,
+            true
+        ));
+        assert!(!sends_workspace_shortcut(
+            &WorkspaceAction::CreatePane,
+            ElementState::Released,
+            false
+        ));
     }
 
     #[test]

@@ -139,6 +139,10 @@ was MIT-licensed comparison-only evidence for bounded header scrolling, direct
 labeled-row activation, distinct selected state, and one selected content
 surface. Venus reused no source and rejected its terminal ownership, split and
 reorder behavior, previews, sidebar, persistence, command palette, and effects.
+Nova at `57b0c8621894c59d058d7ba7d91464864b7c4917` is Apache-2.0
+comparison-only evidence for shared non-modal `Alt+m` pane creation and
+`Alt+h/l` focus-or-tab traversal. The user selected the complete Eon keymap;
+Venus reuses no Nova source, Zellij configuration, plugin, or pane ownership.
 Exact winit, wgpu, glyphon, and AccessKit versions already selected above own the
 native event, clipping, drawing, tab semantics, expanded state, and accessibility
 action mechanisms used by the workspace projection.

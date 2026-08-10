@@ -23,6 +23,7 @@ pub struct InputState {
     scroll: (f64, f64),
     selection_cell: Option<ViewportCell>,
     copy_pressed: bool,
+    workspace_shortcuts: Vec<KeyCode>,
 }
 
 impl InputState {
@@ -46,6 +47,11 @@ impl InputState {
         &self.preedit
     }
 
+    #[must_use]
+    pub fn modifiers(&self) -> Modifiers {
+        self.modifiers
+    }
+
     pub fn focus(&mut self, focused: bool) -> ClientMessage {
         let event = if focused {
             FocusEvent::Gained
@@ -58,6 +64,7 @@ impl InputState {
             self.reset_scroll();
             self.cancel_selection();
             self.copy_pressed = false;
+            self.workspace_shortcuts.clear();
             self.clear_composition();
         }
         self.focus_event = Some(event);
@@ -317,6 +324,30 @@ impl InputState {
             }
             ElementState::Released if self.copy_pressed => {
                 self.copy_pressed = false;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn consumes_workspace_shortcut(
+        &mut self,
+        key: KeyCode,
+        state: ElementState,
+        recognized: bool,
+    ) -> bool {
+        let pressed = self
+            .workspace_shortcuts
+            .iter()
+            .position(|candidate| *candidate == key);
+        match (state, pressed) {
+            (ElementState::Pressed, None) if recognized => {
+                self.workspace_shortcuts.push(key);
+                true
+            }
+            (ElementState::Pressed, Some(_)) => true,
+            (ElementState::Released, Some(index)) => {
+                self.workspace_shortcuts.swap_remove(index);
                 true
             }
             _ => false,
@@ -850,5 +881,13 @@ mod tests {
         assert_eq!(key_text("界"), Some("界".into()));
         assert_eq!(key_text("\r"), None);
         assert_eq!(key_text("\u{f700}"), None);
+    }
+
+    #[test]
+    fn workspace_shortcut_release_stays_out_of_orbit_after_modifier_release() {
+        let mut input = InputState::default();
+        assert!(input.consumes_workspace_shortcut(KeyCode::KeyH, ElementState::Pressed, true));
+        assert!(input.consumes_workspace_shortcut(KeyCode::KeyH, ElementState::Released, false));
+        assert!(!input.consumes_workspace_shortcut(KeyCode::KeyJ, ElementState::Released, false));
     }
 }

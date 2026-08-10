@@ -135,10 +135,15 @@ impl WorkspaceScene {
             .iter()
             .position(|pane| pane.id == active.selected_pane)
             .expect("EONW validates the selected pane");
-        let terminal_height = (pane_viewport.height - pane_height).max(0.0);
+        let maximum_terminal_height = (pane_viewport.height - pane_height).max(0.0);
+        let minimum_terminal_height =
+            (metrics.padding * 2.0 + metrics.height).min(maximum_terminal_height);
+        let pane_headers_height = active.panes.len() as f32 * pane_height;
+        let terminal_height = (pane_viewport.height - pane_headers_height)
+            .clamp(minimum_terminal_height, maximum_terminal_height);
         let tab_scroll_limit = (snapshot.tabs.len() as f32 * tab_width - width).max(0.0);
         let pane_scroll_limit =
-            ((active.panes.len().saturating_sub(1)) as f32 * pane_height).max(0.0);
+            (pane_headers_height + terminal_height - pane_viewport.height).max(0.0);
         let tab_scroll = if tab_scroll.is_finite() {
             tab_scroll.clamp(0.0, tab_scroll_limit)
         } else {

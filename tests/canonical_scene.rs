@@ -73,6 +73,12 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         ["pane-1", "pane-2"]
     );
     assert_eq!(scene.panes.iter().filter(|pane| pane.selected).count(), 1);
+    assert_eq!(scene.pane_scroll_limit(), 0.0);
+    assert!(scene.panes.iter().all(|pane| {
+        pane.rect.top >= scene.pane_viewport.top
+            && pane.rect.bottom() <= scene.pane_viewport.bottom()
+    }));
+    assert_eq!(scene.panes[0].rect.bottom(), scene.panes[1].rect.top);
     assert!(scene.terminal.height > metrics.height);
     assert_eq!(scene.terminal.top, scene.panes[1].rect.bottom());
     assert_eq!(
@@ -89,29 +95,51 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     assert!(scene.tab_scroll_limit().is_finite());
     assert!(scene.pane_scroll_limit().is_finite());
 
-    let mut overflow_snapshot = snapshot.clone();
-    overflow_snapshot.tabs[0].selected_pane = "pane-1".into();
-    overflow_snapshot.tabs[0].panes.push(Pane {
+    let mut fitting_snapshot = snapshot.clone();
+    fitting_snapshot.tabs[0].panes.push(Pane {
         id: "pane-4".into(),
         session: "session-4".into(),
         endpoint: b"/run/eon/session-4.sock".to_vec(),
         live: true,
     });
+    let fitting = WorkspaceScene::from_snapshot(&fitting_snapshot, size, metrics, 0.0, 0.0);
+    assert_eq!(fitting.pane_scroll_limit(), 0.0);
+    assert!(fitting.panes.iter().all(|pane| {
+        pane.rect.top >= fitting.pane_viewport.top
+            && pane.rect.bottom() <= fitting.pane_viewport.bottom()
+    }));
+    assert_eq!(fitting.terminal.top, fitting.panes[1].rect.bottom());
+    assert_eq!(fitting.panes[2].rect.top, fitting.terminal.bottom());
+
+    let mut overflow_snapshot = fitting_snapshot;
+    for number in 5..=32 {
+        overflow_snapshot.tabs[0].panes.push(Pane {
+            id: format!("pane-{number}"),
+            session: format!("session-{number}"),
+            endpoint: format!("/run/eon/session-{number}.sock").into_bytes(),
+            live: true,
+        });
+    }
+    overflow_snapshot.tabs[0].selected_pane = "pane-32".into();
     let unscrolled = WorkspaceScene::from_snapshot(&overflow_snapshot, size, metrics, 0.0, 0.0);
-    let scrolled = WorkspaceScene::from_snapshot(
+    assert!(unscrolled.pane_scroll_limit() > 0.0);
+    let revealed = WorkspaceScene::from_snapshot(
         &overflow_snapshot,
         size,
         metrics,
         0.0,
-        unscrolled.pane_scroll_limit(),
+        unscrolled.selected_pane_scroll(),
     );
-    assert!(scrolled.terminal.top < scrolled.pane_viewport.top);
-    assert_eq!(
-        scrolled.hit_test(1.0, scrolled.pane_viewport.top + 1.0),
-        Some(WorkspaceHit::Terminal)
-    );
+    let selected = revealed
+        .panes
+        .iter()
+        .find(|pane| pane.selected)
+        .expect("selected pane");
+    assert!(selected.rect.top >= revealed.pane_viewport.top);
+    assert_eq!(revealed.terminal.top, selected.rect.bottom());
+    assert!(revealed.terminal.bottom() <= revealed.pane_viewport.bottom());
     assert!(matches!(
-        scrolled.hit_test(1.0, scrolled.tab_viewport.bottom() - 1.0),
+        revealed.hit_test(1.0, revealed.tab_viewport.bottom() - 1.0),
         Some(WorkspaceHit::Tab(_))
     ));
 

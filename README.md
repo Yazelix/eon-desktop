@@ -8,10 +8,10 @@ and sends semantic interaction back to the authoritative session runtime.
 
 The Venus client implements one Linux window for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
-Eon-authored horizontal tabs and a one-expanded vertical pane accordion, routes
-selection back as semantic Eon actions, and attaches only the selected Orbit
-endpoint. It detaches without ending any Session and does not own a PTY,
-terminal emulator, or workspace topology.
+Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
+pane accordion, routes selection back as semantic Eon actions, and attaches only
+the selected Orbit endpoint. It detaches without ending any Session and does not
+own a PTY, terminal emulator, or workspace topology.
 
 ## Ownership
 
@@ -29,6 +29,11 @@ selection, identities, actions, and pane-to-Session mappings. Venus consumes
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
+
+An Eon Workspace is composition, not another Session. Each pane references an
+independent Orbit Session. Venus keeps the EONW connection for workspace state
+and actions plus one Orbit connection to the selected pane; inactive Sessions
+remain alive without a Venus connection.
 
 ## Run
 
@@ -53,10 +58,12 @@ cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
-Click a tab or pane header to select it. Press F6 to cycle terminal, tab, and
-pane keyboard focus; use Left/Right on tabs, Up/Down on panes, and Escape to
-return to the terminal. Wheel over the tab strip or a pane header to reach
-clipped headers without scrolling the terminal.
+Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
+Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
+and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
+available. Wheel over the tab strip or a pane header to reach clipped headers
+without scrolling the terminal. In standalone mode these keys remain Orbit
+input.
 
 Wheel or trackpad movement scrolls through Orbit-owned retained history. Hold
 Shift while dragging the left mouse button to select cells, then press
@@ -92,17 +99,18 @@ and resolves from GitHub; later Orbit hardening at
 
 ## LOC scorecard
 
-The scorecard counts tracked handwritten text and code. It excludes `.git/`,
-Beads data, lock files, and generated artifacts.
+The scorecard counts tracked project text and code, including rendered
+`AGENTS.md` because agents consume it directly. It excludes `.git/`, Beads data,
+lock files, and other generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 404 |
-| README | 108 |
-| Contracts and references | 178 |
+| Agent policy | 405 |
+| README | 116 |
+| Contracts and references | 182 |
 | Crate decisions | 121 |
-| Changelog | 33 |
-| Rust source, including unit tests | 6,062 |
-| Rust integration tests | 524 |
+| Changelog | 34 |
+| Rust source, including unit tests | 6,195 |
+| Rust integration tests | 552 |
 | Cargo manifest | 20 |
-| **Total** | **7,450** |
+| **Total** | **7,625** |

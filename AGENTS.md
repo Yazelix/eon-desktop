@@ -216,9 +216,10 @@ authority; Eon owns product orchestration, policy, composition, and distribution
 ## Status
 
 This repository implements the accepted `ven-upt.2` standalone Linux slice and
-the accepted `ven-c87` Eon workspace slice. `VEN-C8` is proved through Venus
-`2dfe364fdc6a86ec183bf846d1b233e7a64de0dd`: base Linux/Xwayland and focused
-native Wayland refresh; broader native Wayland and macOS remain unproved.
+the accepted `ven-c87` Eon workspace slice. The accepted `VEN-C8` proof remains
+Venus `2dfe364fdc6a86ec183bf846d1b233e7a64de0dd`; direct workspace shortcuts and
+fitting pane-header materialization are an uncommitted `ven-599` candidate.
+Broader native Wayland and macOS remain unproved.
 
 ## Product boundary
 
@@ -234,12 +235,12 @@ second protocol schema. Report an insufficient Orbit contract to Orbit instead
 of compensating in the client.
 
 The current Linux slice is one native window. It supports either one standalone
-local Orbit session or Eon-authored horizontal tabs and per-active-tab vertical
-accordion panes with exactly one expanded Orbit surface. It does not include
-arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
-popups, settings, visual effects, configuration, remote or web access, plugins,
-shell integration, compatibility windows, macOS implementation, packaging, or
-distribution.
+local Orbit session or Eon-authored horizontal tabs and ordered per-active-tab
+vertical accordion pane headers around exactly one expanded Orbit surface. It
+does not include arbitrary split trees, simultaneous expanded panes, reordering,
+sidebars, popups, settings, visual effects, configuration, remote or web access,
+plugins, shell integration, compatibility windows, macOS implementation,
+packaging, or distribution.
 
 A new Venus module is product scope, not an implementation detail.
 
