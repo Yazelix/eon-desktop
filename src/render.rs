@@ -883,10 +883,14 @@ impl Renderer {
         buffer.set_monospace_width(monospace_width);
         buffer.set_text(text, &attrs, shaping(text), None);
         buffer.shape_until_scroll(&mut self.font_system, false);
-        let measured_width = shaped_width(&buffer);
+        let (left_offset, measured_width) = if matches!(kind, DrawStyleKind::Preedit) {
+            shaped_preedit_placement(&buffer)
+        } else {
+            (0.0, 0.0)
+        };
         self.text.push(PlacedText {
             buffer,
-            left,
+            left: left + left_offset,
             top,
             right: (left + layout_width).ceil() as i32,
             bottom: (top + layout_height).ceil() as i32,
@@ -925,19 +929,15 @@ enum DrawStyleKind {
     Status,
 }
 
-fn shaped_width(buffer: &Buffer) -> f32 {
-    buffer.layout_runs().fold(0.0_f32, |width, run| {
-        let Some(first) = run.glyphs.first() else {
-            return width;
-        };
-        let (left, right) = run
-            .glyphs
-            .iter()
-            .fold((first.x, first.x + first.w), |(left, right), glyph| {
-                (left.min(glyph.x), right.max(glyph.x + glyph.w))
-            });
-        width.max(right - left)
-    })
+fn shaped_preedit_placement(buffer: &Buffer) -> (f32, f32) {
+    let mut glyphs = buffer.layout_runs().flat_map(|run| run.glyphs);
+    let Some(first) = glyphs.next() else {
+        return (0.0, 0.0);
+    };
+    let (left, right) = glyphs.fold((first.x, first.x + first.w), |(left, right), glyph| {
+        (left.min(glyph.x), right.max(glyph.x + glyph.w))
+    });
+    (-left, right - left)
 }
 
 fn fitted_cell_font_size(font_system: &mut FontSystem, metrics: CellMetrics) -> f32 {
@@ -1478,8 +1478,8 @@ mod tests {
     }
 
     #[test]
-    fn shaped_width_follows_emitted_glyphs_without_charging_combining_marks() {
-        fn text_width(text: &str) -> (f32, f32) {
+    fn shaped_preedit_follows_emitted_glyphs_without_charging_combining_marks() {
+        fn text_width(text: &str) -> (f32, f32, f32) {
             let mut font_system = FontSystem::new();
             let mut metrics = CellMetrics::for_scale(1.25);
             metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
@@ -1487,13 +1487,13 @@ mod tests {
                 &mut font_system,
                 Metrics::new(metrics.font_size, metrics.height),
             );
-            buffer.set_size(Some(100.0), Some(18.0));
+            buffer.set_size(Some(100.0), Some(metrics.height));
             buffer.set_wrap(Wrap::None);
             buffer.set_monospace_width(Some(metrics.width));
             buffer.set_text(
                 text,
                 &Attrs::new().family(Family::Monospace),
-                Shaping::Advanced,
+                shaping(text),
                 None,
             );
             buffer.shape_until_scroll(&mut font_system, false);
@@ -1506,15 +1506,17 @@ mod tests {
                 (f32::INFINITY, f32::NEG_INFINITY),
                 |(left, right), glyph| (left.min(glyph.x), right.max(glyph.x + glyph.w)),
             );
-            (shaped_width(&buffer), right - left)
+            let (left_offset, width) = shaped_preedit_placement(&buffer);
+            (width, right - left, left + left_offset)
         }
 
         for text in ["e", "eee", "e\u{301}", "אבג"] {
-            let (width, emitted_width) = text_width(text);
+            let (width, emitted_width, left) = text_width(text);
             assert!(
                 (width - emitted_width).abs() < 0.01,
                 "{text:?} measured {width} but emitted {emitted_width}"
             );
+            assert!(left.abs() < 0.01, "{text:?} starts at {left}");
         }
         assert!((text_width("e").0 - text_width("e\u{301}").0).abs() < 0.01);
     }
