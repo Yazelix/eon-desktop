@@ -110,7 +110,7 @@ lock files, and other generated artifacts.
 | Contracts and references | 182 |
 | Crate decisions | 121 |
 | Changelog | 35 |
-| Rust source, including unit tests | 6,312 |
+| Rust source, including unit tests | 6,338 |
 | Rust integration tests | 552 |
 | Cargo manifest | 20 |
-| **Total** | **7,743** |
+| **Total** | **7,769** |
