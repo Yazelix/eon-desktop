@@ -10,8 +10,9 @@ The Venus client implements one Linux window for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion, routes selection back as semantic Eon actions, and attaches only
-the selected Orbit endpoint. It detaches without ending any Session and does not
-own a PTY, terminal emulator, or workspace topology.
+the selected live Orbit endpoint. It automatically recovers that attachment after
+retryable local socket loss, detaches without ending any Session, and does not own
+a PTY, terminal emulator, or workspace topology.
 
 ## Ownership
 
@@ -37,8 +38,7 @@ remain alive without a Venus connection.
 
 ## Run
 
-Start the Eon Sessions Orbit server first, then pass its Unix socket to the
-Venus client:
+Pass the Eon Sessions Orbit Unix socket to the Venus client:
 
 ```sh
 cargo run --locked -- /path/to/orbit.sock
@@ -48,6 +48,11 @@ Without an argument, Venus uses
 `$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
 `/tmp/yazelix-orbit-$UID/orbit.sock` when the runtime directory is unavailable.
 Only one presentation client can attach to an Orbit session at a time.
+Venus may start before Orbit. A missing, refused, reset, or dropped local socket
+retries after 250 ms, 500 ms, 1 s, 2 s, 4 s, and then every 5 s. Venus retains
+the last coherent scene during recovery and replaces it only with a fresh
+complete frame. Busy, incompatible, exited, invalid protocol or model, resource,
+queue, input, and worker-start failures remain terminal and visible.
 
 For an Eon workspace, pass the initial Orbit socket followed by the EONW socket:
 
@@ -58,6 +63,8 @@ cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
+Recovery continues only while that exact selected pane remains live; endpoint
+replacement or authoritative offline state cancels obsolete retry state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
 and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
@@ -106,11 +113,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 405 |
-| README | 116 |
-| Contracts and references | 182 |
+| README | 123 |
+| Contracts and references | 183 |
 | Crate decisions | 121 |
-| Changelog | 35 |
-| Rust source, including unit tests | 6,344 |
-| Rust integration tests | 552 |
+| Changelog | 37 |
+| Rust source, including unit tests | 6,685 |
+| Rust integration tests | 555 |
 | Cargo manifest | 20 |
-| **Total** | **7,775** |
+| **Total** | **8,129** |

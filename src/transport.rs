@@ -20,6 +20,7 @@ use std::{
 pub enum TransportEvent {
     Server(ServerMessage),
     InvalidInput(String),
+    RetryableLoss(String),
     Lost(String),
 }
 
@@ -305,7 +306,16 @@ impl EventQueue {
             state.stopped = true;
             return wake;
         }
-        state.stopped = matches!(&event, TransportEvent::Lost(_));
+        state.stopped = matches!(
+            &event,
+            TransportEvent::RetryableLoss(_)
+                | TransportEvent::Lost(_)
+                | TransportEvent::Server(
+                    ServerMessage::Busy
+                        | ServerMessage::Incompatible { .. }
+                        | ServerMessage::Exited { .. }
+                )
+        );
         state.frames += usize::from(incoming_revision.is_some());
         state.events.push_back(event);
         wake
@@ -350,10 +360,11 @@ fn run(
     let mut stream = match UnixStream::connect(&socket) {
         Ok(stream) => stream,
         Err(error) => {
-            notify(TransportEvent::Lost(format!(
-                "Cannot connect to Orbit at {}: {error}",
-                socket.display()
-            )));
+            let kind = error.kind();
+            notify(socket_loss(
+                format!("Cannot connect to Orbit at {}: {error}", socket.display()),
+                kind,
+            ));
             return;
         }
     };
@@ -373,9 +384,11 @@ fn run(
             maximum_version: session::VERSION,
         },
     ) {
-        notify(TransportEvent::Lost(format!(
-            "Cannot start the Orbit attachment: {error}"
-        )));
+        let kind = error.kind();
+        notify(socket_loss(
+            format!("Cannot start the Orbit attachment: {error}"),
+            kind,
+        ));
         return;
     }
 
@@ -395,7 +408,7 @@ fn run(
         match read_message(&mut stream) {
             Ok(Some(message)) => notify(TransportEvent::Server(message)),
             Ok(None) => {
-                notify(TransportEvent::Lost(
+                notify(TransportEvent::RetryableLoss(
                     "Orbit closed the local session".into(),
                 ));
                 return;
@@ -418,7 +431,8 @@ fn write_loop(
             let event = if error.kind() == ErrorKind::InvalidInput {
                 TransportEvent::InvalidInput(error.to_string())
             } else {
-                TransportEvent::Lost(format!("Cannot send input to Orbit: {error}"))
+                let kind = error.kind();
+                socket_loss(format!("Cannot send input to Orbit: {error}"), kind)
             };
             notify(event);
             if error.kind() != ErrorKind::InvalidInput {
@@ -459,7 +473,28 @@ fn read_message(stream: &mut impl Read) -> Result<Option<ServerMessage>, Transpo
 }
 
 fn io_loss(error: io::Error) -> TransportEvent {
-    TransportEvent::Lost(format!("Cannot read from Orbit: {error}"))
+    let kind = error.kind();
+    socket_loss(format!("Cannot read from Orbit: {error}"), kind)
+}
+
+fn socket_loss(detail: String, kind: ErrorKind) -> TransportEvent {
+    if matches!(
+        kind,
+        ErrorKind::NotFound
+            | ErrorKind::ConnectionRefused
+            | ErrorKind::ConnectionReset
+            | ErrorKind::ConnectionAborted
+            | ErrorKind::NotConnected
+            | ErrorKind::BrokenPipe
+            | ErrorKind::TimedOut
+            | ErrorKind::Interrupted
+            | ErrorKind::UnexpectedEof
+            | ErrorKind::WriteZero
+    ) {
+        TransportEvent::RetryableLoss(detail)
+    } else {
+        TransportEvent::Lost(detail)
+    }
 }
 
 fn protocol_loss(error: session::Error) -> TransportEvent {
@@ -492,8 +527,20 @@ mod tests {
         let error = io::Error::new(ErrorKind::ConnectionReset, "socket reset");
         assert_eq!(
             io_loss(error),
-            TransportEvent::Lost("Cannot read from Orbit: socket reset".into())
+            TransportEvent::RetryableLoss("Cannot read from Orbit: socket reset".into())
         );
+        assert!(matches!(
+            protocol_loss(session::Error::InvalidMagic),
+            TransportEvent::Lost(_)
+        ));
+        assert!(matches!(
+            socket_loss("missing".into(), ErrorKind::NotFound),
+            TransportEvent::RetryableLoss(_)
+        ));
+        assert!(matches!(
+            socket_loss("resource".into(), ErrorKind::OutOfMemory),
+            TransportEvent::Lost(_)
+        ));
     }
 
     #[test]
@@ -532,6 +579,14 @@ mod tests {
         assert_eq!(
             events.drain(),
             [TransportEvent::Lost("writer failed".into())]
+        );
+
+        let events = EventQueue::default();
+        assert!(events.push(TransportEvent::Server(ServerMessage::Busy)));
+        assert!(!events.push(TransportEvent::RetryableLoss("socket closed".into())));
+        assert_eq!(
+            events.drain(),
+            [TransportEvent::Server(ServerMessage::Busy)]
         );
     }
 
@@ -649,6 +704,72 @@ mod tests {
             server.join().unwrap(),
             ClientMessage::Hello { .. }
         ));
+    }
+
+    #[test]
+    fn missing_and_dropped_sockets_can_attach_on_later_attempts() {
+        let socket = TestSocket::new();
+        let (first_wake, first_events) = mpsc::channel();
+        let first = Transport::start(socket.path.clone(), move || {
+            let _ = first_wake.send(());
+        });
+        first_events.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            first.drain_events().as_slice(),
+            [TransportEvent::RetryableLoss(detail)] if detail.contains("Cannot connect to Orbit")
+        ));
+        drop(first);
+
+        let listener = UnixListener::bind(&socket.path).unwrap();
+        let (release, releases) = mpsc::channel();
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                assert!(matches!(
+                    read_client(&mut stream),
+                    ClientMessage::Hello { .. }
+                ));
+                stream
+                    .write_all(
+                        &session::encode_server_message(&ServerMessage::Attached {
+                            version: session::VERSION,
+                        })
+                        .unwrap(),
+                    )
+                    .unwrap();
+                releases.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+        });
+
+        let (second_wake, second_events) = mpsc::channel();
+        let second = Transport::start(socket.path.clone(), move || {
+            let _ = second_wake.send(());
+        });
+        second_events.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            second.drain_events().as_slice(),
+            [TransportEvent::Server(ServerMessage::Attached { .. })]
+        ));
+        release.send(()).unwrap();
+        second_events.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            second.drain_events().as_slice(),
+            [TransportEvent::RetryableLoss(detail)] if detail == "Orbit closed the local session"
+        ));
+        drop(second);
+
+        let (third_wake, third_events) = mpsc::channel();
+        let third = Transport::start(socket.path.clone(), move || {
+            let _ = third_wake.send(());
+        });
+        third_events.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            third.drain_events().as_slice(),
+            [TransportEvent::Server(ServerMessage::Attached { .. })]
+        ));
+        release.send(()).unwrap();
+        drop(third);
+        server.join().unwrap();
     }
 
     #[test]

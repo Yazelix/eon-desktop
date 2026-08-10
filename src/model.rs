@@ -63,6 +63,7 @@ pub struct SessionModel {
     reducer: FrameReducer,
     scene: Option<Scene>,
     connection: ConnectionState,
+    awaiting_current_frame: bool,
     notices: Vec<Notice>,
 }
 
@@ -109,7 +110,7 @@ impl WorkspaceModel {
     }
 
     #[must_use]
-    pub fn active_endpoint(&self) -> Option<&[u8]> {
+    pub fn active_attachment(&self) -> Option<(&[u8], bool)> {
         let snapshot = self.snapshot.as_ref()?;
         let tab = snapshot
             .tabs
@@ -118,7 +119,7 @@ impl WorkspaceModel {
         tab.panes
             .iter()
             .find(|pane| pane.id == tab.selected_pane)
-            .map(|pane| pane.endpoint.as_slice())
+            .map(|pane| (pane.endpoint.as_slice(), pane.live))
     }
 
     fn set_notice(&mut self, notice: String) -> bool {
@@ -141,6 +142,7 @@ impl SessionModel {
             reducer: FrameReducer::default(),
             scene: None,
             connection: ConnectionState::Connecting,
+            awaiting_current_frame: true,
             notices: Vec::with_capacity(4),
         }
     }
@@ -165,6 +167,11 @@ impl SessionModel {
     #[must_use]
     pub fn is_attached(&self) -> bool {
         matches!(self.connection, ConnectionState::Attached { .. })
+    }
+
+    #[must_use]
+    pub fn awaiting_current_frame(&self) -> bool {
+        self.awaiting_current_frame
     }
 
     #[must_use]
@@ -206,6 +213,7 @@ impl SessionModel {
             ServerMessage::Frame(frame) => {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
+                self.awaiting_current_frame = false;
             }
             ServerMessage::Accepted => {
                 self.clear_orbit_notice();
@@ -261,6 +269,7 @@ impl SessionModel {
     pub fn prepare_reconnect(&mut self) {
         self.reducer = FrameReducer::default();
         self.connection = ConnectionState::Connecting;
+        self.awaiting_current_frame = true;
         self.notices.clear();
     }
 
@@ -334,7 +343,10 @@ mod tests {
         );
 
         assert_eq!(model.snapshot(), Some(&snapshot));
-        assert_eq!(model.active_endpoint(), Some(&b"/run/eon/orbit.sock"[..]));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/orbit.sock"[..], true))
+        );
         assert_eq!(
             model.notice(),
             Some("Eon workspace edge: there is no pane above the selected pane")
@@ -345,11 +357,19 @@ mod tests {
         );
         assert_eq!(model.notice(), None);
         assert_eq!(
-            model.apply(WorkspaceResponse::Snapshot(snapshot)),
+            model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
             (false, false)
         );
 
         assert!(model.mark_unavailable("Cannot connect to Eon"));
         assert!(!model.mark_unavailable("Cannot connect to Eon"));
+
+        let mut offline = snapshot;
+        offline.tabs[0].panes[0].live = false;
+        model.apply(WorkspaceResponse::Snapshot(offline));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/orbit.sock"[..], false))
+        );
     }
 }

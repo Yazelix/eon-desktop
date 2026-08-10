@@ -285,15 +285,18 @@ fn reconnect_preserves_the_last_scene_and_accepts_a_fresh_revision() {
     model.prepare_reconnect();
     assert_eq!(model.connection(), &ConnectionState::Connecting);
     assert_eq!(model.scene().unwrap().revision, 42);
+    assert!(model.awaiting_current_frame());
 
     model
         .apply(ServerMessage::Attached {
             version: session::VERSION,
         })
         .unwrap();
+    assert!(model.awaiting_current_frame());
     model
         .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Alternate))))
         .unwrap();
+    assert!(!model.awaiting_current_frame());
     assert_eq!(model.scene().unwrap().revision, 1);
     assert_eq!(model.scene().unwrap().screen, Screen::Alternate);
 }

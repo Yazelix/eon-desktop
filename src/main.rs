@@ -5,7 +5,7 @@ use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEve
 use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDirection};
 use orbit_protocol::{
     MAX_CELLS,
-    session::{self, ClientMessage, SelectionAction, ServerMessage, SurfaceSize},
+    session::{self, ClientMessage, FailureCode, SelectionAction, ServerMessage, SurfaceSize},
 };
 use std::{
     env,
@@ -38,6 +38,44 @@ use yazelix_venus::{
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
+const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
+
+struct OrbitRetry {
+    deadline: Option<Instant>,
+    next_delay: Duration,
+}
+
+impl Default for OrbitRetry {
+    fn default() -> Self {
+        Self {
+            deadline: None,
+            next_delay: INITIAL_RETRY_DELAY,
+        }
+    }
+}
+
+impl OrbitRetry {
+    fn schedule(&mut self, now: Instant) {
+        if self.deadline.is_none() {
+            self.deadline = Some(now + self.next_delay);
+            self.next_delay = self.next_delay.saturating_mul(2).min(MAX_RETRY_DELAY);
+        }
+    }
+
+    fn take_due(&mut self, now: Instant) -> bool {
+        if self.deadline.is_some_and(|deadline| now >= deadline) {
+            self.deadline = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
 
 #[derive(Debug)]
 enum UserEvent {
@@ -77,6 +115,9 @@ struct Application {
     next_blink: Option<Instant>,
     clipboard: Option<arboard::Clipboard>,
     active_endpoint: Option<Vec<u8>>,
+    active_endpoint_live: bool,
+    orbit_retry: OrbitRetry,
+    retry_suppressed: bool,
     window_focused: bool,
     workspace_focus: WorkspaceFocus,
     tab_scroll: f32,
@@ -107,6 +148,9 @@ impl Application {
             next_blink: None,
             clipboard: None,
             active_endpoint: None,
+            active_endpoint_live: false,
+            orbit_retry: OrbitRetry::default(),
+            retry_suppressed: false,
             window_focused: false,
             workspace_focus: WorkspaceFocus::Terminal,
             tab_scroll: 0.0,
@@ -225,11 +269,11 @@ impl Application {
 
     fn switch_orbit_endpoint(&mut self, endpoint: Vec<u8>) {
         let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
-        if same_endpoint && self.transport.is_some() {
-            return;
-        }
         self.active_endpoint = Some(endpoint.clone());
+        self.active_endpoint_live = true;
         self.transport = None;
+        self.orbit_retry.reset();
+        self.retry_suppressed = false;
         if same_endpoint {
             self.model.prepare_reconnect();
         } else {
@@ -242,6 +286,47 @@ impl Application {
         self.start_orbit(PathBuf::from(OsString::from_vec(endpoint)));
     }
 
+    fn suspend_orbit_endpoint(&mut self, endpoint: Vec<u8>) {
+        let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
+        self.active_endpoint = Some(endpoint);
+        self.active_endpoint_live = false;
+        self.transport = None;
+        self.orbit_retry.reset();
+        self.retry_suppressed = true;
+        if !same_endpoint {
+            self.model = SessionModel::new();
+        }
+        self.model.mark_lost("The selected Eon pane is offline");
+        self.input.reset_scroll();
+        self.input.cancel_selection();
+        self.last_resize = None;
+        self.presented_revision = None;
+    }
+
+    fn retry_allowed(&self) -> bool {
+        retry_is_allowed(
+            self.workspace_socket.is_some(),
+            self.workspace_model.active_attachment(),
+            self.active_endpoint.as_deref(),
+        )
+    }
+
+    fn retry_orbit(&mut self, now: Instant) {
+        if !self.orbit_retry.take_due(now) {
+            return;
+        }
+        if self.transport.is_some() || !self.retry_allowed() {
+            self.orbit_retry.reset();
+            return;
+        }
+        self.model.prepare_reconnect();
+        self.retry_suppressed = false;
+        self.last_resize = None;
+        self.presented_revision = None;
+        self.start_orbit(self.orbit_socket.clone());
+        self.refresh_client_view();
+    }
+
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
         let (view_changed, snapshot_changed) = match event {
             WorkspaceEvent::Response(response) => self.workspace_model.apply(response),
@@ -251,8 +336,18 @@ impl Application {
         };
         if snapshot_changed {
             self.reveal_workspace_selection();
-            if let Some(endpoint) = self.workspace_model.active_endpoint() {
-                self.switch_orbit_endpoint(endpoint.to_vec());
+            if let Some((endpoint, live)) = self.workspace_model.active_attachment() {
+                let endpoint = endpoint.to_vec();
+                if should_start_endpoint(
+                    self.active_endpoint.as_deref(),
+                    self.active_endpoint_live,
+                    &endpoint,
+                    live,
+                ) {
+                    self.switch_orbit_endpoint(endpoint);
+                } else if !live {
+                    self.suspend_orbit_endpoint(endpoint);
+                }
             }
         }
         if view_changed {
@@ -359,8 +454,18 @@ impl Application {
     }
 
     fn handle_transport(&mut self, event: TransportEvent) {
+        let transport_ended = matches!(
+            &event,
+            TransportEvent::RetryableLoss(_) | TransportEvent::Lost(_)
+        );
+        let retryable_loss = matches!(&event, TransportEvent::RetryableLoss(_))
+            && !self.model.is_terminal()
+            && !self.retry_suppressed;
         match event {
             TransportEvent::Server(message) => {
+                if server_failure_suppresses_retry(&message) {
+                    self.retry_suppressed = true;
+                }
                 let was_attached = self.model.is_attached();
                 let frame = matches!(&message, ServerMessage::Frame(_));
                 match self.model.apply(message) {
@@ -377,6 +482,7 @@ impl Application {
                     self.input.cancel_selection();
                 }
                 if !was_attached && self.model.is_attached() {
+                    self.orbit_retry.reset();
                     self.input.reset_scroll();
                     self.input.cancel_selection();
                     self.send_resize();
@@ -391,14 +497,27 @@ impl Application {
                     format!("Venus could not encode input: {detail}"),
                 );
             }
+            TransportEvent::RetryableLoss(detail) => {
+                self.input.reset_scroll();
+                self.input.cancel_selection();
+                if retryable_loss {
+                    self.model.mark_lost(detail);
+                }
+            }
             TransportEvent::Lost(detail) => {
                 self.input.reset_scroll();
                 self.input.cancel_selection();
                 self.model.mark_lost(detail);
             }
         }
-        if self.model.is_terminal() {
+        if transport_ended || self.model.is_terminal() {
             self.transport = None;
+            self.presented_revision = None;
+            if retryable_loss && self.retry_allowed() {
+                self.orbit_retry.schedule(Instant::now());
+            } else {
+                self.orbit_retry.reset();
+            }
         }
         self.refresh_client_view();
     }
@@ -553,7 +672,7 @@ impl Application {
             ConnectionState::Connecting => {
                 format!("Connecting to Orbit at {}", self.orbit_socket.display())
             }
-            ConnectionState::Attached { .. } if self.model.scene().is_none() => {
+            ConnectionState::Attached { .. } if self.model.awaiting_current_frame() => {
                 "Attached to Orbit. Waiting for its current frame.".into()
             }
             ConnectionState::Attached { .. } => String::new(),
@@ -890,21 +1009,22 @@ impl ApplicationHandler<UserEvent> for Application {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+        self.retry_orbit(now);
         let blinking = self
             .model
             .scene()
             .is_some_and(|scene| scene.has_blinking_content());
-        if update_blink(
-            blinking,
-            &mut self.blink_visible,
-            &mut self.next_blink,
-            Instant::now(),
-        ) && let Some(state) = &self.window
+        if update_blink(blinking, &mut self.blink_visible, &mut self.next_blink, now)
+            && let Some(state) = &self.window
         {
             state.window.request_redraw();
         }
         event_loop.set_control_flow(
-            self.next_blink
+            [self.next_blink, self.orbit_retry.deadline]
+                .into_iter()
+                .flatten()
+                .min()
                 .map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
         );
     }
@@ -927,6 +1047,31 @@ fn update_blink(
         return true;
     }
     false
+}
+
+fn retry_is_allowed(
+    workspace: bool,
+    selected: Option<(&[u8], bool)>,
+    active: Option<&[u8]>,
+) -> bool {
+    !workspace || selected.is_some_and(|(endpoint, live)| live && active == Some(endpoint))
+}
+
+fn should_start_endpoint(
+    active: Option<&[u8]>,
+    active_live: bool,
+    selected: &[u8],
+    selected_live: bool,
+) -> bool {
+    selected_live && (active != Some(selected) || !active_live)
+}
+
+fn server_failure_suppresses_retry(message: &ServerMessage) -> bool {
+    matches!(
+        message,
+        ServerMessage::Failure(failure)
+            if matches!(failure.code, FailureCode::Protocol | FailureCode::Terminal)
+    )
 }
 
 fn current_presentation(
@@ -1107,6 +1252,61 @@ mod tests {
         assert_eq!((visible, deadline), (true, None));
         assert!(!update_blink(true, &mut visible, &mut deadline, now));
         assert_eq!((visible, deadline), (true, Some(now + BLINK_INTERVAL)));
+    }
+
+    #[test]
+    fn orbit_retry_schedule_is_bounded_and_resettable() {
+        let now = Instant::now();
+        let mut retry = OrbitRetry::default();
+
+        for delay in [250, 500, 1_000, 2_000, 4_000, 5_000, 5_000] {
+            retry.schedule(now);
+            assert_eq!(retry.deadline, Some(now + Duration::from_millis(delay)));
+            retry.schedule(now + Duration::from_millis(1));
+            assert_eq!(retry.deadline, Some(now + Duration::from_millis(delay)));
+            assert!(!retry.take_due(now + Duration::from_millis(delay - 1)));
+            assert!(retry.take_due(now + Duration::from_millis(delay)));
+        }
+
+        retry.schedule(now);
+        retry.reset();
+        assert_eq!(retry.deadline, None);
+        retry.schedule(now);
+        assert_eq!(retry.deadline, Some(now + Duration::from_millis(250)));
+    }
+
+    #[test]
+    fn workspace_recovery_requires_the_same_selected_live_endpoint() {
+        let first = b"/run/eon/session-1.sock";
+        let second = b"/run/eon/session-2.sock";
+
+        assert!(retry_is_allowed(false, None, None));
+        assert!(retry_is_allowed(true, Some((first, true)), Some(first)));
+        assert!(!retry_is_allowed(true, Some((first, false)), Some(first)));
+        assert!(!retry_is_allowed(true, Some((second, true)), Some(first)));
+        assert!(!should_start_endpoint(Some(first), true, first, true));
+        assert!(should_start_endpoint(Some(first), false, first, true));
+        assert!(should_start_endpoint(Some(first), true, second, true));
+        assert!(!should_start_endpoint(Some(first), true, second, false));
+    }
+
+    #[test]
+    fn protocol_and_terminal_failures_do_not_become_socket_retries() {
+        use orbit_protocol::session::Failure;
+
+        for (code, suppressed) in [
+            (FailureCode::InvalidInput, false),
+            (FailureCode::Protocol, true),
+            (FailureCode::Terminal, true),
+        ] {
+            assert_eq!(
+                server_failure_suppresses_retry(&ServerMessage::Failure(Failure {
+                    code,
+                    detail: "bounded".into(),
+                })),
+                suppressed
+            );
+        }
     }
 
     #[test]

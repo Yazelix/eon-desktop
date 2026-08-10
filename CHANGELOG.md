@@ -26,8 +26,10 @@
   authoritative selected presentation, and copy exact text returned by Orbit after the drag.
 - Explain bounded attachment, frame, and connection failures in the client and
   accessibility tree, preserve Orbit's input, protocol, and terminal failure classes,
-  distinguish socket failures from invalid messages, retry interrupted reads,
-  and keep unrelated traffic from erasing notices.
+  distinguish retryable socket failures from terminal invalid messages and resource
+  failures, retry interrupted reads, automatically recover the same selected live
+  endpoint with bounded backoff while retaining the last coherent scene, and keep
+  unrelated traffic from erasing notices.
 - Preserve resize and pointer readiness across queue and surface failures, report
   exact rendered grid geometry, and render Orbit colors in its declared space.
 - Keep sustained complete-frame rendering within the accepted Linux CPU and
