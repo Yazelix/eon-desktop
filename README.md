@@ -75,9 +75,10 @@ replacement or authoritative offline state cancels obsolete retry state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
 and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
-available. Wheel over the tab strip or a pane header to reach clipped headers
-without scrolling the terminal. In standalone mode these keys remain Orbit
-input.
+available. Pane headers show pane identity and offline state; Session mappings
+remain in Eon diagnostics. Wheel over the tab strip or a pane header to reach
+clipped headers without scrolling the terminal. In standalone mode these keys
+remain Orbit input.
 
 Wheel or trackpad movement scrolls through Orbit-owned retained history. Hold
 Shift while dragging the left mouse button to select cells, then press
@@ -121,11 +122,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 131 |
+| README | 132 |
 | Contracts and references | 183 |
 | Crate decisions | 121 |
-| Changelog | 41 |
-| Rust source, including unit tests | 6,749 |
+| Changelog | 43 |
+| Rust source, including unit tests | 6,751 |
 | Rust integration tests | 565 |
 | Cargo manifest | 20 |
-| **Total** | **8,226** |
+| **Total** | **8,231** |

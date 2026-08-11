@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep Eon workspace pane headers focused on pane identity and offline state
+  while retaining Session mappings in EONW and Eon diagnostics.
 - Preserve Shift-produced layout text, including punctuation and non-ASCII
   characters, through Kitty keyboard mode without changing modified shortcuts.
 - Accept `--no-decorations` at launch while retaining decorated windows as the

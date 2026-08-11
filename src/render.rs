@@ -667,11 +667,7 @@ impl Renderer {
                     accent,
                 );
             }
-            let label = if pane.live {
-                format!("{}  {}", pane.id, pane.session)
-            } else {
-                format!("{}  {}  offline", pane.id, pane.session)
-            };
+            let label = pane.label();
             self.push_text_clipped(
                 &label,
                 pane.rect.left + self.metrics.padding,

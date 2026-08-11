@@ -113,11 +113,7 @@ impl Snapshot {
             nodes.push((PANE_PANEL, panel));
             for (index, pane) in workspace.panes.iter().enumerate() {
                 let mut node = Node::new(Role::Button);
-                node.set_label(if pane.live {
-                    format!("{} {}", pane.id, pane.session)
-                } else {
-                    format!("{} {} offline", pane.id, pane.session)
-                });
+                node.set_label(pane.label());
                 node.set_selected(pane.selected);
                 node.set_expanded(pane.selected);
                 node.set_bounds(rect(pane.rect));
@@ -449,7 +445,7 @@ mod tests {
                                 id: "pane-1".into(),
                                 session: "session-1".into(),
                                 endpoint: b"/run/eon/one.sock".to_vec(),
-                                live: true,
+                                live: false,
                             },
                             Pane {
                                 id: "pane-2".into(),
@@ -510,6 +506,8 @@ mod tests {
             &[pane_id(0), pane_id(1), CONTENT]
         );
         assert_eq!(node(tab_id(0)).role(), Role::Tab);
+        assert_eq!(node(pane_id(0)).label(), Some("pane-1 offline"));
+        assert_eq!(node(pane_id(1)).label(), Some("pane-2"));
         assert_eq!(node(pane_id(1)).role(), Role::Button);
         assert_eq!(node(pane_id(1)).is_expanded(), Some(true));
         assert_eq!(node(CONTENT).bounds(), Some(terminal_bounds));

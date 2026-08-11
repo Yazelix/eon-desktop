@@ -56,10 +56,19 @@ pub struct WorkspaceTab {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspacePane {
     pub id: String,
-    pub session: String,
     pub live: bool,
     pub selected: bool,
     pub rect: SceneRect,
+}
+
+impl WorkspacePane {
+    pub(crate) fn label(&self) -> String {
+        if self.live {
+            self.id.clone()
+        } else {
+            format!("{} offline", self.id)
+        }
+    }
 }
 
 /// Native workspace target at one physical point.
@@ -175,7 +184,6 @@ impl WorkspaceScene {
             .enumerate()
             .map(|(index, pane)| WorkspacePane {
                 id: pane.id.clone(),
-                session: pane.session.clone(),
                 live: pane.live,
                 selected: index == selected_pane,
                 rect: SceneRect {
