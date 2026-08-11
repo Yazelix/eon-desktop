@@ -60,6 +60,13 @@ For an Eon workspace, pass the initial Orbit socket followed by the EONW socket:
 cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
 ```
 
+Pass `--no-decorations` to request a window without its native title bar. The
+default remains decorated:
+
+```sh
+cargo run --locked -- --no-decorations /path/to/orbit.sock /path/to/eon.sock
+```
+
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
@@ -94,8 +101,9 @@ cargo clippy --locked --all-targets -- -D warnings
 ## Exclusions
 
 Arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
-popups, settings, visual effects, configuration, plugins, remote and web access,
-macOS implementation, packaging, and distribution are outside this slice.
+popups, settings, visual effects, persistent configuration, plugins, remote and
+web access, macOS implementation, packaging, and distribution are outside this
+slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
 text-clipboard effect. macOS remains an architectural target, not an
@@ -113,11 +121,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 405 |
-| README | 123 |
+| README | 131 |
 | Contracts and references | 183 |
 | Crate decisions | 121 |
-| Changelog | 37 |
-| Rust source, including unit tests | 6,653 |
+| Changelog | 39 |
+| Rust source, including unit tests | 6,710 |
 | Rust integration tests | 565 |
 | Cargo manifest | 20 |
-| **Total** | **8,107** |
+| **Total** | **8,174** |

@@ -40,6 +40,7 @@ type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
+const USAGE: &str = "usage: yazelix-venus [--no-decorations] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 struct OrbitRetry {
     deadline: Option<Instant>,
@@ -101,6 +102,7 @@ struct WindowState {
 struct Application {
     orbit_socket: PathBuf,
     workspace_socket: Option<PathBuf>,
+    decorations: bool,
     proxy: EventLoopProxy<UserEvent>,
     window: Option<WindowState>,
     transport: Option<Transport>,
@@ -129,11 +131,13 @@ impl Application {
     fn new(
         orbit_socket: PathBuf,
         workspace_socket: Option<PathBuf>,
+        decorations: bool,
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
         Self {
             orbit_socket,
             workspace_socket,
+            decorations,
             proxy,
             window: None,
             transport: None,
@@ -163,6 +167,7 @@ impl Application {
         let attributes = Window::default_attributes()
             .with_title("Venus")
             .with_inner_size(LogicalSize::new(960.0, 600.0))
+            .with_decorations(self.decorations)
             .with_visible(false);
         #[cfg(target_os = "linux")]
         let attributes = if event_loop.is_wayland() {
@@ -1154,22 +1159,49 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 }
 
 fn main() -> Result {
-    let (orbit_socket, workspace_socket) = socket_arguments()?;
+    let arguments = launch_arguments(env::args_os().skip(1))?;
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
-    let mut application =
-        Application::new(orbit_socket, workspace_socket, event_loop.create_proxy());
+    let mut application = Application::new(
+        arguments.orbit_socket,
+        arguments.workspace_socket,
+        arguments.decorations,
+        event_loop.create_proxy(),
+    );
     event_loop.run_app(&mut application)?;
     Ok(())
 }
 
-fn socket_arguments() -> Result<(PathBuf, Option<PathBuf>)> {
-    let mut arguments = env::args_os().skip(1);
-    let orbit = arguments.next().map(PathBuf::from);
-    let workspace = arguments.next().map(PathBuf::from);
-    if arguments.next().is_some() {
-        return Err("usage: yazelix-venus [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]".into());
+#[derive(Debug)]
+struct LaunchArguments {
+    orbit_socket: PathBuf,
+    workspace_socket: Option<PathBuf>,
+    decorations: bool,
+}
+
+fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<LaunchArguments> {
+    let mut orbit_socket = None;
+    let mut workspace_socket = None;
+    let mut decorations = true;
+
+    for argument in arguments {
+        if argument == "--no-decorations" {
+            decorations = false;
+        } else if argument.as_encoded_bytes().starts_with(b"-") {
+            return Err(USAGE.into());
+        } else if orbit_socket.is_none() {
+            orbit_socket = Some(PathBuf::from(argument));
+        } else if workspace_socket.is_none() {
+            workspace_socket = Some(PathBuf::from(argument));
+        } else {
+            return Err(USAGE.into());
+        }
     }
-    Ok((orbit.map_or_else(default_socket_path, Ok)?, workspace))
+
+    Ok(LaunchArguments {
+        orbit_socket: orbit_socket.map_or_else(default_socket_path, Ok)?,
+        workspace_socket,
+        decorations,
+    })
 }
 
 fn default_socket_path() -> Result<PathBuf> {
@@ -1188,6 +1220,31 @@ fn default_socket_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_arguments_preserve_the_default_and_reject_invalid_input() {
+        let parse = |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from));
+
+        let default = parse(&[]).unwrap();
+        assert!(default.decorations && default.workspace_socket.is_none());
+
+        let borderless = parse(&["--no-decorations"]).unwrap();
+        assert!(!borderless.decorations && borderless.workspace_socket.is_none());
+
+        let borderless = parse(&["orbit.sock", "--no-decorations"]).unwrap();
+        assert!(!borderless.decorations);
+        assert_eq!(borderless.orbit_socket, PathBuf::from("orbit.sock"));
+        assert_eq!(borderless.workspace_socket, None);
+
+        let borderless = parse(&["--no-decorations", "orbit.sock", "eon.sock"]).unwrap();
+        assert!(!borderless.decorations);
+        assert_eq!(borderless.orbit_socket, PathBuf::from("orbit.sock"));
+        assert_eq!(borderless.workspace_socket, Some(PathBuf::from("eon.sock")));
+
+        for invalid in [&["--unknown"][..], &["one", "two", "three"][..]] {
+            assert_eq!(parse(invalid).unwrap_err().to_string(), USAGE);
+        }
+    }
 
     #[test]
     fn surface_measurements_match_orbit_invariants() {

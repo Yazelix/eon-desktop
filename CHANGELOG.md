@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Accept `--no-decorations` at launch while retaining decorated windows as the
+  default.
 - Materialize accepted Eon workspace snapshots as a horizontally scrollable tab
   strip and a vertically scrollable accordion that shows every fitting pane
   header around one expanded terminal, route pointer, Alt+H/L and Alt+K/J
