@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Render regular, bold, and italic terminal descenders completely inside each
-  cell row while preserving exact grid advances and row clipping.
+- Render terminal `g`, `j`, `p`, `q`, and `y` descenders in regular, bold, and
+  italic text inside each cell row while preserving grid advances and clipping.
 - Keep Eon workspace pane headers focused on pane identity and offline state
   while retaining Session mappings in EONW and Eon diagnostics.
 - Preserve Shift-produced layout text, including punctuation and non-ASCII
