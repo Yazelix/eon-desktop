@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve Shift-produced layout text, including punctuation and non-ASCII
+  characters, through Kitty keyboard mode without changing modified shortcuts.
 - Accept `--no-decorations` at launch while retaining decorated windows as the
   default.
 - Materialize accepted Eon workspace snapshots as a horizontally scrollable tab

@@ -82,6 +82,12 @@ impl InputState {
             WinitPhysicalKey::Code(code) => Some(code),
             WinitPhysicalKey::Unidentified(_) => None,
         };
+        let text = event.text.as_deref().and_then(key_text);
+        let (unshifted_codepoint, consumed_modifiers) = layout_metadata(
+            self.modifiers,
+            text.as_deref(),
+            event.key_without_modifiers(),
+        );
         ClientMessage::Key(KeyEvent {
             action: match (event.state, event.repeat) {
                 (ElementState::Released, _) => KeyAction::Release,
@@ -90,10 +96,10 @@ impl InputState {
             },
             key: code.map_or(PhysicalKey::UNIDENTIFIED, physical_key),
             modifiers: self.modifiers,
-            consumed_modifiers: Modifiers::empty(),
+            consumed_modifiers,
             composing: self.composing,
-            text: event.text.as_deref().and_then(key_text),
-            unshifted_codepoint: unshifted_codepoint(event.key_without_modifiers()),
+            text,
+            unshifted_codepoint,
         })
     }
 
@@ -551,13 +557,27 @@ fn physical_key(code: KeyCode) -> PhysicalKey {
     }
 }
 
-fn unshifted_codepoint(key: Key) -> Option<char> {
-    let Key::Character(text) = key else {
-        return None;
+fn layout_metadata(
+    modifiers: Modifiers,
+    text: Option<&str>,
+    key: Key,
+) -> (Option<char>, Modifiers) {
+    let Key::Character(unshifted_text) = key else {
+        return (None, Modifiers::empty());
     };
-    let mut characters = text.chars();
-    let codepoint = characters.next()?;
-    characters.next().is_none().then_some(codepoint)
+    // Other modifiers can also produce layout text, so infer only Shift by itself.
+    let consumed = if modifiers == Modifiers::SHIFT
+        && text.is_some_and(|text| text != unshifted_text.as_str())
+    {
+        Modifiers::SHIFT
+    } else {
+        Modifiers::empty()
+    };
+    let mut characters = unshifted_text.chars();
+    (
+        characters.next().filter(|_| characters.next().is_none()),
+        consumed,
+    )
 }
 
 fn coordinates(x: f64, y: f64) -> Option<(f32, f32)> {
@@ -608,12 +628,31 @@ mod tests {
     }
 
     #[test]
-    fn accepts_one_layout_derived_unshifted_codepoint() {
-        assert_eq!(unshifted_codepoint(Key::Character("ч".into())), Some('ч'));
-        assert_eq!(unshifted_codepoint(Key::Character("ss".into())), None);
+    fn derives_layout_metadata_without_a_keyboard_map() {
+        let character = |modifiers, text, unshifted: &str| {
+            layout_metadata(modifiers, text, Key::Character(unshifted.into()))
+        };
+        for (text, unshifted, expected) in [
+            ("?", "/", (Some('/'), Modifiers::SHIFT)),
+            ("Ч", "ч", (Some('ч'), Modifiers::SHIFT)),
+            ("SS", "ss", (None, Modifiers::SHIFT)),
+            (" ", " ", (Some(' '), Modifiers::empty())),
+        ] {
+            assert_eq!(character(Modifiers::SHIFT, Some(text), unshifted), expected);
+        }
+        for modifier in [Modifiers::CTRL, Modifiers::ALT, Modifiers::SUPER] {
+            assert_eq!(
+                character(Modifiers::SHIFT.union(modifier), Some("?"), "/"),
+                (Some('/'), Modifiers::empty())
+            );
+        }
         assert_eq!(
-            unshifted_codepoint(Key::Named(winit::keyboard::NamedKey::Enter)),
-            None
+            layout_metadata(
+                Modifiers::SHIFT,
+                Some("?"),
+                Key::Named(winit::keyboard::NamedKey::Enter),
+            ),
+            (None, Modifiers::empty())
         );
     }
 
