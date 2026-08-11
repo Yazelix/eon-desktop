@@ -71,6 +71,22 @@ pub struct CellMetrics {
     pub padding: f32,
 }
 
+#[derive(Clone, Copy)]
+struct CellFont {
+    size: f32,
+    letter_spacing: f32,
+    box_size: f32,
+    box_letter_spacing: f32,
+}
+
+impl CellFont {
+    fn attrs(self) -> Attrs<'static> {
+        Attrs::new()
+            .family(Family::Monospace)
+            .letter_spacing(self.letter_spacing)
+    }
+}
+
 impl CellMetrics {
     #[must_use]
     pub fn for_scale(scale_factor: f64) -> Self {
@@ -145,7 +161,7 @@ pub struct Renderer {
     content_key: Option<ContentKey>,
     clear: wgpu::Color,
     metrics: CellMetrics,
-    cell_font_size: f32,
+    cell_font: CellFont,
     window: Arc<Window>,
 }
 
@@ -251,7 +267,7 @@ impl Renderer {
 
         let mut font_system = FontSystem::new();
         let metrics = CellMetrics::for_scale(window.scale_factor());
-        let cell_font_size = fitted_cell_font_size(&mut font_system, metrics);
+        let cell_font = fitted_cell_font(&mut font_system, metrics);
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
@@ -283,7 +299,7 @@ impl Renderer {
             content_key: None,
             clear: color(DEFAULT_BACKGROUND, srgb_target),
             metrics,
-            cell_font_size,
+            cell_font,
             window,
         })
     }
@@ -304,7 +320,7 @@ impl Renderer {
         self.config.height = size.height;
         let metrics = CellMetrics::for_scale(scale_factor);
         if metrics != self.metrics {
-            self.cell_font_size = fitted_cell_font_size(&mut self.font_system, metrics);
+            self.cell_font = fitted_cell_font(&mut self.font_system, metrics);
             self.metrics = metrics;
         }
         self.surface.configure(&self.device, &self.config);
@@ -806,13 +822,13 @@ impl Renderer {
             foreground,
             kind,
         );
-        if self.text.len() > previous_len
-            && let Some(text) = self.text.last_mut()
-        {
-            text.bound_left = bounds.left.floor() as i32;
-            text.bound_top = bounds.top.floor() as i32;
-            text.right = bounds.right().ceil() as i32;
-            text.bottom = bounds.bottom().ceil() as i32;
+        if self.text.len() > previous_len {
+            for text in &mut self.text[previous_len..] {
+                text.bound_left = bounds.left.floor() as i32;
+                text.bound_top = bounds.top.floor() as i32;
+                text.right = bounds.right().ceil() as i32;
+                text.bottom = bounds.bottom().ceil() as i32;
+            }
         }
         width
     }
@@ -833,21 +849,16 @@ impl Renderer {
         }
         let (font_size, line_height, attrs, monospace_width, wrap, alpha) = match kind {
             DrawStyleKind::Cell(style) => {
-                let mut attrs = Attrs::new().family(Family::Monospace);
-                if style.bold {
-                    attrs = attrs.weight(Weight::BOLD);
-                }
-                if style.italic {
-                    attrs = attrs.style(Style::Italic);
-                }
-                (
-                    self.cell_font_size,
-                    self.metrics.height,
-                    attrs,
-                    Some(self.metrics.width),
-                    Wrap::None,
-                    if style.faint { 150 } else { 255 },
-                )
+                self.push_cell_text(
+                    text,
+                    left,
+                    top,
+                    layout_width,
+                    layout_height,
+                    foreground,
+                    style,
+                );
+                return 0.0;
             }
             DrawStyleKind::Heading => (
                 self.metrics.font_size * 1.15,
@@ -858,9 +869,9 @@ impl Renderer {
                 255,
             ),
             DrawStyleKind::Preedit => (
-                self.cell_font_size,
+                self.cell_font.size,
                 self.metrics.height,
-                Attrs::new().family(Family::Monospace),
+                self.cell_font.attrs(),
                 Some(self.metrics.width),
                 Wrap::None,
                 255,
@@ -898,6 +909,70 @@ impl Renderer {
             color: Color::rgba(foreground.r, foreground.g, foreground.b, alpha),
         });
         measured_width
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_cell_text(
+        &mut self,
+        text: &str,
+        left: f32,
+        top: f32,
+        layout_width: f32,
+        layout_height: f32,
+        foreground: SceneColor,
+        style: DrawStyle,
+    ) {
+        let segments = cell_text_segments(text);
+        let mut attrs = self.cell_font.attrs();
+        if style.bold {
+            attrs = attrs.weight(Weight::BOLD);
+        }
+        if style.italic {
+            attrs = attrs.style(Style::Italic);
+        }
+        let box_attrs = attrs
+            .clone()
+            .metrics(Metrics::new(self.cell_font.box_size, self.metrics.height))
+            .letter_spacing(self.cell_font.box_letter_spacing);
+        for box_drawing in [false, true] {
+            if !segments
+                .iter()
+                .any(|(_, segment_is_box)| *segment_is_box == box_drawing)
+            {
+                continue;
+            }
+            let mut buffer = Buffer::new(
+                &mut self.font_system,
+                Metrics::new(self.cell_font.size, self.metrics.height),
+            );
+            buffer.set_size(Some(layout_width.max(1.0)), Some(layout_height.max(1.0)));
+            buffer.set_wrap(Wrap::None);
+            buffer.set_monospace_width(Some(self.metrics.width));
+            set_cell_layer(
+                &mut buffer,
+                text,
+                &segments,
+                &attrs,
+                &box_attrs,
+                box_drawing,
+            );
+            buffer.shape_until_scroll(&mut self.font_system, false);
+            self.text.push(PlacedText {
+                buffer,
+                left,
+                top,
+                right: (left + layout_width).ceil() as i32,
+                bottom: (top + layout_height).ceil() as i32,
+                bound_left: left.floor() as i32,
+                bound_top: top.floor() as i32,
+                color: Color::rgba(
+                    foreground.r,
+                    foreground.g,
+                    foreground.b,
+                    if style.faint { 150 } else { 255 },
+                ),
+            });
+        }
     }
 
     fn upload_vertices(&mut self, bytes: &[u8]) {
@@ -939,7 +1014,7 @@ fn shaped_preedit_placement(buffer: &Buffer) -> (f32, f32) {
     (-left, right - left)
 }
 
-fn fitted_cell_font_size(font_system: &mut FontSystem, metrics: CellMetrics) -> f32 {
+fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellFont {
     let mut buffer = Buffer::new(font_system, Metrics::new(metrics.font_size, metrics.height));
     buffer.set_wrap(Wrap::None);
     buffer.set_text(
@@ -953,11 +1028,77 @@ fn fitted_cell_font_size(font_system: &mut FontSystem, metrics: CellMetrics) -> 
         .and_then(|lines| lines.first())
         .map(|line| line.w)
         .filter(|width| width.is_finite() && *width > 0.0);
-    advance.map_or(metrics.font_size, |advance| {
-        (metrics.font_size * metrics.width / advance)
-            .round()
-            .max(1.0)
-    })
+    advance.map_or(
+        CellFont {
+            size: metrics.font_size,
+            letter_spacing: 0.0,
+            box_size: metrics.font_size,
+            box_letter_spacing: 0.0,
+        },
+        |advance| {
+            let fitted_size = (metrics.font_size * metrics.width / advance)
+                .round()
+                .max(1.0);
+            let size = (fitted_size - 1.0).max(1.0);
+            let box_size = fitted_size + 1.0;
+            CellFont {
+                size,
+                letter_spacing: metrics.width / size - advance / metrics.font_size,
+                box_size,
+                box_letter_spacing: metrics.width / box_size - advance / metrics.font_size,
+            }
+        },
+    )
+}
+
+fn cell_text_segments(text: &str) -> Vec<(&str, bool)> {
+    let Some(first) = text.chars().next() else {
+        return Vec::new();
+    };
+    let mut segments = Vec::new();
+    let mut start = 0;
+    let mut box_drawing = is_box_drawing(first);
+    for (index, character) in text.char_indices().skip(1) {
+        let next_box_drawing = is_box_drawing(character);
+        if next_box_drawing != box_drawing {
+            segments.push((&text[start..index], box_drawing));
+            start = index;
+            box_drawing = next_box_drawing;
+        }
+    }
+    segments.push((&text[start..], box_drawing));
+    segments
+}
+
+fn set_cell_layer(
+    buffer: &mut Buffer,
+    text: &str,
+    segments: &[(&str, bool)],
+    attrs: &Attrs<'static>,
+    box_attrs: &Attrs<'static>,
+    box_drawing: bool,
+) {
+    let hidden = attrs.clone().color(Color::rgba(0, 0, 0, 0));
+    let visible = if box_drawing { box_attrs } else { attrs };
+    buffer.set_rich_text(
+        segments.iter().map(|(segment, segment_is_box)| {
+            (
+                *segment,
+                if *segment_is_box == box_drawing {
+                    visible.clone()
+                } else {
+                    hidden.clone()
+                },
+            )
+        }),
+        attrs,
+        shaping(text),
+        None,
+    );
+}
+
+fn is_box_drawing(character: char) -> bool {
+    ('\u{2500}'..='\u{257f}').contains(&character)
 }
 
 fn shaping(text: &str) -> Shaping {
@@ -1479,22 +1620,17 @@ mod tests {
     #[test]
     fn shaped_preedit_follows_emitted_glyphs_without_charging_combining_marks() {
         let mut font_system = FontSystem::new();
-        let mut metrics = CellMetrics::for_scale(1.25);
-        metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
+        let metrics = CellMetrics::for_scale(1.25);
+        let cell_font = fitted_cell_font(&mut font_system, metrics);
         let mut text_width = |text: &str| {
             let mut buffer = Buffer::new(
                 &mut font_system,
-                Metrics::new(metrics.font_size, metrics.height),
+                Metrics::new(cell_font.size, metrics.height),
             );
             buffer.set_size(Some(100.0), Some(metrics.height));
             buffer.set_wrap(Wrap::None);
             buffer.set_monospace_width(Some(metrics.width));
-            buffer.set_text(
-                text,
-                &Attrs::new().family(Family::Monospace),
-                shaping(text),
-                None,
-            );
+            buffer.set_text(text, &cell_font.attrs(), shaping(text), None);
             buffer.shape_until_scroll(&mut font_system, false);
             let glyphs = buffer
                 .layout_runs()
@@ -1526,41 +1662,59 @@ mod tests {
         fn grid_buffer(
             font_system: &mut FontSystem,
             metrics: CellMetrics,
+            cell_font: CellFont,
             text: &str,
-            attrs: Attrs<'_>,
+            box_drawing: bool,
+            attrs: Attrs<'static>,
         ) -> Buffer {
-            let mut buffer =
-                Buffer::new(font_system, Metrics::new(metrics.font_size, metrics.height));
+            let attrs = attrs.letter_spacing(cell_font.letter_spacing);
+            let box_attrs = attrs
+                .clone()
+                .metrics(Metrics::new(cell_font.box_size, metrics.height))
+                .letter_spacing(cell_font.box_letter_spacing);
+            let mut buffer = Buffer::new(font_system, Metrics::new(cell_font.size, metrics.height));
             buffer.set_size(
                 Some(metrics.width * text.chars().count() as f32),
                 Some(metrics.height),
             );
             buffer.set_wrap(Wrap::None);
             buffer.set_monospace_width(Some(metrics.width));
-            buffer.set_text(text, &attrs, shaping(text), None);
+            set_cell_layer(
+                &mut buffer,
+                text,
+                &cell_text_segments(text),
+                &attrs,
+                &box_attrs,
+                box_drawing,
+            );
             buffer.shape_until_scroll(font_system, false);
             buffer
         }
 
         let mut font_system = FontSystem::new();
         for scale in [1.0, 1.25, 1.5, 2.0] {
-            let mut metrics = CellMetrics::for_scale(scale);
-            metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
-            for (text, attrs) in [
-                ("narrow text", Attrs::new().family(Family::Monospace)),
+            let metrics = CellMetrics::for_scale(scale);
+            let cell_font = fitted_cell_font(&mut font_system, metrics);
+            for (text, box_drawing, attrs) in [
+                ("narrow text", false, cell_font.attrs()),
                 (
                     "┌──┬──┐",
-                    Attrs::new()
-                        .family(Family::Monospace)
+                    true,
+                    cell_font
+                        .attrs()
                         .weight(Weight::BOLD)
                         .color(Color::rgb(80, 200, 160)),
                 ),
-                (
-                    "│ab│cd│",
-                    Attrs::new().family(Family::Monospace).style(Style::Italic),
-                ),
+                ("italic text", false, cell_font.attrs().style(Style::Italic)),
             ] {
-                let buffer = grid_buffer(&mut font_system, metrics, text, attrs);
+                let buffer = grid_buffer(
+                    &mut font_system,
+                    metrics,
+                    cell_font,
+                    text,
+                    box_drawing,
+                    attrs,
+                );
                 let glyphs = buffer
                     .layout_runs()
                     .next()
@@ -1577,15 +1731,90 @@ mod tests {
                     );
                 }
             }
+
+            let mixed = "e\u{301}│abc│";
+            let segments = cell_text_segments(mixed);
+            assert_eq!(
+                segments,
+                [
+                    ("e\u{301}", false),
+                    ("│", true),
+                    ("abc", false),
+                    ("│", true)
+                ]
+            );
+            let layer_widths = [false, true].map(|box_drawing| {
+                let buffer = grid_buffer(
+                    &mut font_system,
+                    metrics,
+                    cell_font,
+                    mixed,
+                    box_drawing,
+                    cell_font.attrs(),
+                );
+                shaped_preedit_placement(&buffer).1
+            });
+            for layer_width in layer_widths {
+                assert!(
+                    (layer_width - metrics.width * 6.0).abs() < 0.01,
+                    "mixed combining and box text at scale {scale} occupies {layer_width} instead of {}",
+                    metrics.width * 6.0
+                );
+            }
+            let fallback_widths = [false, true].map(|box_drawing| {
+                let buffer = grid_buffer(
+                    &mut font_system,
+                    metrics,
+                    cell_font,
+                    "אבג│",
+                    box_drawing,
+                    cell_font.attrs(),
+                );
+                shaped_preedit_placement(&buffer).1
+            });
+            assert!(
+                (fallback_widths[0] - fallback_widths[1]).abs() < 0.01,
+                "mixed fallback and box layers diverge at scale {scale}: {fallback_widths:?}"
+            );
+
+            let buffer = grid_buffer(
+                &mut font_system,
+                metrics,
+                cell_font,
+                "│",
+                true,
+                cell_font.attrs(),
+            );
+            let run = buffer
+                .layout_runs()
+                .next()
+                .expect("the vertical border should shape");
+            let glyph = run
+                .glyphs
+                .first()
+                .expect("the vertical border should exist");
+            let physical = glyph.physical((0.0, 0.0), 1.0);
+            let image = SwashCache::new()
+                .get_image_uncached(&mut font_system, physical.cache_key)
+                .expect("the vertical border glyph should rasterize");
+            let top = run.line_y.round() as i32 + physical.y - image.placement.top;
+            let bottom = top + image.placement.height as i32;
+            assert!(
+                top <= 0 && bottom >= metrics.height as i32,
+                "vertical border at scale {scale} occupies {top}..{bottom} in a {} px row",
+                metrics.height
+            );
         }
 
-        let mut metrics = CellMetrics::for_scale(1.0);
-        metrics.font_size = fitted_cell_font_size(&mut font_system, metrics);
+        let metrics = CellMetrics::for_scale(1.0);
+        let cell_font = fitted_cell_font(&mut font_system, metrics);
         let buffer = grid_buffer(
             &mut font_system,
             metrics,
+            cell_font,
             "─────",
-            Attrs::new().family(Family::Monospace),
+            true,
+            cell_font.attrs(),
         );
         let glyphs = buffer
             .layout_runs()
@@ -1610,6 +1839,56 @@ mod tests {
                 "adjacent table-border cells must not expose a gap: {pair:?}"
             );
         }
+    }
+
+    #[test]
+    fn descender_rasters_fit_the_cell_row_at_supported_scales() {
+        let mut font_system = FontSystem::new();
+        let mut swash_cache = SwashCache::new();
+        let mut failures = Vec::new();
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let cell_font = fitted_cell_font(&mut font_system, metrics);
+            for (style, attrs) in [
+                ("regular", cell_font.attrs()),
+                ("bold", cell_font.attrs().weight(Weight::BOLD)),
+                ("italic", cell_font.attrs().style(Style::Italic)),
+            ] {
+                let text = "gjpqy";
+                let mut buffer = Buffer::new(
+                    &mut font_system,
+                    Metrics::new(cell_font.size, metrics.height),
+                );
+                buffer.set_size(
+                    Some(metrics.width * text.chars().count() as f32),
+                    Some(metrics.height),
+                );
+                buffer.set_wrap(Wrap::None);
+                buffer.set_monospace_width(Some(metrics.width));
+                buffer.set_text(text, &attrs, shaping(text), None);
+                buffer.shape_until_scroll(&mut font_system, false);
+                let run = buffer
+                    .layout_runs()
+                    .next()
+                    .expect("the descender corpus should shape");
+                assert_eq!(run.glyphs.len(), text.chars().count());
+                for (character, glyph) in text.chars().zip(run.glyphs) {
+                    let physical = glyph.physical((0.0, 0.0), 1.0);
+                    let image = swash_cache
+                        .get_image_uncached(&mut font_system, physical.cache_key)
+                        .expect("the descender glyph should rasterize");
+                    let top = run.line_y.round() as i32 + physical.y - image.placement.top;
+                    let bottom = top + image.placement.height as i32;
+                    if top < 0 || bottom > metrics.height as i32 {
+                        failures.push(format!(
+                            "{style} {character:?} at scale {scale} occupies {top}..{bottom} in a {} px row",
+                            metrics.height
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 
     #[test]
