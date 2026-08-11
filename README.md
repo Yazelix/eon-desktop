@@ -120,7 +120,7 @@ lock files, and other generated artifacts.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 405 |
+| Agent policy | 416 |
 | README | 131 |
 | Contracts and references | 183 |
 | Crate decisions | 121 |
@@ -128,4 +128,4 @@ lock files, and other generated artifacts.
 | Rust source, including unit tests | 6,749 |
 | Rust integration tests | 565 |
 | Cargo manifest | 20 |
-| **Total** | **8,215** |
+| **Total** | **8,226** |
