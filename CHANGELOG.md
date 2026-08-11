@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Render Unicode Braille cells with distinct dots while preserving adjacent
+  text, box-drawing cells, and authoritative cell-grid bounds.
 - Render terminal `g`, `j`, `p`, `q`, and `y` descenders in regular, bold, and
   italic text inside each cell row while preserving grid advances and clipping.
 - Keep Eon workspace pane headers focused on pane identity and offline state

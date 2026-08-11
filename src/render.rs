@@ -20,6 +20,7 @@ use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::Window};
 const VERTEX_SIZE: u64 = 24;
 #[cfg(test)]
 const VERTICES_PER_QUAD: u32 = 6;
+const BRAILLE_FAMILY: &str = "DejaVu Sans";
 const DEFAULT_BACKGROUND: SceneColor = SceneColor {
     r: 10,
     g: 13,
@@ -934,10 +935,11 @@ impl Renderer {
             .clone()
             .metrics(Metrics::new(self.cell_font.box_size, self.metrics.height))
             .letter_spacing(self.cell_font.box_letter_spacing);
+        let braille_attrs = attrs.clone().family(Family::Name(BRAILLE_FAMILY));
         for box_drawing in [false, true] {
             if !segments
                 .iter()
-                .any(|(_, segment_is_box)| *segment_is_box == box_drawing)
+                .any(|(_, kind)| (*kind == CellTextKind::Box) == box_drawing)
             {
                 continue;
             }
@@ -953,6 +955,7 @@ impl Renderer {
                 text,
                 &segments,
                 &attrs,
+                &braille_attrs,
                 &box_attrs,
                 box_drawing,
             );
@@ -1051,43 +1054,59 @@ fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellF
     )
 }
 
-fn cell_text_segments(text: &str) -> Vec<(&str, bool)> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CellTextKind {
+    Text,
+    Braille,
+    Box,
+}
+
+fn cell_text_kind(character: char) -> CellTextKind {
+    match character {
+        '\u{2500}'..='\u{257f}' => CellTextKind::Box,
+        '\u{2800}'..='\u{28ff}' => CellTextKind::Braille,
+        _ => CellTextKind::Text,
+    }
+}
+
+fn cell_text_segments(text: &str) -> Vec<(&str, CellTextKind)> {
     let Some(first) = text.chars().next() else {
         return Vec::new();
     };
     let mut segments = Vec::new();
     let mut start = 0;
-    let mut box_drawing = is_box_drawing(first);
+    let mut kind = cell_text_kind(first);
     for (index, character) in text.char_indices().skip(1) {
-        let next_box_drawing = is_box_drawing(character);
-        if next_box_drawing != box_drawing {
-            segments.push((&text[start..index], box_drawing));
+        let next_kind = cell_text_kind(character);
+        if next_kind != kind {
+            segments.push((&text[start..index], kind));
             start = index;
-            box_drawing = next_box_drawing;
+            kind = next_kind;
         }
     }
-    segments.push((&text[start..], box_drawing));
+    segments.push((&text[start..], kind));
     segments
 }
 
 fn set_cell_layer(
     buffer: &mut Buffer,
     text: &str,
-    segments: &[(&str, bool)],
+    segments: &[(&str, CellTextKind)],
     attrs: &Attrs<'static>,
+    braille_attrs: &Attrs<'static>,
     box_attrs: &Attrs<'static>,
     box_drawing: bool,
 ) {
     let hidden = attrs.clone().color(Color::rgba(0, 0, 0, 0));
-    let visible = if box_drawing { box_attrs } else { attrs };
     buffer.set_rich_text(
-        segments.iter().map(|(segment, segment_is_box)| {
+        segments.iter().map(|(segment, kind)| {
             (
                 *segment,
-                if *segment_is_box == box_drawing {
-                    visible.clone()
-                } else {
-                    hidden.clone()
+                match (*kind, box_drawing) {
+                    (CellTextKind::Text, false) => attrs.clone(),
+                    (CellTextKind::Braille, false) => braille_attrs.clone(),
+                    (CellTextKind::Box, true) => box_attrs.clone(),
+                    _ => hidden.clone(),
                 },
             )
         }),
@@ -1095,10 +1114,6 @@ fn set_cell_layer(
         shaping(text),
         None,
     );
-}
-
-fn is_box_drawing(character: char) -> bool {
-    ('\u{2500}'..='\u{257f}').contains(&character)
 }
 
 fn shaping(text: &str) -> Shaping {
@@ -1437,6 +1452,40 @@ mod tests {
         }
     }
 
+    fn grid_buffer(
+        font_system: &mut FontSystem,
+        metrics: CellMetrics,
+        cell_font: CellFont,
+        text: &str,
+        box_drawing: bool,
+        attrs: Attrs<'static>,
+    ) -> Buffer {
+        let attrs = attrs.letter_spacing(cell_font.letter_spacing);
+        let box_attrs = attrs
+            .clone()
+            .metrics(Metrics::new(cell_font.box_size, metrics.height))
+            .letter_spacing(cell_font.box_letter_spacing);
+        let braille_attrs = attrs.clone().family(Family::Name(BRAILLE_FAMILY));
+        let mut buffer = Buffer::new(font_system, Metrics::new(cell_font.size, metrics.height));
+        buffer.set_size(
+            Some(metrics.width * text.chars().count() as f32),
+            Some(metrics.height),
+        );
+        buffer.set_wrap(Wrap::None);
+        buffer.set_monospace_width(Some(metrics.width));
+        set_cell_layer(
+            &mut buffer,
+            text,
+            &cell_text_segments(text),
+            &attrs,
+            &braille_attrs,
+            &box_attrs,
+            box_drawing,
+        );
+        buffer.shape_until_scroll(font_system, false);
+        buffer
+    }
+
     #[test]
     fn concealed_cells_draw_no_foreground_elements() {
         let style = DrawStyle {
@@ -1659,38 +1708,6 @@ mod tests {
 
     #[test]
     fn text_runs_follow_the_cell_grid_and_box_borders_connect() {
-        fn grid_buffer(
-            font_system: &mut FontSystem,
-            metrics: CellMetrics,
-            cell_font: CellFont,
-            text: &str,
-            box_drawing: bool,
-            attrs: Attrs<'static>,
-        ) -> Buffer {
-            let attrs = attrs.letter_spacing(cell_font.letter_spacing);
-            let box_attrs = attrs
-                .clone()
-                .metrics(Metrics::new(cell_font.box_size, metrics.height))
-                .letter_spacing(cell_font.box_letter_spacing);
-            let mut buffer = Buffer::new(font_system, Metrics::new(cell_font.size, metrics.height));
-            buffer.set_size(
-                Some(metrics.width * text.chars().count() as f32),
-                Some(metrics.height),
-            );
-            buffer.set_wrap(Wrap::None);
-            buffer.set_monospace_width(Some(metrics.width));
-            set_cell_layer(
-                &mut buffer,
-                text,
-                &cell_text_segments(text),
-                &attrs,
-                &box_attrs,
-                box_drawing,
-            );
-            buffer.shape_until_scroll(font_system, false);
-            buffer
-        }
-
         let mut font_system = FontSystem::new();
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
@@ -1737,10 +1754,10 @@ mod tests {
             assert_eq!(
                 segments,
                 [
-                    ("e\u{301}", false),
-                    ("│", true),
-                    ("abc", false),
-                    ("│", true)
+                    ("e\u{301}", CellTextKind::Text),
+                    ("│", CellTextKind::Box),
+                    ("abc", CellTextKind::Text),
+                    ("│", CellTextKind::Box)
                 ]
             );
             let layer_widths = [false, true].map(|box_drawing| {
@@ -1838,6 +1855,69 @@ mod tests {
                 pair[0].1 >= pair[1].0,
                 "adjacent table-border cells must not expose a gap: {pair:?}"
             );
+        }
+    }
+
+    #[test]
+    fn braille_progress_uses_distinct_packaged_glyphs_on_the_cell_grid() {
+        const SPINNER: &str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+        assert_eq!(
+            cell_text_segments(&format!("{SPINNER}│X")),
+            [
+                (SPINNER, CellTextKind::Braille),
+                ("│", CellTextKind::Box),
+                ("X", CellTextKind::Text),
+            ]
+        );
+
+        let mut font_system = FontSystem::new();
+        let mut swash_cache = SwashCache::new();
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let cell_font = fitted_cell_font(&mut font_system, metrics);
+            for frame in SPINNER.chars() {
+                let text = format!("{frame}│X");
+                let buffer = grid_buffer(
+                    &mut font_system,
+                    metrics,
+                    cell_font,
+                    &text,
+                    false,
+                    cell_font.attrs(),
+                );
+                let run = buffer
+                    .layout_runs()
+                    .next()
+                    .expect("the Braille frame should shape");
+                assert_eq!(run.glyphs.len(), 3);
+                let glyph = &run.glyphs[0];
+                let face = font_system
+                    .db()
+                    .face(glyph.font_id)
+                    .expect("the Braille face should remain loaded");
+                assert!(
+                    face.families.iter().any(|(name, _)| name == BRAILLE_FAMILY),
+                    "{frame} at scale {scale} used {}",
+                    face.post_script_name
+                );
+                let physical = glyph.physical((0.0, 0.0), 1.0);
+                let image = swash_cache
+                    .get_image_uncached(&mut font_system, physical.cache_key)
+                    .expect("the Braille frame should rasterize");
+                let left = physical.x + image.placement.left;
+                let right = left + image.placement.width as i32;
+                let top = run.line_y.round() as i32 + physical.y - image.placement.top;
+                let bottom = top + image.placement.height as i32;
+                assert!(
+                    left >= 0
+                        && right <= metrics.width as i32
+                        && top >= 0
+                        && bottom <= metrics.height as i32,
+                    "{frame} at scale {scale} occupies {left}..{right} by {top}..{bottom} in a {} by {} cell",
+                    metrics.width,
+                    metrics.height
+                );
+            }
         }
     }
 
