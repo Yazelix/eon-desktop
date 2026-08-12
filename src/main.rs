@@ -21,6 +21,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 #[cfg(target_os = "linux")]
 use winit::platform::wayland::{ActiveEventLoopExtWayland, WindowAttributesExtWayland};
 use winit::{
@@ -608,20 +609,41 @@ impl Application {
     }
 
     fn write_clipboard(&mut self, location: ClipboardLocation, text: String) {
-        let result = (|| {
-            if self.clipboard.is_none() {
-                self.clipboard = Some(arboard::Clipboard::new()?);
-            }
-            write_native_clipboard(
-                self.clipboard
-                    .as_mut()
-                    .expect("clipboard initialized above"),
-                location,
-                text,
-            )
-        })();
+        let result = self
+            .clipboard()
+            .and_then(|clipboard| write_native_clipboard(clipboard, location, text));
         self.model
             .set_venus_notice(LocalNoticeSource::Clipboard, clipboard_notice(result));
+    }
+
+    fn clipboard(&mut self) -> std::result::Result<&mut arboard::Clipboard, arboard::Error> {
+        if self.clipboard.is_none() {
+            self.clipboard = Some(arboard::Clipboard::new()?);
+        }
+        Ok(self
+            .clipboard
+            .as_mut()
+            .expect("clipboard initialized above"))
+    }
+
+    fn paste_clipboard(&mut self) {
+        if !self.model.is_attached() {
+            return;
+        }
+        let result = self
+            .clipboard()
+            .map_err(|error| error.to_string())
+            .and_then(|clipboard| clipboard_paste_message(clipboard.get_text()));
+        match result {
+            Ok(message) => {
+                self.send(message);
+            }
+            Err(error) => {
+                self.model
+                    .set_venus_notice(LocalNoticeSource::Clipboard, clipboard_paste_notice(error));
+                self.refresh_client_view();
+            }
+        }
     }
 
     fn send_resize(&mut self) {
@@ -782,6 +804,14 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => {
                 if self.handle_workspace_key(&event) {
+                } else if self.input.consumes_paste_shortcut(
+                    &event.key_without_modifiers(),
+                    event.state,
+                    event.repeat,
+                ) {
+                    if shortcut_is_ready(event.state, event.repeat) {
+                        self.paste_clipboard();
+                    }
                 } else if self.input.consumes_copy_shortcut(
                     event.physical_key,
                     event.state,
@@ -1068,8 +1098,12 @@ fn can_follow_implicit_resize(message: &ClientMessage) -> bool {
     matches!(message, ClientMessage::Mouse(_))
 }
 
-fn copy_is_ready(selecting: bool, state: winit::event::ElementState, repeat: bool) -> bool {
-    !selecting && state == winit::event::ElementState::Pressed && !repeat
+fn shortcut_is_ready(state: ElementState, repeat: bool) -> bool {
+    state == ElementState::Pressed && !repeat
+}
+
+fn copy_is_ready(selecting: bool, state: ElementState, repeat: bool) -> bool {
+    !selecting && shortcut_is_ready(state, repeat)
 }
 
 fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
@@ -1126,6 +1160,26 @@ fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) ->
         |error| format!("Venus could not write the native clipboard: {error}"),
         |()| "Text copied to the native clipboard.".into(),
     )
+}
+
+fn clipboard_paste_message(
+    text: std::result::Result<String, arboard::Error>,
+) -> std::result::Result<ClientMessage, String> {
+    let text = text.map_err(|error| error.to_string())?;
+    if text.is_empty() {
+        return Err("The native clipboard contains no text".into());
+    }
+    if text.len() > session::MAX_PASTE_BYTES {
+        return Err(format!(
+            "Native clipboard text exceeds the {} byte paste limit",
+            session::MAX_PASTE_BYTES
+        ));
+    }
+    Ok(ClientMessage::Paste(text.into_bytes()))
+}
+
+fn clipboard_paste_notice(error: impl std::fmt::Display) -> String {
+    format!("Venus could not paste from the native clipboard: {error}")
 }
 
 fn write_native_clipboard(
@@ -1507,6 +1561,34 @@ mod tests {
         assert_eq!(
             clipboard_notice(Err("display unavailable")),
             "Venus could not write the native clipboard: display unavailable"
+        );
+    }
+
+    #[test]
+    fn native_clipboard_text_becomes_one_bounded_semantic_paste() {
+        let text = "first\n界\0second";
+        assert_eq!(
+            clipboard_paste_message(Ok(text.into())),
+            Ok(ClientMessage::Paste(text.as_bytes().to_vec()))
+        );
+        assert_eq!(
+            clipboard_paste_message(Ok(String::new())).unwrap_err(),
+            "The native clipboard contains no text"
+        );
+        assert_eq!(
+            clipboard_paste_message(Ok("x".repeat(session::MAX_PASTE_BYTES + 1))).unwrap_err(),
+            format!(
+                "Native clipboard text exceeds the {} byte paste limit",
+                session::MAX_PASTE_BYTES
+            )
+        );
+        assert_eq!(
+            clipboard_paste_message(Err(arboard::Error::ContentNotAvailable)).unwrap_err(),
+            arboard::Error::ContentNotAvailable.to_string()
+        );
+        assert_eq!(
+            clipboard_paste_notice("display unavailable"),
+            "Venus could not paste from the native clipboard: display unavailable"
         );
     }
 

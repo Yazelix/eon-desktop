@@ -83,6 +83,8 @@ remain Orbit input.
 Wheel or trackpad movement scrolls through Orbit-owned retained history. Hold
 Shift while dragging the left mouse button to select cells, then press
 Ctrl+Shift+C to copy the exact bounded text returned by Orbit.
+Press Ctrl+Shift+V or the native Paste key to read the ordinary clipboard once.
+Orbit applies normal or bracketed paste from its authoritative terminal mode.
 Terminal programs can also request bounded text writes through Orbit. On Linux,
 Venus sends the standard destination to the ordinary clipboard and sends the
 selection or primary destination to the primary clipboard.
@@ -124,11 +126,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 134 |
-| Contracts and references | 196 |
-| Crate decisions | 123 |
-| Changelog | 49 |
-| Rust source, including unit tests | 7,173 |
+| README | 136 |
+| Contracts and references | 210 |
+| Crate decisions | 126 |
+| Changelog | 51 |
+| Rust source, including unit tests | 7,310 |
 | Rust integration tests | 591 |
 | Cargo manifest | 20 |
-| **Total** | **8,702** |
+| **Total** | **8,860** |

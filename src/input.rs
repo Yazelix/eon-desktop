@@ -23,6 +23,7 @@ pub struct InputState {
     scroll: (f64, f64),
     selection_cell: Option<ViewportCell>,
     copy_pressed: bool,
+    paste_pressed: bool,
     workspace_shortcuts: Vec<KeyCode>,
 }
 
@@ -64,6 +65,7 @@ impl InputState {
             self.reset_scroll();
             self.cancel_selection();
             self.copy_pressed = false;
+            self.paste_pressed = false;
             self.workspace_shortcuts.clear();
             self.clear_composition();
         }
@@ -330,6 +332,33 @@ impl InputState {
             }
             ElementState::Released if self.copy_pressed => {
                 self.copy_pressed = false;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    #[must_use]
+    pub fn consumes_paste_shortcut(
+        &mut self,
+        key: &Key,
+        state: ElementState,
+        repeat: bool,
+    ) -> bool {
+        let recognized = match key {
+            Key::Named(winit::keyboard::NamedKey::Paste) => true,
+            Key::Character(text) if text.eq_ignore_ascii_case("v") => {
+                self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT)
+            }
+            _ => return false,
+        };
+        match state {
+            ElementState::Pressed if self.paste_pressed || (!repeat && recognized) => {
+                self.paste_pressed = true;
+                true
+            }
+            ElementState::Released if self.paste_pressed => {
+                self.paste_pressed = false;
                 true
             }
             _ => false,
@@ -920,6 +949,32 @@ mod tests {
         assert_eq!(key_text("界"), Some("界".into()));
         assert_eq!(key_text("\r"), None);
         assert_eq!(key_text("\u{f700}"), None);
+    }
+
+    #[test]
+    fn paste_shortcuts_are_one_shot_without_consuming_control_v() {
+        use winit::event::ElementState::{Pressed, Released};
+        use winit::keyboard::NamedKey;
+
+        let mut input = InputState::default();
+        let v = Key::Character("v".into());
+        input.set_modifiers(ModifiersState::CONTROL);
+        assert!(!input.consumes_paste_shortcut(&v, Pressed, false));
+
+        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
+        assert!(input.consumes_paste_shortcut(&v, Pressed, false));
+        assert!(input.consumes_paste_shortcut(&v, Pressed, true));
+        input.set_modifiers(ModifiersState::empty());
+        assert!(input.consumes_paste_shortcut(&v, Released, false));
+        assert!(!input.consumes_paste_shortcut(&v, Released, false));
+
+        let paste = Key::Named(NamedKey::Paste);
+        assert!(input.consumes_paste_shortcut(&paste, Pressed, false));
+        input.focus(false);
+        assert!(!input.consumes_paste_shortcut(&paste, Released, false));
+
+        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT | ModifiersState::ALT);
+        assert!(!input.consumes_paste_shortcut(&v, Pressed, false));
     }
 
     #[test]

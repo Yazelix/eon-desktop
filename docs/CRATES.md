@@ -4,8 +4,9 @@
 shape. `ven-upt.2` implements it with exact direct versions and features in
 `Cargo.toml`. `ven-4sn` adds the minimum native text-clipboard owner.
 `ven-consume-terminal-clipboard-writes-zgh` advances the canonical session
-consumer to ORBS v3. `ven-c87` adds the exact Eon-owned EONW v1 consumer without
-a local protocol mirror.
+consumer to ORBS v3. `ven-native-clipboard-paste-uas` reuses that clipboard
+owner for explicit reads. `ven-c87` adds the exact Eon-owned EONW v1 consumer
+without a local protocol mirror.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
@@ -14,7 +15,7 @@ a local protocol mirror.
 | Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Active | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
-| Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host writes canonical bounded `CopiedText` and `ClipboardWrite` effects and retains the platform clipboard owner. It never reads or reconstructs terminal text. Native Wayland without data-control and macOS remain unproved. |
+| Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host reads ordinary clipboard text once after an explicit paste shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects. Orbit owns paste encoding and terminal text. Native Wayland without data-control and macOS remain unproved. |
 
 ## Measured comparison
 
@@ -72,9 +73,10 @@ arboard 3.6.1 owns the operation the existing stack and Rust standard library do
 not provide: host a native plain-text clipboard value. Image support and default
 features are disabled. Linux maps Orbit's standard destination to arboard's
 ordinary clipboard and maps selection or primary to arboard's primary clipboard.
-The code adds no dependency, feature, native library, or Nix runtime input.
-Xwayland clipboard dogfood covers exact UTF-8 selection text; terminal-emitted
-writes still need native acceptance.
+Ctrl+Shift+V or the native Paste key reads ordinary UTF-8 clipboard text once
+and sends one canonical bounded paste to Orbit. The code adds no dependency,
+feature, native library, or Nix runtime input. Xwayland clipboard dogfood covers
+exact UTF-8 selection text; paste and terminal writes need native acceptance.
 
 External `wl-copy`, `xclip`, and `xsel` commands were rejected as undeclared
 runtime dependencies. Handwritten X11, Wayland, and AppKit ownership was
@@ -101,8 +103,9 @@ inputs. It owns no socket, window, GPU, or terminal handle.
 The native host maps winit events only into `orbit-protocol` values, keeps
 transport outside the renderer, and sends typed wakeups through
 `EventLoopProxy`. The selected shape adds no general async application runtime.
-The same host owns one lazy native clipboard handle and writes the exact
-`CopiedText` or `ClipboardWrite` effect returned by Orbit.
+The same host owns one lazy native clipboard handle. It reads after an explicit
+paste shortcut and writes the exact `CopiedText` or `ClipboardWrite` effect
+returned by Orbit.
 
 Venus derives drawing, accessibility, and deterministic contract snapshots from
 the latest accepted scene. After a successful GPU present, the renderer

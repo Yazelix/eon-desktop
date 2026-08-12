@@ -116,6 +116,19 @@ native accumulation. Exact AccessKit 0.24.1 text runs and text positions support
 selection derived from the accepted scene. Exact arboard 3.6.1 supplies the
 isolated native text write selected in `docs/CRATES.md`.
 
+## Required for native paste
+
+`ven-native-clipboard-paste-uas` consumes Orbit `ORB-C5` at accepted proof
+`9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`. Orbit accepts one canonical paste
+up to 1 MiB and applies normal or bracketed terminal encoding. Venus passes that
+message unchanged and keeps no terminal paste policy.
+
+Exact winit 0.30.13 supplies logical Ctrl+Shift+V and `NamedKey::Paste`. Exact
+arboard 3.6.1 reads UTF-8 from the ordinary clipboard and reports empty or
+non-text content. Mars `21109e3ebc24b63da11bae644dfb9bab28ce0e18` confirms
+the same Linux shortcuts. Venus reuses no Mars binding, clipboard, or terminal
+code.
+
 `ven-consume-terminal-clipboard-writes-zgh` consumes Orbit `ORB-C11` and
 canonical ORBS v3 at proof `3ee7c80005f3d2bbe81e539799327803716f6174`.
 Orbit supplies bounded UTF-8 and the normalized standard, selection, or primary
