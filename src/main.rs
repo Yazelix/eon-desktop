@@ -806,6 +806,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 if self.handle_workspace_key(&event) {
                 } else if self.input.consumes_paste_shortcut(
                     &event.key_without_modifiers(),
+                    event.physical_key,
                     event.state,
                     event.repeat,
                 ) {

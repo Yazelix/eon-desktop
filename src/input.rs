@@ -23,8 +23,7 @@ pub struct InputState {
     scroll: (f64, f64),
     selection_cell: Option<ViewportCell>,
     copy_pressed: bool,
-    paste_v_pressed: bool,
-    paste_named_pressed: bool,
+    paste_shortcuts: Vec<WinitPhysicalKey>,
     workspace_shortcuts: Vec<KeyCode>,
 }
 
@@ -66,8 +65,7 @@ impl InputState {
             self.reset_scroll();
             self.cancel_selection();
             self.copy_pressed = false;
-            self.paste_v_pressed = false;
-            self.paste_named_pressed = false;
+            self.paste_shortcuts.clear();
             self.workspace_shortcuts.clear();
             self.clear_composition();
         }
@@ -344,24 +342,29 @@ impl InputState {
     pub fn consumes_paste_shortcut(
         &mut self,
         key: &Key,
+        physical_key: WinitPhysicalKey,
         state: ElementState,
         repeat: bool,
     ) -> bool {
-        let v_recognized = self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT);
-        let (pressed, recognized) = match key {
-            Key::Named(winit::keyboard::NamedKey::Paste) => (&mut self.paste_named_pressed, true),
+        let recognized = match key {
+            Key::Named(winit::keyboard::NamedKey::Paste) => true,
             Key::Character(text) if text.eq_ignore_ascii_case("v") => {
-                (&mut self.paste_v_pressed, v_recognized)
+                self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT)
             }
-            _ => return false,
+            _ => false,
         };
-        match state {
-            ElementState::Pressed if *pressed || (!repeat && recognized) => {
-                *pressed = true;
+        let pressed = self
+            .paste_shortcuts
+            .iter()
+            .position(|candidate| *candidate == physical_key);
+        match (state, pressed) {
+            (ElementState::Pressed, None) if !repeat && recognized => {
+                self.paste_shortcuts.push(physical_key);
                 true
             }
-            ElementState::Released if *pressed => {
-                *pressed = false;
+            (ElementState::Pressed, Some(_)) => true,
+            (ElementState::Released, Some(index)) => {
+                self.paste_shortcuts.swap_remove(index);
                 true
             }
             _ => false,
@@ -961,29 +964,36 @@ mod tests {
 
         let mut input = InputState::default();
         let v = Key::Character("v".into());
+        let v_physical = WinitPhysicalKey::Code(KeyCode::KeyV);
         input.set_modifiers(ModifiersState::CONTROL);
-        assert!(!input.consumes_paste_shortcut(&v, Pressed, false));
+        assert!(!input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
-        assert!(input.consumes_paste_shortcut(&v, Pressed, false));
-        assert!(input.consumes_paste_shortcut(&v, Pressed, true));
+        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
+        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, true));
         input.set_modifiers(ModifiersState::empty());
-        assert!(input.consumes_paste_shortcut(&v, Released, false));
-        assert!(!input.consumes_paste_shortcut(&v, Released, false));
+        assert!(input.consumes_paste_shortcut(&v, v_physical, Released, false));
+        assert!(!input.consumes_paste_shortcut(&v, v_physical, Released, false));
 
         let paste = Key::Named(NamedKey::Paste);
-        assert!(input.consumes_paste_shortcut(&paste, Pressed, false));
+        let paste_physical = WinitPhysicalKey::Code(KeyCode::Paste);
+        assert!(input.consumes_paste_shortcut(&paste, paste_physical, Pressed, false));
         input.focus(false);
-        assert!(!input.consumes_paste_shortcut(&paste, Released, false));
+        assert!(!input.consumes_paste_shortcut(&paste, paste_physical, Released, false));
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
-        assert!(input.consumes_paste_shortcut(&v, Pressed, false));
-        assert!(input.consumes_paste_shortcut(&paste, Pressed, false));
-        assert!(input.consumes_paste_shortcut(&v, Released, false));
-        assert!(input.consumes_paste_shortcut(&paste, Released, false));
+        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
+        assert!(input.consumes_paste_shortcut(&paste, paste_physical, Pressed, false));
+        assert!(input.consumes_paste_shortcut(&v, v_physical, Released, false));
+        assert!(input.consumes_paste_shortcut(&paste, paste_physical, Released, false));
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT | ModifiersState::ALT);
-        assert!(!input.consumes_paste_shortcut(&v, Pressed, false));
+        assert!(!input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
+
+        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
+        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
+        let changed_layout = Key::Character("x".into());
+        assert!(input.consumes_paste_shortcut(&changed_layout, v_physical, Released, false));
     }
 
     #[test]
