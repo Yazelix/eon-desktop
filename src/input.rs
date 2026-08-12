@@ -23,7 +23,8 @@ pub struct InputState {
     scroll: (f64, f64),
     selection_cell: Option<ViewportCell>,
     copy_pressed: bool,
-    paste_shortcuts: Vec<Key>,
+    paste_v_pressed: bool,
+    paste_named_pressed: bool,
     workspace_shortcuts: Vec<KeyCode>,
 }
 
@@ -65,7 +66,8 @@ impl InputState {
             self.reset_scroll();
             self.cancel_selection();
             self.copy_pressed = false;
-            self.paste_shortcuts.clear();
+            self.paste_v_pressed = false;
+            self.paste_named_pressed = false;
             self.workspace_shortcuts.clear();
             self.clear_composition();
         }
@@ -345,25 +347,21 @@ impl InputState {
         state: ElementState,
         repeat: bool,
     ) -> bool {
-        let recognized = match key {
-            Key::Named(winit::keyboard::NamedKey::Paste) => true,
+        let v_recognized = self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT);
+        let (pressed, recognized) = match key {
+            Key::Named(winit::keyboard::NamedKey::Paste) => (&mut self.paste_named_pressed, true),
             Key::Character(text) if text.eq_ignore_ascii_case("v") => {
-                self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT)
+                (&mut self.paste_v_pressed, v_recognized)
             }
-            _ => false,
+            _ => return false,
         };
-        let pressed = self
-            .paste_shortcuts
-            .iter()
-            .position(|candidate| candidate == key);
-        match (state, pressed) {
-            (ElementState::Pressed, None) if !repeat && recognized => {
-                self.paste_shortcuts.push(key.clone());
+        match state {
+            ElementState::Pressed if *pressed || (!repeat && recognized) => {
+                *pressed = true;
                 true
             }
-            (ElementState::Pressed, Some(_)) => true,
-            (ElementState::Released, Some(index)) => {
-                self.paste_shortcuts.swap_remove(index);
+            ElementState::Released if *pressed => {
+                *pressed = false;
                 true
             }
             _ => false,
