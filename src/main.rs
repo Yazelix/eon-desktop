@@ -1128,18 +1128,25 @@ fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) ->
     )
 }
 
-#[cfg(target_os = "linux")]
 fn write_native_clipboard(
     clipboard: &mut arboard::Clipboard,
     location: ClipboardLocation,
     text: String,
 ) -> std::result::Result<(), arboard::Error> {
-    use arboard::SetExtLinux;
+    #[cfg(target_os = "linux")]
+    {
+        use arboard::SetExtLinux;
 
-    clipboard
-        .set()
-        .clipboard(linux_clipboard_kind(location))
-        .text(text)
+        clipboard
+            .set()
+            .clipboard(linux_clipboard_kind(location))
+            .text(text)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = location;
+        clipboard.set_text(text)
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -1150,15 +1157,6 @@ fn linux_clipboard_kind(location: ClipboardLocation) -> arboard::LinuxClipboardK
             arboard::LinuxClipboardKind::Primary
         }
     }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn write_native_clipboard(
-    clipboard: &mut arboard::Clipboard,
-    _location: ClipboardLocation,
-    text: String,
-) -> std::result::Result<(), arboard::Error> {
-    clipboard.set_text(text)
 }
 
 fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
