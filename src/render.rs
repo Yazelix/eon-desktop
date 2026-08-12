@@ -75,6 +75,7 @@ pub struct CellMetrics {
 #[derive(Clone, Copy)]
 struct CellFont {
     size: f32,
+    top_offset: f32,
     letter_spacing: f32,
     box_size: f32,
     box_letter_spacing: f32,
@@ -93,9 +94,9 @@ impl CellMetrics {
     pub fn for_scale(scale_factor: f64) -> Self {
         let scale = scale_factor as f32;
         Self {
-            width: (9.0 * scale).round().max(1.0),
+            width: (10.0 * scale).round().max(1.0),
             height: (18.0 * scale).round().max(1.0),
-            font_size: (14.0 * scale).max(1.0),
+            font_size: (16.0 * scale).max(1.0),
             padding: (12.0 * scale).round(),
         }
     }
@@ -902,7 +903,12 @@ impl Renderer {
         self.text.push(PlacedText {
             buffer,
             left: left + left_offset,
-            top,
+            top: top
+                - if matches!(kind, DrawStyleKind::Preedit) {
+                    self.cell_font.top_offset
+                } else {
+                    0.0
+                },
             right: (left + layout_width).ceil() as i32,
             bottom: (top + layout_height).ceil() as i32,
             bound_left: left.floor() as i32,
@@ -963,7 +969,12 @@ impl Renderer {
             self.text.push(PlacedText {
                 buffer,
                 left,
-                top,
+                top: top
+                    - if box_drawing {
+                        0.0
+                    } else {
+                        self.cell_font.top_offset
+                    },
                 right: (left + layout_width).ceil() as i32,
                 bottom: (top + layout_height).ceil() as i32,
                 bound_left: left.floor() as i32,
@@ -1018,6 +1029,9 @@ fn shaped_preedit_placement(buffer: &Buffer) -> (f32, f32) {
 }
 
 fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellFont {
+    let top_offset = ((metrics.height - metrics.font_size) / 2.0)
+        .round()
+        .max(0.0);
     let mut buffer = Buffer::new(font_system, Metrics::new(metrics.font_size, metrics.height));
     buffer.set_wrap(Wrap::None);
     buffer.set_text(
@@ -1034,6 +1048,7 @@ fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellF
     advance.map_or(
         CellFont {
             size: metrics.font_size,
+            top_offset,
             letter_spacing: 0.0,
             box_size: metrics.font_size,
             box_letter_spacing: 0.0,
@@ -1042,10 +1057,11 @@ fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellF
             let fitted_size = (metrics.font_size * metrics.width / advance)
                 .round()
                 .max(1.0);
-            let size = (fitted_size - 1.0).max(1.0);
+            let size = (fitted_size - 1.0).clamp(1.0, metrics.font_size);
             let box_size = fitted_size + 1.0;
             CellFont {
                 size,
+                top_offset,
                 letter_spacing: metrics.width / size - advance / metrics.font_size,
                 box_size,
                 box_letter_spacing: metrics.width / box_size - advance / metrics.font_size,
@@ -1720,16 +1736,26 @@ mod tests {
     }
 
     #[test]
-    fn scale_changes_all_cell_metrics_together() {
-        assert_eq!(
-            CellMetrics::for_scale(2.0),
-            CellMetrics {
-                width: 18.0,
-                height: 36.0,
-                font_size: 28.0,
-                padding: 24.0,
-            }
-        );
+    fn default_font_matches_nova_at_supported_scales() {
+        let mut font_system = FontSystem::new();
+        for (scale, width, height, font_size, padding) in [
+            (1.0, 10.0, 18.0, 16.0, 12.0),
+            (1.25, 13.0, 23.0, 20.0, 15.0),
+            (1.5, 15.0, 27.0, 24.0, 18.0),
+            (2.0, 20.0, 36.0, 32.0, 24.0),
+        ] {
+            let metrics = CellMetrics::for_scale(scale);
+            assert_eq!(
+                (
+                    metrics.width,
+                    metrics.height,
+                    metrics.font_size,
+                    metrics.padding
+                ),
+                (width, height, font_size, padding)
+            );
+            assert_eq!(fitted_cell_font(&mut font_system, metrics).size, font_size);
+        }
     }
 
     #[test]
@@ -1988,7 +2014,9 @@ mod tests {
                     .expect("the Braille frame should rasterize");
                 let left = physical.x + image.placement.left;
                 let right = left + image.placement.width as i32;
-                let top = run.line_y.round() as i32 + physical.y - image.placement.top;
+                let top = run.line_y.round() as i32 + physical.y
+                    - image.placement.top
+                    - cell_font.top_offset as i32;
                 let bottom = top + image.placement.height as i32;
                 assert!(
                     left >= 0
@@ -2039,7 +2067,9 @@ mod tests {
                     let image = swash_cache
                         .get_image_uncached(&mut font_system, physical.cache_key)
                         .expect("the descender glyph should rasterize");
-                    let top = run.line_y.round() as i32 + physical.y - image.placement.top;
+                    let top = run.line_y.round() as i32 + physical.y
+                        - image.placement.top
+                        - cell_font.top_offset as i32;
                     let bottom = top + image.placement.height as i32;
                     if top < 0 || bottom > metrics.height as i32 {
                         failures.push(format!(

@@ -1342,7 +1342,7 @@ mod tests {
     fn surface_measurements_match_orbit_invariants() {
         let metrics = CellMetrics::for_scale(1.0);
         let size = surface_size(PhysicalSize::new(960, 600), metrics).unwrap();
-        assert_eq!((size.cols, size.rows), (104, 32));
+        assert_eq!((size.cols, size.rows), (93, 32));
         assert!(
             orbit_protocol::session::encode_client_message(&ClientMessage::Resize(size)).is_ok()
         );
