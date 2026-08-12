@@ -735,7 +735,7 @@ impl Renderer {
         clip: SceneRect,
     ) {
         for run in scene
-            .glyph_runs()
+            .text_glyph_runs()
             .into_iter()
             .filter(|run| run.style.foreground_visible(blink_visible))
         {
@@ -972,7 +972,7 @@ impl Renderer {
                     foreground.r,
                     foreground.g,
                     foreground.b,
-                    if style.faint { 150 } else { 255 },
+                    style.foreground_alpha(),
                 ),
             });
         }
@@ -1253,6 +1253,16 @@ fn build_scene_rectangles(
             }
             let left = viewport.left + metrics.padding + column as f32 * metrics.width;
             let top = viewport.top + metrics.padding + row_index as f32 * metrics.height;
+            if cell.is_full_block() {
+                rectangles.push(
+                    left,
+                    top,
+                    metrics.width,
+                    metrics.height,
+                    cell.style.foreground,
+                    f32::from(cell.style.foreground_alpha()) / 255.0,
+                );
+            }
             let thickness = (metrics.height / 14.0).max(1.0);
             match cell.style.underline {
                 Underline::None => {}
@@ -1536,6 +1546,78 @@ mod tests {
         assert!(rectangles.bytes.is_empty());
         assert!(scene.glyph_runs().is_empty());
         assert!(!scene.has_blinking_content());
+    }
+
+    #[test]
+    fn full_block_cells_use_exact_cell_rectangles() {
+        let colors = [
+            SceneColor { r: 255, g: 0, b: 0 },
+            SceneColor { r: 0, g: 255, b: 0 },
+            SceneColor { r: 0, g: 0, b: 255 },
+            SceneColor {
+                r: 255,
+                g: 0,
+                b: 255,
+            },
+        ];
+        let scene = Scene {
+            revision: 1,
+            columns: 2,
+            rows: 2,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: DEFAULT_BACKGROUND,
+            foreground: SceneColor::default(),
+            cursor: None,
+            content: colors
+                .chunks_exact(2)
+                .map(|row| DrawRow {
+                    wrapped: false,
+                    wrap_continuation: false,
+                    kitty_virtual_placeholder: false,
+                    cells: row
+                        .iter()
+                        .map(|foreground| DrawCell {
+                            width: CellWidth::Narrow,
+                            text: "█".into(),
+                            hyperlink: String::new(),
+                            style: DrawStyle {
+                                foreground: *foreground,
+                                faint: *foreground == colors[2],
+                                ..plain_style()
+                            },
+                        })
+                        .collect(),
+                })
+                .collect(),
+        };
+
+        assert!(scene.text_glyph_runs().is_empty());
+        assert_eq!(scene.glyph_runs().len(), 4);
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let viewport = SceneRect {
+                left: 7.0,
+                top: 11.0,
+                width: 200.0,
+                height: 200.0,
+            };
+            let mut actual = RectangleBatch::new(300, 300);
+            build_scene_rectangles(&mut actual, &scene, true, metrics, viewport);
+            let mut expected = RectangleBatch::new(300, 300);
+            for (index, color) in colors.into_iter().enumerate() {
+                expected.push(
+                    viewport.left + metrics.padding + (index % 2) as f32 * metrics.width,
+                    viewport.top + metrics.padding + (index / 2) as f32 * metrics.height,
+                    metrics.width,
+                    metrics.height,
+                    color,
+                    if index == 2 { 150.0 / 255.0 } else { 1.0 },
+                );
+            }
+            assert_eq!(actual.bytes, expected.bytes, "scale {scale}");
+        }
     }
 
     #[test]

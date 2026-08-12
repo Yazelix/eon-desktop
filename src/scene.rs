@@ -326,6 +326,10 @@ impl DrawStyle {
     pub(crate) fn foreground_visible(self, blink_visible: bool) -> bool {
         !self.invisible && (blink_visible || !self.blink)
     }
+
+    pub(crate) fn foreground_alpha(self) -> u8 {
+        if self.faint { 150 } else { 255 }
+    }
 }
 
 /// One exact grid cell after palette and inverse-color resolution.
@@ -335,6 +339,12 @@ pub struct DrawCell {
     pub text: String,
     pub hyperlink: String,
     pub style: DrawStyle,
+}
+
+impl DrawCell {
+    pub(crate) fn is_full_block(&self) -> bool {
+        self.width == CellWidth::Narrow && self.text == "█"
+    }
 }
 
 /// One deterministic row of draw cells.
@@ -470,6 +480,14 @@ impl Scene {
     /// Build positioned text runs without changing grapheme strings.
     #[must_use]
     pub fn glyph_runs(&self) -> Vec<GlyphRun> {
+        self.build_glyph_runs(false)
+    }
+
+    pub(crate) fn text_glyph_runs(&self) -> Vec<GlyphRun> {
+        self.build_glyph_runs(true)
+    }
+
+    fn build_glyph_runs(&self, omit_full_blocks: bool) -> Vec<GlyphRun> {
         let mut runs = Vec::new();
         for (row_index, row) in self.content.iter().enumerate() {
             let mut current: Option<GlyphRun> = None;
@@ -485,6 +503,11 @@ impl Scene {
                         continue;
                     }
                 };
+                if omit_full_blocks && cell.is_full_block() {
+                    finish_run(&mut runs, &mut current);
+                    column += span;
+                    continue;
+                }
                 let text = if cell.text.is_empty() {
                     if span == 2 { "  " } else { " " }
                 } else {
