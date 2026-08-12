@@ -2,7 +2,7 @@ use eon_workspace_protocol::{Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
-    session::{self, Failure, FailureCode, ServerMessage},
+    session::{self, ClipboardLocation, Failure, FailureCode, ServerMessage},
 };
 use winit::dpi::PhysicalSize;
 use yazelix_venus::{
@@ -407,11 +407,20 @@ fn notices_recover_independently_by_source() {
 }
 
 #[test]
-fn copied_text_is_an_attached_one_shot_effect_not_presentation_state() {
+fn clipboard_text_is_an_attached_one_shot_effect_not_presentation_state() {
     let mut model = SessionModel::new();
     assert_eq!(
         model
             .apply(ServerMessage::CopiedText("not attached".into()))
+            .unwrap_err(),
+        ModelError::UnexpectedMessage
+    );
+    assert_eq!(
+        model
+            .apply(ServerMessage::ClipboardWrite {
+                location: ClipboardLocation::Primary,
+                text: "not attached".into(),
+            })
             .unwrap_err(),
         ModelError::UnexpectedMessage
     );
@@ -424,8 +433,25 @@ fn copied_text_is_an_attached_one_shot_effect_not_presentation_state() {
         model
             .apply(ServerMessage::CopiedText("e\u{301}界\nsecond".into()))
             .unwrap(),
-        Some("e\u{301}界\nsecond".into())
+        Some((ClipboardLocation::Standard, "e\u{301}界\nsecond".into()))
     );
+    model
+        .apply(ServerMessage::Failure(Failure {
+            code: FailureCode::InvalidInput,
+            detail: "bad key".into(),
+        }))
+        .unwrap();
+    assert_eq!(
+        model
+            .apply(ServerMessage::ClipboardWrite {
+                location: ClipboardLocation::Selection,
+                text: "terminal".into(),
+            })
+            .unwrap(),
+        Some((ClipboardLocation::Selection, "terminal".into()))
+    );
+    assert_eq!(model.notice(), Some("Orbit rejected input: bad key"));
+    assert_eq!(model.apply(ServerMessage::Accepted).unwrap(), None);
     assert_eq!(model.scene().unwrap().revision, 1);
 }
 

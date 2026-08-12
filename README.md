@@ -25,8 +25,8 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
 `4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
 selection, identities, actions, and pane-to-Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v1, and ORBS v2 at exact Orbit proof
-`9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v1, and ORBS v3 at exact Orbit proof
+`3ee7c80005f3d2bbe81e539799327803716f6174`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -83,6 +83,9 @@ remain Orbit input.
 Wheel or trackpad movement scrolls through Orbit-owned retained history. Hold
 Shift while dragging the left mouse button to select cells, then press
 Ctrl+Shift+C to copy the exact bounded text returned by Orbit.
+Terminal programs can also request bounded text writes through Orbit. On Linux,
+Venus sends the standard destination to the ordinary clipboard and sends the
+selection or primary destination to the primary clipboard.
 
 ## Architecture and evidence
 
@@ -109,9 +112,8 @@ slice.
 The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
 text-clipboard effect. macOS remains an architectural target, not an
 implemented or proved platform. The exact
-`9d6d2bb37f20ab4ad9e186c7bc715eabef43e757` Orbit package revision is published
-and resolves from GitHub; later Orbit hardening at
-`6452a2f4f4233a7a89a17e479eda36b010516dcf` preserves that product proof.
+`3ee7c80005f3d2bbe81e539799327803716f6174` Orbit package revision is published
+and resolves from GitHub.
 
 ## LOC scorecard
 
@@ -122,11 +124,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 132 |
-| Contracts and references | 183 |
-| Crate decisions | 121 |
-| Changelog | 47 |
-| Rust source, including unit tests | 7,110 |
-| Rust integration tests | 565 |
+| README | 134 |
+| Contracts and references | 196 |
+| Crate decisions | 123 |
+| Changelog | 49 |
+| Rust source, including unit tests | 7,175 |
+| Rust integration tests | 591 |
 | Cargo manifest | 20 |
-| **Total** | **8,594** |
+| **Total** | **8,704** |

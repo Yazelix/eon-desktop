@@ -2,18 +2,19 @@
 
 `ven-upt.1` records the user-selected thin winit, wgpu, glyphon, and AccessKit
 shape. `ven-upt.2` implements it with exact direct versions and features in
-`Cargo.toml`. `ven-4sn` advances the canonical session consumer to ORBS v2 and
-adds the minimum native text-clipboard owner. `ven-c87` adds the exact Eon-owned
-EONW v1 consumer without a local protocol mirror.
+`Cargo.toml`. `ven-4sn` adds the minimum native text-clipboard owner.
+`ven-consume-terminal-clipboard-writes-zgh` advances the canonical session
+consumer to ORBS v3. `ven-c87` adds the exact Eon-owned EONW v1 consumer without
+a local protocol mirror.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
 | Eon workspace protocol consumer | Exact Git revision `4af395aea06c230ee6b18cf0755ae25915c0b88d` of the dependency-free, publish-false `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v1 values, validation, topology, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. The user authorized Apache-2.0, matching Nova, if Eon needs a public license; the exact Eon revision has no durable license record, so public distribution remains blocked until Eon records it. |
-| Orbit protocol consumer | Exact Git revision `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v2, ORBF v1, semantic values, history, selection, copied text, bounds, and revision reduction. Venus keeps no mirror or adapter. |
+| Orbit protocol consumer | Exact Git revision `3ee7c80005f3d2bbe81e539799327803716f6174` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v3, ORBF v1, semantic values, history, selection, copied text, terminal clipboard effects, bounds, and revision reduction. Venus keeps no mirror or adapter. |
 | Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Active | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
-| Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host writes only canonical bounded `CopiedText` and retains the platform clipboard owner. It never reads or reconstructs terminal text. Native Wayland without data-control and macOS remain unproved. |
+| Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host writes canonical bounded `CopiedText` and `ClipboardWrite` effects and retains the platform clipboard owner. It never reads or reconstructs terminal text. Native Wayland without data-control and macOS remain unproved. |
 
 ## Measured comparison
 
@@ -67,12 +68,13 @@ macOS work.
 
 ## Native clipboard decision
 
-arboard 3.6.1 owns the one operation the existing stack and Rust standard
-library do not provide: host a native plain-text clipboard value. Image support
-and default features are disabled. The integration adds 15 Venus production
-lines and 12 all-target lock packages, introduces no separately managed native
-library or Nix package on Linux, and is removable at one retained field and one
-write method. Xwayland clipboard dogfood passed with exact UTF-8 selection text.
+arboard 3.6.1 owns the operation the existing stack and Rust standard library do
+not provide: host a native plain-text clipboard value. Image support and default
+features are disabled. Linux maps Orbit's standard destination to arboard's
+ordinary clipboard and maps selection or primary to arboard's primary clipboard.
+The code adds no dependency, feature, native library, or Nix runtime input.
+Xwayland clipboard dogfood covers exact UTF-8 selection text; terminal-emitted
+writes still need native acceptance.
 
 External `wl-copy`, `xclip`, and `xsel` commands were rejected as undeclared
 runtime dependencies. Handwritten X11, Wayland, and AppKit ownership was
@@ -99,8 +101,8 @@ inputs. It owns no socket, window, GPU, or terminal handle.
 The native host maps winit events only into `orbit-protocol` values, keeps
 transport outside the renderer, and sends typed wakeups through
 `EventLoopProxy`. The selected shape adds no general async application runtime.
-The same host owns one lazy native clipboard handle and writes only the exact
-`CopiedText` effect returned by Orbit.
+The same host owns one lazy native clipboard handle and writes the exact
+`CopiedText` or `ClipboardWrite` effect returned by Orbit.
 
 Venus derives drawing, accessibility, and deterministic contract snapshots from
 the latest accepted scene. After a successful GPU present, the renderer

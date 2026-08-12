@@ -1,7 +1,7 @@
 use crate::scene::Scene;
 use eon_workspace_protocol::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
-use orbit_protocol::session::{FailureCode, ServerMessage};
+use orbit_protocol::session::{ClipboardLocation, FailureCode, ServerMessage};
 use std::{error::Error, fmt};
 
 /// Bounded lifecycle state for one local Orbit attachment.
@@ -185,7 +185,10 @@ impl SessionModel {
         )
     }
 
-    pub fn apply(&mut self, message: ServerMessage) -> Result<Option<String>, ModelError> {
+    pub fn apply(
+        &mut self,
+        message: ServerMessage,
+    ) -> Result<Option<(ClipboardLocation, String)>, ModelError> {
         let in_order = match &message {
             ServerMessage::Attached { .. }
             | ServerMessage::Busy
@@ -195,6 +198,7 @@ impl SessionModel {
             ServerMessage::Frame(_)
             | ServerMessage::Accepted
             | ServerMessage::CopiedText(_)
+            | ServerMessage::ClipboardWrite { .. }
             | ServerMessage::Exited { .. } => self.is_attached(),
             ServerMessage::Failure(_) => matches!(
                 self.connection,
@@ -250,7 +254,10 @@ impl SessionModel {
             }
             ServerMessage::CopiedText(text) => {
                 self.clear_orbit_notice();
-                return Ok(Some(text));
+                return Ok(Some((ClipboardLocation::Standard, text)));
+            }
+            ServerMessage::ClipboardWrite { location, text } => {
+                return Ok(Some((location, text)));
             }
         }
         Ok(None)

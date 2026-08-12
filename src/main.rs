@@ -5,7 +5,10 @@ use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEve
 use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDirection};
 use orbit_protocol::{
     MAX_CELLS,
-    session::{self, ClientMessage, FailureCode, SelectionAction, ServerMessage, SurfaceSize},
+    session::{
+        self, ClientMessage, ClipboardLocation, FailureCode, SelectionAction, ServerMessage,
+        SurfaceSize,
+    },
 };
 use std::{
     env,
@@ -455,7 +458,7 @@ impl Application {
                 let was_attached = self.model.is_attached();
                 let frame = matches!(&message, ServerMessage::Frame(_));
                 match self.model.apply(message) {
-                    Ok(Some(text)) => self.write_clipboard(text),
+                    Ok(Some((location, text))) => self.write_clipboard(location, text),
                     Ok(None) => {}
                     Err(error) => self.model.mark_lost(error.to_string()),
                 }
@@ -604,15 +607,18 @@ impl Application {
         true
     }
 
-    fn write_clipboard(&mut self, text: String) {
+    fn write_clipboard(&mut self, location: ClipboardLocation, text: String) {
         let result = (|| {
             if self.clipboard.is_none() {
                 self.clipboard = Some(arboard::Clipboard::new()?);
             }
-            self.clipboard
-                .as_mut()
-                .expect("clipboard initialized above")
-                .set_text(text)
+            write_native_clipboard(
+                self.clipboard
+                    .as_mut()
+                    .expect("clipboard initialized above"),
+                location,
+                text,
+            )
         })();
         self.model
             .set_venus_notice(LocalNoticeSource::Clipboard, clipboard_notice(result));
@@ -1118,8 +1124,41 @@ fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repea
 fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
-        |()| "Selection copied to the native clipboard.".into(),
+        |()| "Text copied to the native clipboard.".into(),
     )
+}
+
+#[cfg(target_os = "linux")]
+fn write_native_clipboard(
+    clipboard: &mut arboard::Clipboard,
+    location: ClipboardLocation,
+    text: String,
+) -> std::result::Result<(), arboard::Error> {
+    use arboard::SetExtLinux;
+
+    clipboard
+        .set()
+        .clipboard(linux_clipboard_kind(location))
+        .text(text)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_clipboard_kind(location: ClipboardLocation) -> arboard::LinuxClipboardKind {
+    match location {
+        ClipboardLocation::Standard => arboard::LinuxClipboardKind::Clipboard,
+        ClipboardLocation::Selection | ClipboardLocation::Primary => {
+            arboard::LinuxClipboardKind::Primary
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn write_native_clipboard(
+    clipboard: &mut arboard::Clipboard,
+    _location: ClipboardLocation,
+    text: String,
+) -> std::result::Result<(), arboard::Error> {
+    clipboard.set_text(text)
 }
 
 fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
@@ -1465,11 +1504,30 @@ mod tests {
     fn clipboard_results_are_attributed_without_copying_terminal_cells() {
         assert_eq!(
             clipboard_notice::<&str>(Ok(())),
-            "Selection copied to the native clipboard."
+            "Text copied to the native clipboard."
         );
         assert_eq!(
             clipboard_notice(Err("display unavailable")),
             "Venus could not write the native clipboard: display unavailable"
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn terminal_clipboard_locations_use_the_existing_linux_targets() {
+        use arboard::LinuxClipboardKind::{Clipboard, Primary};
+
+        assert!(matches!(
+            linux_clipboard_kind(ClipboardLocation::Standard),
+            Clipboard
+        ));
+        assert!(matches!(
+            linux_clipboard_kind(ClipboardLocation::Selection),
+            Primary
+        ));
+        assert!(matches!(
+            linux_clipboard_kind(ClipboardLocation::Primary),
+            Primary
+        ));
     }
 }

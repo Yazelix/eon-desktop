@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Deliver bounded Orbit terminal clipboard-write effects through the existing
+  native text clipboard owner, preserving standard and Linux primary targets.
 - Render Unicode Braille cells with distinct dots while preserving adjacent
   text, box-drawing cells, and authoritative cell-grid bounds.
 - Render terminal `g`, `j`, `p`, `q`, and `y` descenders in regular, bold, and

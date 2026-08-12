@@ -116,6 +116,19 @@ native accumulation. Exact AccessKit 0.24.1 text runs and text positions support
 selection derived from the accepted scene. Exact arboard 3.6.1 supplies the
 isolated native text write selected in `docs/CRATES.md`.
 
+`ven-consume-terminal-clipboard-writes-zgh` consumes Orbit `ORB-C11` and
+canonical ORBS v3 at proof `3ee7c80005f3d2bbe81e539799327803716f6174`.
+Orbit supplies bounded UTF-8 and the normalized standard, selection, or primary
+destination. Venus accepts the effect only while attached and passes it to the
+existing native clipboard owner without a local decoder or replay state.
+
+Exact arboard 3.6.1 exposes the ordinary and primary Linux clipboards through
+its selected `wayland-data-control` build. The pinned Ghostty comparable maps
+standard to the ordinary clipboard and maps both selection and primary to the
+platform primary clipboard. Venus uses that map and rejects arboard's secondary
+clipboard for this contract. macOS has no distinct arboard primary target and
+remains outside the proved platform surface.
+
 Alacritty 0.15.1 at
 `0c405d53e74ace2980fc5e6c6d5b710c144bc075` was comparison-only evidence for
 wheel residuals, Shift selection precedence, Ctrl+Shift+C, clipboard isolation,
