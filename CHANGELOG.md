@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Render adjacent Unicode full-block cells as exact cell rectangles so terminal
+  graphics meet without visible seams.
 - Read ordinary native clipboard text on Ctrl+Shift+V or the Paste key and send
   one bounded semantic paste to Orbit for authoritative terminal-mode encoding,
   while retaining each accepted shortcut through its matching release.
