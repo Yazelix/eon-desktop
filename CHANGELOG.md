@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Read ordinary native clipboard text on Ctrl+Shift+V or the Paste key and send
-  one bounded semantic paste to Orbit for authoritative terminal-mode encoding.
+  one bounded semantic paste to Orbit for authoritative terminal-mode encoding,
+  while retaining each accepted shortcut through its matching release.
 - Deliver bounded Orbit terminal clipboard-write effects through the existing
   native text clipboard owner, preserving standard and Linux primary targets.
 - Render Unicode Braille cells with distinct dots while preserving adjacent
