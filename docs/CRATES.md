@@ -76,7 +76,8 @@ ordinary clipboard and maps selection or primary to arboard's primary clipboard.
 Ctrl+Shift+V or the native Paste key reads ordinary UTF-8 clipboard text once
 and sends one canonical bounded paste to Orbit. The code adds no dependency,
 feature, native library, or Nix runtime input. Xwayland clipboard dogfood covers
-exact UTF-8 selection text; paste and terminal writes need native acceptance.
+exact UTF-8 selection text. Native Wayland paste is proved with data-control;
+terminal writes still need native acceptance.
 
 External `wl-copy`, `xclip`, and `xsel` commands were rejected as undeclared
 runtime dependencies. Handwritten X11, Wayland, and AppKit ownership was
