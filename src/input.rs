@@ -346,29 +346,15 @@ impl InputState {
         state: ElementState,
         repeat: bool,
     ) -> bool {
-        let recognized = match key {
-            Key::Named(winit::keyboard::NamedKey::Paste) => true,
-            Key::Character(text) if text.eq_ignore_ascii_case("v") => {
-                self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT)
-            }
-            _ => false,
-        };
-        let pressed = self
-            .paste_shortcuts
-            .iter()
-            .position(|candidate| *candidate == physical_key);
-        match (state, pressed) {
-            (ElementState::Pressed, None) if !repeat && recognized => {
-                self.paste_shortcuts.push(physical_key);
-                true
-            }
-            (ElementState::Pressed, Some(_)) => true,
-            (ElementState::Released, Some(index)) => {
-                self.paste_shortcuts.swap_remove(index);
-                true
-            }
-            _ => false,
-        }
+        let recognized = !repeat
+            && match key {
+                Key::Named(winit::keyboard::NamedKey::Paste) => true,
+                Key::Character(text) if text.eq_ignore_ascii_case("v") => {
+                    self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT)
+                }
+                _ => false,
+            };
+        capture_shortcut(&mut self.paste_shortcuts, physical_key, state, recognized)
     }
 
     pub fn consumes_workspace_shortcut(
@@ -377,23 +363,27 @@ impl InputState {
         state: ElementState,
         recognized: bool,
     ) -> bool {
-        let pressed = self
-            .workspace_shortcuts
-            .iter()
-            .position(|candidate| *candidate == key);
-        match (state, pressed) {
-            (ElementState::Pressed, None) if recognized => {
-                self.workspace_shortcuts.push(key);
-                true
-            }
-            (ElementState::Pressed, Some(_)) => true,
-            (ElementState::Released, Some(index)) => {
-                self.workspace_shortcuts.swap_remove(index);
-                true
-            }
-            _ => false,
-        }
+        capture_shortcut(&mut self.workspace_shortcuts, key, state, recognized)
     }
+}
+
+fn capture_shortcut<T: Copy + Eq>(
+    shortcuts: &mut Vec<T>,
+    key: T,
+    state: ElementState,
+    recognized: bool,
+) -> bool {
+    if let Some(index) = shortcuts.iter().position(|candidate| *candidate == key) {
+        if state == ElementState::Released {
+            shortcuts.swap_remove(index);
+        }
+        return true;
+    }
+    if state == ElementState::Pressed && recognized {
+        shortcuts.push(key);
+        return true;
+    }
+    false
 }
 
 fn viewport_cell(cursor: (f32, f32), size: SurfaceSize, clamp: bool) -> Option<ViewportCell> {
