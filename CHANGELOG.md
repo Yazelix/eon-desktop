@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use a nominal 16 px terminal font with one shared 10×18 logical cell grid so
+  rendering, resizing, pointer mapping, input methods, and accessibility retain
+  coherent geometry at supported display scales.
 - Preserve the existing supervised Venus window and request native presentation
   when Eon presents the same live generation again.
 - Render adjacent Unicode full-block cells as exact cell rectangles so terminal
