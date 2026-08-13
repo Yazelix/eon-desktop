@@ -178,9 +178,11 @@ action mechanisms used by the workspace projection.
 `eon-cyt` consumes Eon's existing `EON-C11` Present action and exact child-process
 ownership without changing EONW. Exact winit 0.30.13 owns
 `Window::set_minimized`, `Window::focus_window`, and
-`Window::request_user_attention`; its Wayland implementation requests and applies
-`xdg_activation_v1` for the existing surface. Venus accepts only the bounded
-private supervisor signal and remains the sole native activation owner.
+`Window::request_user_attention`. Locked winit documents direct unminimize and
+focus as unsupported on Wayland; its attention path requests and applies
+`xdg_activation_v1` for the existing surface under compositor policy. Venus
+accepts only the bounded private supervisor signal and remains the sole native
+activation owner.
 
 The selected shape rejects a duplicate window, Venus replacement, platform token
 in EONW, compositor-specific commands, D-Bus application infrastructure, polling

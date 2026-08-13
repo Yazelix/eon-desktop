@@ -68,9 +68,10 @@ cargo run --locked -- --no-decorations /path/to/orbit.sock /path/to/eon.sock
 ```
 
 When Eon supervises Venus, it supplies one private bounded presentation channel.
-A repeated Eon launch keeps the same Venus process and terminal attachment,
-restores its existing window, and asks the native window system for focus or
-attention.
+A repeated Eon launch keeps the same Venus process and terminal attachment
+and asks the native window system to present its existing window. Direct focus
+and unminimize are unavailable through winit on Wayland; xdg activation remains
+compositor-controlled.
 
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
@@ -131,11 +132,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 141 |
-| Contracts and references | 225 |
+| README | 142 |
+| Contracts and references | 227 |
 | Crate decisions | 127 |
 | Changelog | 56 |
 | Rust source, including unit tests | 7,485 |
 | Rust integration tests | 591 |
 | Cargo manifest | 20 |
-| **Total** | **9,061** |
+| **Total** | **9,064** |
