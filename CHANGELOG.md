@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restore the existing supervised Venus window and request native focus or
+  attention when Eon presents the same live generation again.
 - Render adjacent Unicode full-block cells as exact cell rectangles so terminal
   graphics meet without visible seams.
 - Read ordinary native clipboard text on Ctrl+Shift+V or the Paste key and send

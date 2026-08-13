@@ -15,10 +15,12 @@ use std::{
     error::Error,
     ffi::OsString,
     fs,
+    io::{self, Read},
     os::unix::ffi::OsStringExt,
     os::unix::fs::MetadataExt,
     path::PathBuf,
     sync::Arc,
+    thread,
     time::{Duration, Instant},
 };
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
@@ -31,7 +33,7 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
-    window::{Window, WindowId},
+    window::{UserAttentionType, Window, WindowId},
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, ConnectionState, InputState,
@@ -85,6 +87,7 @@ impl OrbitRetry {
 #[derive(Debug)]
 enum UserEvent {
     AccessKit(AccessKitEvent),
+    Present,
     Transport,
     Workspace,
 }
@@ -976,6 +979,15 @@ impl ApplicationHandler<UserEvent> for Application {
 
     fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
         match event {
+            UserEvent::Present => {
+                if let Some(state) = &self.window {
+                    state.window.set_minimized(false);
+                    state.window.focus_window();
+                    state
+                        .window
+                        .request_user_attention(Some(UserAttentionType::Informational));
+                }
+            }
             UserEvent::Transport => {
                 let events = self
                     .transport
@@ -1253,6 +1265,9 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 fn main() -> Result {
     let arguments = launch_arguments(env::args_os().skip(1))?;
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
+    if env::var_os("EON_VENUS_PRESENTATION_CONTROL") == Some(OsString::from("stdin")) {
+        start_presentation_control(event_loop.create_proxy())?;
+    }
     let mut application = Application::new(
         arguments.orbit_socket,
         arguments.workspace_socket,
@@ -1294,6 +1309,21 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
         workspace_socket,
         decorations,
     })
+}
+
+fn start_presentation_control(proxy: EventLoopProxy<UserEvent>) -> Result {
+    thread::Builder::new()
+        .name("venus-presentation-control".into())
+        .spawn(move || {
+            let mut input = io::stdin().lock();
+            let mut message = [0; 8];
+            while input.read_exact(&mut message).is_ok() {
+                if message == *b"present\n" && proxy.send_event(UserEvent::Present).is_err() {
+                    break;
+                }
+            }
+        })?;
+    Ok(())
 }
 
 fn default_socket_path() -> Result<PathBuf> {

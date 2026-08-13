@@ -173,6 +173,20 @@ Exact winit, wgpu, glyphon, and AccessKit versions already selected above own th
 native event, clipping, drawing, tab semantics, expanded state, and accessibility
 action mechanisms used by the workspace projection.
 
+## Required for supervisor-owned native presentation
+
+`eon-cyt` consumes Eon's existing `EON-C11` Present action and exact child-process
+ownership without changing EONW. Exact winit 0.30.13 owns
+`Window::set_minimized`, `Window::focus_window`, and
+`Window::request_user_attention`; its Wayland implementation requests and applies
+`xdg_activation_v1` for the existing surface. Venus accepts only the bounded
+private supervisor signal and remains the sole native activation owner.
+
+The selected shape rejects a duplicate window, Venus replacement, platform token
+in EONW, compositor-specific commands, D-Bus application infrastructure, polling
+files, and a signal-handler dependency. The compositor retains final activation
+policy, so native acceptance is platform-specific.
+
 ## Rejected initial routing
 
 - Rio VT is not a Venus dependency; replacing Orbit's terminal engine is an

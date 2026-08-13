@@ -67,6 +67,11 @@ default remains decorated:
 cargo run --locked -- --no-decorations /path/to/orbit.sock /path/to/eon.sock
 ```
 
+When Eon supervises Venus, it supplies one private bounded presentation channel.
+A repeated Eon launch keeps the same Venus process and terminal attachment,
+restores its existing window, and asks the native window system for focus or
+attention.
+
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
@@ -126,11 +131,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 136 |
-| Contracts and references | 210 |
+| README | 141 |
+| Contracts and references | 225 |
 | Crate decisions | 127 |
-| Changelog | 54 |
-| Rust source, including unit tests | 7,455 |
+| Changelog | 56 |
+| Rust source, including unit tests | 7,485 |
 | Rust integration tests | 591 |
 | Cargo manifest | 20 |
-| **Total** | **9,009** |
+| **Total** | **9,061** |
