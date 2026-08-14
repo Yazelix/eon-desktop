@@ -33,7 +33,7 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
-    window::{UserAttentionType, Window, WindowId},
+    window::{UserAttentionType, Window, WindowAttributes, WindowId},
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, Color, ConnectionState, InputState,
@@ -47,7 +47,7 @@ const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
-const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
+const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 struct OrbitRetry {
     deadline: Option<Instant>,
@@ -112,6 +112,7 @@ struct Application {
     workspace_socket: Option<PathBuf>,
     decorations: bool,
     background_opacity: f32,
+    background_blur: bool,
     cursor_tail: Option<(Color, f32)>,
     proxy: EventLoopProxy<UserEvent>,
     window: Option<WindowState>,
@@ -145,6 +146,7 @@ impl Application {
         workspace_socket: Option<PathBuf>,
         decorations: bool,
         background_opacity: f32,
+        background_blur: bool,
         cursor_tail: Option<(Color, f32)>,
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
@@ -153,6 +155,7 @@ impl Application {
             workspace_socket,
             decorations,
             background_opacity,
+            background_blur,
             cursor_tail,
             proxy,
             window: None,
@@ -182,12 +185,11 @@ impl Application {
     }
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result {
-        let attributes = Window::default_attributes()
-            .with_title("Venus")
-            .with_inner_size(LogicalSize::new(960.0, 600.0))
-            .with_decorations(self.decorations)
-            .with_transparent(self.background_opacity < 1.0)
-            .with_visible(false);
+        let attributes = window_attributes(
+            self.decorations,
+            self.background_opacity,
+            self.background_blur,
+        );
         #[cfg(target_os = "linux")]
         let attributes = if event_loop.is_wayland() {
             attributes.with_name("eon", "yazelix-venus")
@@ -784,6 +786,20 @@ impl Application {
     }
 }
 
+fn window_attributes(
+    decorations: bool,
+    background_opacity: f32,
+    background_blur: bool,
+) -> WindowAttributes {
+    Window::default_attributes()
+        .with_title("Venus")
+        .with_inner_size(LogicalSize::new(960.0, 600.0))
+        .with_decorations(decorations)
+        .with_transparent(background_opacity < 1.0)
+        .with_blur(background_blur)
+        .with_visible(false)
+}
+
 impl ApplicationHandler<UserEvent> for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none()
@@ -1353,6 +1369,7 @@ fn main() -> Result {
         arguments.workspace_socket,
         arguments.decorations,
         arguments.background_opacity,
+        arguments.background_blur,
         arguments.cursor_tail,
         event_loop.create_proxy(),
     );
@@ -1366,6 +1383,7 @@ struct LaunchArguments {
     workspace_socket: Option<PathBuf>,
     decorations: bool,
     background_opacity: f32,
+    background_blur: bool,
     cursor_tail: Option<(Color, f32)>,
 }
 
@@ -1375,6 +1393,7 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
     let mut workspace_socket = None;
     let mut decorations = true;
     let mut background_opacity = None;
+    let mut background_blur = false;
     let mut cursor_effect = None;
     let mut cursor_trail_color = None;
     let mut cursor_trail_duration = None;
@@ -1395,6 +1414,11 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
                 return Err(USAGE.into());
             };
             background_opacity = Some(value);
+        } else if argument == "--background-blur" {
+            if background_blur {
+                return Err(USAGE.into());
+            }
+            background_blur = true;
         } else if argument == "--cursor-effect-v1" {
             if cursor_effect.is_some() {
                 return Err(USAGE.into());
@@ -1449,6 +1473,7 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
         workspace_socket,
         decorations,
         background_opacity: background_opacity.unwrap_or(1.0),
+        background_blur,
         cursor_tail,
     })
 }
@@ -1499,27 +1524,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cursor_profile_launch_arguments_are_complete_bounded_and_default_static() {
+    fn presentation_launch_arguments_are_complete_bounded_and_default_static() {
         let parse = |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from));
 
         let default = parse(&[]).unwrap();
         assert!(default.decorations && default.workspace_socket.is_none());
         assert_eq!(default.background_opacity, 1.0);
+        assert!(!default.background_blur);
         assert_eq!(default.cursor_tail, None);
+        let attributes = window_attributes(
+            default.decorations,
+            default.background_opacity,
+            default.background_blur,
+        );
+        assert!(attributes.decorations && !attributes.transparent && !attributes.blur);
 
         for value in ["0", "0.88", "1"] {
             let parsed = parse(&[
                 "--no-decorations",
                 "--background-opacity",
                 value,
+                "--background-blur",
                 "orbit.sock",
                 "eon.sock",
             ])
             .unwrap();
             assert!(!parsed.decorations);
             assert_eq!(parsed.background_opacity, value.parse::<f32>().unwrap());
+            assert!(parsed.background_blur);
             assert_eq!(parsed.orbit_socket, PathBuf::from("orbit.sock"));
             assert_eq!(parsed.workspace_socket, Some(PathBuf::from("eon.sock")));
+            let attributes = window_attributes(
+                parsed.decorations,
+                parsed.background_opacity,
+                parsed.background_blur,
+            );
+            assert!(attributes.blur);
+            assert_eq!(attributes.transparent, value != "1");
         }
 
         let tail = parse(&[
@@ -1558,6 +1599,7 @@ mod tests {
             &["--background-opacity", "-0.01"][..],
             &["--background-opacity", "1.01"][..],
             &["--background-opacity", "0.5", "--background-opacity", "0.6"][..],
+            &["--background-blur", "--background-blur"][..],
             &["--cursor-effect-v1"][..],
             &["--cursor-effect-v1", "warp"][..],
             &["--cursor-effect-v1", "tail"][..],
