@@ -36,7 +36,7 @@ use winit::{
     window::{UserAttentionType, Window, WindowId},
 };
 use yazelix_venus::{
-    Accessibility, AccessibilityTarget, CellMetrics, ConnectionState, InputState,
+    Accessibility, AccessibilityTarget, CellMetrics, Color, ConnectionState, InputState,
     LocalNoticeSource, PresentOutcome, Renderer, SessionModel, Transport, TransportEvent,
     WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene,
     WorkspaceTransport,
@@ -44,9 +44,10 @@ use yazelix_venus::{
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
+const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
-const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
+const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 struct OrbitRetry {
     deadline: Option<Instant>,
@@ -111,6 +112,7 @@ struct Application {
     workspace_socket: Option<PathBuf>,
     decorations: bool,
     background_opacity: f32,
+    cursor_tail: Option<(Color, f32)>,
     proxy: EventLoopProxy<UserEvent>,
     window: Option<WindowState>,
     transport: Option<Transport>,
@@ -123,12 +125,14 @@ struct Application {
     render_notice: Option<String>,
     blink_visible: bool,
     next_blink: Option<Instant>,
+    next_animation: Option<Instant>,
     clipboard: Option<arboard::Clipboard>,
     active_endpoint: Option<Vec<u8>>,
     active_endpoint_live: bool,
     orbit_retry: OrbitRetry,
     retry_suppressed: bool,
     window_focused: bool,
+    window_occluded: bool,
     workspace_focus: WorkspaceFocus,
     tab_scroll: f32,
     pane_scroll: f32,
@@ -141,6 +145,7 @@ impl Application {
         workspace_socket: Option<PathBuf>,
         decorations: bool,
         background_opacity: f32,
+        cursor_tail: Option<(Color, f32)>,
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
         Self {
@@ -148,6 +153,7 @@ impl Application {
             workspace_socket,
             decorations,
             background_opacity,
+            cursor_tail,
             proxy,
             window: None,
             transport: None,
@@ -160,12 +166,14 @@ impl Application {
             render_notice: None,
             blink_visible: true,
             next_blink: None,
+            next_animation: None,
             clipboard: None,
             active_endpoint: None,
             active_endpoint_live: false,
             orbit_retry: OrbitRetry::default(),
             retry_suppressed: false,
             window_focused: false,
+            window_occluded: false,
             workspace_focus: WorkspaceFocus::Terminal,
             tab_scroll: 0.0,
             pane_scroll: 0.0,
@@ -203,6 +211,7 @@ impl Application {
             Arc::clone(&window),
             event_loop,
             self.background_opacity,
+            self.cursor_tail,
         ))?;
         window.set_ime_allowed(true);
         window.set_visible(true);
@@ -232,6 +241,13 @@ impl Application {
         self.transport = Some(Transport::start(socket, move || {
             let _ = proxy.send_event(UserEvent::Transport);
         }));
+    }
+
+    fn reset_cursor_animation(&mut self) {
+        self.next_animation = None;
+        if let Some(state) = &mut self.window {
+            state.renderer.reset_cursor_animation();
+        }
     }
 
     fn workspace_scene(&self) -> Option<WorkspaceScene> {
@@ -288,6 +304,7 @@ impl Application {
     }
 
     fn set_orbit_attachment(&mut self, endpoint: Vec<u8>, live: bool) {
+        self.reset_cursor_animation();
         let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
         self.active_endpoint = Some(endpoint.clone());
         self.active_endpoint_live = live;
@@ -328,6 +345,7 @@ impl Application {
             return;
         }
         self.model.prepare_reconnect();
+        self.reset_cursor_animation();
         self.retry_suppressed = false;
         self.last_resize = None;
         self.presented_revision = None;
@@ -483,6 +501,7 @@ impl Application {
                     self.input.cancel_selection();
                 }
                 if !was_attached && self.model.is_attached() {
+                    self.reset_cursor_animation();
                     self.orbit_retry.reset();
                     self.input.reset_scroll();
                     self.input.cancel_selection();
@@ -512,6 +531,7 @@ impl Application {
             }
         }
         if transport_ended || self.model.is_terminal() {
+            self.reset_cursor_animation();
             self.transport = None;
             self.presented_revision = None;
             if retryable_loss && self.retry_allowed() {
@@ -714,6 +734,9 @@ impl Application {
     }
 
     fn render(&mut self) {
+        if !cursor_animation_allowed(self.window_focused, self.window_occluded) {
+            self.reset_cursor_animation();
+        }
         let status = self.status();
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
@@ -793,6 +816,7 @@ impl ApplicationHandler<UserEvent> for Application {
         match event {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(size) => {
+                self.next_animation = None;
                 self.input.reset_scroll();
                 state.renderer.resize(size, state.window.scale_factor());
                 self.reveal_workspace_selection();
@@ -801,6 +825,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.next_animation = None;
                 self.input.reset_scroll();
                 state
                     .renderer
@@ -810,7 +835,14 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.send_resize();
                 self.refresh_client_view();
             }
-            WindowEvent::Occluded(false) => state.window.request_redraw(),
+            WindowEvent::Occluded(occluded) => {
+                self.window_occluded = occluded;
+                self.next_animation = None;
+                state.renderer.reset_cursor_animation();
+                if !occluded {
+                    state.window.request_redraw();
+                }
+            }
             WindowEvent::RedrawRequested => self.render(),
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => {
@@ -847,6 +879,8 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::Focused(focused) => {
                 self.window_focused = focused;
+                self.next_animation = None;
+                state.renderer.reset_cursor_animation();
                 let message = self
                     .input
                     .focus(terminal_focused(focused, self.workspace_focus));
@@ -1063,12 +1097,29 @@ impl ApplicationHandler<UserEvent> for Application {
         {
             state.window.request_redraw();
         }
+        let animation_active = self
+            .window
+            .as_ref()
+            .is_some_and(|state| state.renderer.cursor_animation_active());
+        if update_animation_deadline(
+            animation_active,
+            cursor_animation_allowed(self.window_focused, self.window_occluded),
+            &mut self.next_animation,
+            now,
+        ) && let Some(state) = &self.window
+        {
+            state.window.request_redraw();
+        }
         event_loop.set_control_flow(
-            [self.next_blink, self.orbit_retry.deadline]
-                .into_iter()
-                .flatten()
-                .min()
-                .map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
+            [
+                self.next_blink,
+                self.next_animation,
+                self.orbit_retry.deadline,
+            ]
+            .into_iter()
+            .flatten()
+            .min()
+            .map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
         );
     }
 }
@@ -1087,6 +1138,27 @@ fn update_blink(
     } else if deadline.is_some_and(|next| now >= next) {
         *visible = !*visible;
         *deadline = Some(now + BLINK_INTERVAL);
+        return true;
+    }
+    false
+}
+
+fn cursor_animation_allowed(focused: bool, occluded: bool) -> bool {
+    focused && !occluded
+}
+
+fn update_animation_deadline(
+    active: bool,
+    allowed: bool,
+    deadline: &mut Option<Instant>,
+    now: Instant,
+) -> bool {
+    if !active || !allowed {
+        *deadline = None;
+    } else if deadline.is_none() {
+        *deadline = Some(now + ANIMATION_FRAME_INTERVAL);
+    } else if deadline.is_some_and(|next| now >= next) {
+        *deadline = Some(now + ANIMATION_FRAME_INTERVAL);
         return true;
     }
     false
@@ -1281,6 +1353,7 @@ fn main() -> Result {
         arguments.workspace_socket,
         arguments.decorations,
         arguments.background_opacity,
+        arguments.cursor_tail,
         event_loop.create_proxy(),
     );
     event_loop.run_app(&mut application)?;
@@ -1293,6 +1366,7 @@ struct LaunchArguments {
     workspace_socket: Option<PathBuf>,
     decorations: bool,
     background_opacity: f32,
+    cursor_tail: Option<(Color, f32)>,
 }
 
 fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<LaunchArguments> {
@@ -1301,6 +1375,9 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
     let mut workspace_socket = None;
     let mut decorations = true;
     let mut background_opacity = None;
+    let mut cursor_effect = None;
+    let mut cursor_trail_color = None;
+    let mut cursor_trail_duration = None;
 
     while let Some(argument) = arguments.next() {
         if argument == "--no-decorations" {
@@ -1318,6 +1395,38 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
                 return Err(USAGE.into());
             };
             background_opacity = Some(value);
+        } else if argument == "--cursor-effect-v1" {
+            if cursor_effect.is_some() {
+                return Err(USAGE.into());
+            }
+            cursor_effect = match arguments.next().as_deref() {
+                Some(value) if value == "none" => Some(false),
+                Some(value) if value == "tail" => Some(true),
+                _ => return Err(USAGE.into()),
+            };
+        } else if argument == "--cursor-trail-color-v1" {
+            if cursor_trail_color.is_some() {
+                return Err(USAGE.into());
+            }
+            cursor_trail_color = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .and_then(|value| parse_cursor_color(&value));
+            if cursor_trail_color.is_none() {
+                return Err(USAGE.into());
+            }
+        } else if argument == "--cursor-trail-duration-v1" {
+            if cursor_trail_duration.is_some() {
+                return Err(USAGE.into());
+            }
+            cursor_trail_duration = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .and_then(|value| value.parse::<f32>().ok())
+                .filter(|value| value.is_finite() && (0.25..=4.0).contains(value));
+            if cursor_trail_duration.is_none() {
+                return Err(USAGE.into());
+            }
         } else if argument.as_encoded_bytes().starts_with(b"-") {
             return Err(USAGE.into());
         } else if orbit_socket.is_none() {
@@ -1329,11 +1438,31 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
         }
     }
 
+    let cursor_tail = match (cursor_effect, cursor_trail_color, cursor_trail_duration) {
+        (None | Some(false), None, None) => None,
+        (Some(true), Some(color), Some(duration)) => Some((color, duration)),
+        _ => return Err(USAGE.into()),
+    };
+
     Ok(LaunchArguments {
         orbit_socket: orbit_socket.map_or_else(default_socket_path, Ok)?,
         workspace_socket,
         decorations,
         background_opacity: background_opacity.unwrap_or(1.0),
+        cursor_tail,
+    })
+}
+
+fn parse_cursor_color(value: &str) -> Option<Color> {
+    let hex = value.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let rgb = u32::from_str_radix(hex, 16).ok()?;
+    Some(Color {
+        r: (rgb >> 16) as u8,
+        g: (rgb >> 8) as u8,
+        b: rgb as u8,
     })
 }
 
@@ -1370,12 +1499,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn background_opacity_launch_arguments_are_bounded_and_default_opaque() {
+    fn cursor_profile_launch_arguments_are_complete_bounded_and_default_static() {
         let parse = |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from));
 
         let default = parse(&[]).unwrap();
         assert!(default.decorations && default.workspace_socket.is_none());
         assert_eq!(default.background_opacity, 1.0);
+        assert_eq!(default.cursor_tail, None);
 
         for value in ["0", "0.88", "1"] {
             let parsed = parse(&[
@@ -1392,6 +1522,32 @@ mod tests {
             assert_eq!(parsed.workspace_socket, Some(PathBuf::from("eon.sock")));
         }
 
+        let tail = parse(&[
+            "--cursor-effect-v1",
+            "tail",
+            "--cursor-trail-color-v1",
+            "#12aBcF",
+            "--cursor-trail-duration-v1",
+            "2.5",
+            "orbit.sock",
+        ])
+        .unwrap();
+        assert_eq!(
+            tail.cursor_tail,
+            Some((
+                yazelix_venus::Color {
+                    r: 0x12,
+                    g: 0xab,
+                    b: 0xcf,
+                },
+                2.5,
+            ))
+        );
+        assert_eq!(
+            parse(&["--cursor-effect-v1", "none"]).unwrap().cursor_tail,
+            None
+        );
+
         for invalid in [
             &["--unknown"][..],
             &["one", "two", "three"][..],
@@ -1402,8 +1558,118 @@ mod tests {
             &["--background-opacity", "-0.01"][..],
             &["--background-opacity", "1.01"][..],
             &["--background-opacity", "0.5", "--background-opacity", "0.6"][..],
+            &["--cursor-effect-v1"][..],
+            &["--cursor-effect-v1", "warp"][..],
+            &["--cursor-effect-v1", "tail"][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+            ][..],
+            &[
+                "--cursor-effect-v1",
+                "none",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "1",
+            ][..],
+            &["--cursor-trail-color-v1", "#123456"][..],
+            &["--cursor-trail-color-v1", "#aéabc"][..],
+            &["--cursor-trail-color-v1", "123456"][..],
+            &["--cursor-trail-color-v1", "#12345g"][..],
+            &["--cursor-trail-duration-v1", "1"][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "0.24",
+            ][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "4.01",
+            ][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "NaN",
+            ][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "1",
+            ][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-color-v1",
+                "#abcdef",
+                "--cursor-trail-duration-v1",
+                "1",
+            ][..],
+            &[
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "1",
+                "--cursor-trail-duration-v1",
+                "2",
+            ][..],
         ] {
             assert_eq!(parse(invalid).unwrap_err().to_string(), USAGE);
+        }
+    }
+
+    #[test]
+    fn cursor_animation_deadline_stops_when_inactive_unfocused_or_occluded() {
+        let now = Instant::now();
+        let mut deadline = None;
+
+        assert!(!update_animation_deadline(true, true, &mut deadline, now));
+        assert_eq!(deadline, Some(now + ANIMATION_FRAME_INTERVAL));
+        assert!(update_animation_deadline(
+            true,
+            true,
+            &mut deadline,
+            now + ANIMATION_FRAME_INTERVAL,
+        ));
+        assert_eq!(
+            deadline,
+            Some(now + ANIMATION_FRAME_INTERVAL.saturating_mul(2))
+        );
+
+        for (active, focused, occluded) in [
+            (false, true, false),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let allowed = cursor_animation_allowed(focused, occluded);
+            assert!(!update_animation_deadline(
+                active,
+                allowed,
+                &mut deadline,
+                now,
+            ));
+            assert_eq!(deadline, None);
         }
     }
 

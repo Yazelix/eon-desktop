@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Accept a strict versioned launch profile for a static cursor or one bounded
+  Rio-style cursor tail, using a single trail color and duration multiplier
+  while preserving Orbit's authoritative cursor state and stopping redraws when
+  motion settles, the window loses focus, or the surface is occluded.
 - Accept a finite `--background-opacity` value from `0.0` through `1.0`, apply
   it only to the terminal default background, and keep explicit cell
   backgrounds, workspace chrome, selection, inverse video, text, and cursors

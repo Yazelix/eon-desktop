@@ -1,10 +1,12 @@
-use crate::{Color as SceneColor, DrawStyle, Scene, SceneRect, WorkspaceFocus, WorkspaceScene};
+use crate::{
+    Color as SceneColor, DrawCursor, DrawStyle, Scene, SceneRect, WorkspaceFocus, WorkspaceScene,
+};
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
     Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
 use orbit_protocol::{CellWidth, CursorShape, Underline};
-use std::{error::Error, fmt, sync::Arc};
+use std::{error::Error, fmt, sync::Arc, time::Instant};
 use wgpu::{
     BlendState, BufferDescriptor, BufferUsages, ColorTargetState, ColorWrites,
     CommandEncoderDescriptor, CompositeAlphaMode, CurrentSurfaceTexture, DeviceDescriptor,
@@ -21,6 +23,10 @@ const VERTEX_SIZE: u64 = 24;
 #[cfg(test)]
 const VERTICES_PER_QUAD: u32 = 6;
 const BRAILLE_FAMILY: &str = "DejaVu Sans";
+const SHORT_CURSOR_ANIMATION: f32 = 0.04;
+const LONG_CURSOR_ANIMATION: f32 = 0.15;
+const MAX_CURSOR_DELTA: f32 = 0.1;
+const CURSOR_SETTLED: f32 = 0.01;
 const DEFAULT_BACKGROUND: SceneColor = SceneColor {
     r: 10,
     g: 13,
@@ -143,6 +149,222 @@ struct ContentKey {
     status: String,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct CursorPoint {
+    x: f32,
+    y: f32,
+}
+
+fn rect_corners(rect: SceneRect) -> [CursorPoint; 4] {
+    [
+        CursorPoint {
+            x: rect.left,
+            y: rect.top,
+        },
+        CursorPoint {
+            x: rect.right(),
+            y: rect.top,
+        },
+        CursorPoint {
+            x: rect.right(),
+            y: rect.bottom(),
+        },
+        CursorPoint {
+            x: rect.left,
+            y: rect.bottom(),
+        },
+    ]
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CursorSpring {
+    displacement: f32,
+    velocity: f32,
+}
+
+impl CursorSpring {
+    fn advance(&mut self, delta: f32, duration: f32) -> bool {
+        let delta = delta.clamp(0.0, MAX_CURSOR_DELTA);
+        if !self.displacement.is_finite()
+            || !self.velocity.is_finite()
+            || !duration.is_finite()
+            || duration <= delta
+        {
+            *self = Self::default();
+            return false;
+        }
+        if self.displacement.abs() < CURSOR_SETTLED {
+            *self = Self::default();
+            return false;
+        }
+
+        let omega = 4.0 / duration;
+        let a = self.displacement;
+        let b = a * omega + self.velocity;
+        let decay = (-omega * delta).exp();
+        self.displacement = (a + b * delta) * decay;
+        self.velocity = decay * (-a * omega - b * delta * omega + b);
+        if !self.displacement.is_finite() || self.displacement.abs() < CURSOR_SETTLED {
+            *self = Self::default();
+            false
+        } else {
+            true
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct AnimatedCorner {
+    x: CursorSpring,
+    y: CursorSpring,
+    duration: f32,
+}
+
+#[derive(Clone, Debug, Default)]
+struct CursorAnimation {
+    corners: [AnimatedCorner; 4],
+    target: Option<SceneRect>,
+    route: Option<String>,
+    viewport: Option<SceneRect>,
+}
+
+impl CursorAnimation {
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn update(
+        &mut self,
+        target: SceneRect,
+        route: Option<&str>,
+        viewport: SceneRect,
+        cell_width: f32,
+        delta: f32,
+        duration_scale: f32,
+    ) -> bool {
+        if !valid_rect(target)
+            || !valid_rect(viewport)
+            || !duration_scale.is_finite()
+            || !(0.25..=4.0).contains(&duration_scale)
+        {
+            self.reset();
+            return false;
+        }
+        if self.target.is_none()
+            || self.route.as_deref() != route
+            || self.viewport != Some(viewport)
+        {
+            self.snap(target, route, viewport);
+            return false;
+        }
+        if self
+            .target
+            .is_some_and(|previous| rect_changed(previous, target))
+        {
+            self.start_jump(target, cell_width, duration_scale);
+            return self.advance(0.0);
+        }
+        self.advance(delta)
+    }
+
+    fn snap(&mut self, target: SceneRect, route: Option<&str>, viewport: SceneRect) {
+        self.target = Some(target);
+        self.route = route.map(str::to_owned);
+        self.viewport = Some(viewport);
+        self.corners = [AnimatedCorner::default(); 4];
+    }
+
+    fn start_jump(&mut self, target: SceneRect, cell_width: f32, duration_scale: f32) {
+        let previous = self.target.expect("an initialized cursor has a target");
+        let movement = CursorPoint {
+            x: target.left + target.width * 0.5 - previous.left - previous.width * 0.5,
+            y: target.top + target.height * 0.5 - previous.top - previous.height * 0.5,
+        };
+        let short = movement.x.abs() <= cell_width * 2.001 && movement.y.abs() < CURSOR_SETTLED;
+        let durations = if short {
+            [SHORT_CURSOR_ANIMATION * duration_scale; 4]
+        } else {
+            ranked_cursor_durations(movement, duration_scale)
+        };
+        let previous = rect_corners(previous);
+        let destinations = rect_corners(target);
+        for (index, duration) in durations.into_iter().enumerate() {
+            let corner = &mut self.corners[index];
+            corner.x.displacement =
+                destinations[index].x - (previous[index].x - corner.x.displacement);
+            corner.y.displacement =
+                destinations[index].y - (previous[index].y - corner.y.displacement);
+            corner.duration = duration;
+        }
+        self.target = Some(target);
+    }
+
+    fn advance(&mut self, delta: f32) -> bool {
+        let mut active = false;
+        for corner in &mut self.corners {
+            active |= corner.x.advance(delta, corner.duration);
+            active |= corner.y.advance(delta, corner.duration);
+        }
+        active
+    }
+
+    fn corners(&self) -> [CursorPoint; 4] {
+        let target = rect_corners(self.target.unwrap_or_default());
+        [0, 1, 2, 3].map(|index| CursorPoint {
+            x: target[index].x - self.corners[index].x.displacement,
+            y: target[index].y - self.corners[index].y.displacement,
+        })
+    }
+
+    fn is_active(&self) -> bool {
+        self.corners
+            .iter()
+            .any(|corner| corner.x.displacement != 0.0 || corner.y.displacement != 0.0)
+    }
+}
+
+fn ranked_cursor_durations(movement: CursorPoint, scale: f32) -> [f32; 4] {
+    let length = (movement.x * movement.x + movement.y * movement.y)
+        .sqrt()
+        .max(f32::EPSILON);
+    let direction = CursorPoint {
+        x: movement.x / length,
+        y: movement.y / length,
+    };
+    let relatives = [(-0.5_f32, -0.5_f32), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
+    let ranked = relatives.map(|(x, y)| x * direction.x + y * direction.y);
+    let mut order = [0_usize, 1, 2, 3];
+    order.sort_by(|left, right| {
+        ranked[*left]
+            .total_cmp(&ranked[*right])
+            .then(left.cmp(right))
+    });
+    let mut durations = [0.0; 4];
+    for (rank, index) in order.into_iter().enumerate() {
+        durations[index] = match rank {
+            0 => LONG_CURSOR_ANIMATION * scale,
+            1 => LONG_CURSOR_ANIMATION * scale * 0.5,
+            _ => 0.0,
+        };
+    }
+    durations
+}
+
+fn valid_rect(rect: SceneRect) -> bool {
+    [rect.left, rect.top, rect.width, rect.height]
+        .into_iter()
+        .all(f32::is_finite)
+        && rect.width > 0.0
+        && rect.height > 0.0
+}
+
+fn rect_changed(left: SceneRect, right: SceneRect) -> bool {
+    (left.left - right.left).abs() >= CURSOR_SETTLED
+        || (left.top - right.top).abs() >= CURSOR_SETTLED
+        || (left.width - right.width).abs() >= CURSOR_SETTLED
+        || (left.height - right.height).abs() >= CURSOR_SETTLED
+}
+
 /// One wgpu surface and one glyphon text owner for the native window.
 pub struct Renderer {
     instance: Instance,
@@ -154,6 +376,10 @@ pub struct Renderer {
     vertices: wgpu::Buffer,
     vertex_capacity: u64,
     vertex_count: u32,
+    cursor_vertex_boundary: u32,
+    dynamic_vertices: wgpu::Buffer,
+    dynamic_vertex_capacity: u64,
+    dynamic_vertex_count: u32,
     font_system: FontSystem,
     swash_cache: SwashCache,
     viewport: Viewport,
@@ -161,6 +387,9 @@ pub struct Renderer {
     text_renderer: TextRenderer,
     text: Vec<PlacedText>,
     content_key: Option<ContentKey>,
+    cursor_tail: Option<(SceneColor, f32)>,
+    cursor_animation: CursorAnimation,
+    last_cursor_frame: Option<Instant>,
     clear: wgpu::Color,
     background_opacity: f32,
     metrics: CellMetrics,
@@ -173,6 +402,7 @@ impl Renderer {
         window: Arc<Window>,
         event_loop: &ActiveEventLoop,
         background_opacity: f32,
+        cursor_tail: Option<(SceneColor, f32)>,
     ) -> Result<Self, RenderError> {
         let size = nonzero(window.inner_size());
         let instance = Instance::new(InstanceDescriptor::new_with_display_handle(Box::new(
@@ -269,6 +499,12 @@ impl Renderer {
             usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let dynamic_vertices = device.create_buffer(&BufferDescriptor {
+            label: Some("venus dynamic cursor vertices"),
+            size: vertex_capacity,
+            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         let mut font_system = FontSystem::new();
         let metrics = CellMetrics::for_scale(window.scale_factor());
@@ -295,6 +531,10 @@ impl Renderer {
             vertices,
             vertex_capacity,
             vertex_count: 0,
+            cursor_vertex_boundary: 0,
+            dynamic_vertices,
+            dynamic_vertex_capacity: vertex_capacity,
+            dynamic_vertex_count: 0,
             font_system,
             swash_cache,
             viewport,
@@ -302,6 +542,9 @@ impl Renderer {
             text_renderer,
             text: Vec::new(),
             content_key: None,
+            cursor_tail,
+            cursor_animation: CursorAnimation::default(),
+            last_cursor_frame: None,
             clear: clear_color(DEFAULT_BACKGROUND, background_opacity, srgb_target),
             background_opacity,
             metrics,
@@ -331,6 +574,18 @@ impl Renderer {
         }
         self.surface.configure(&self.device, &self.config);
         self.content_key = None;
+        self.reset_cursor_animation();
+    }
+
+    pub fn reset_cursor_animation(&mut self) {
+        self.cursor_animation.reset();
+        self.last_cursor_frame = None;
+        self.dynamic_vertex_count = 0;
+    }
+
+    #[must_use]
+    pub fn cursor_animation_active(&self) -> bool {
+        self.cursor_animation.is_active()
     }
 
     pub fn render(
@@ -342,7 +597,7 @@ impl Renderer {
         blink_visible: bool,
         preedit: &str,
     ) -> Result<PresentOutcome, RenderError> {
-        self.rebuild_if_needed(
+        let content_changed = self.rebuild_if_needed(
             scene,
             workspace,
             workspace_focus,
@@ -350,29 +605,17 @@ impl Renderer {
             blink_visible,
             preedit,
         );
-        self.viewport.update(
-            &self.queue,
-            Resolution {
-                width: self.config.width,
-                height: self.config.height,
-            },
-        );
-
-        if self
-            .text_renderer
-            .prepare(
-                &self.device,
+        self.rebuild_dynamic_cursor(scene, workspace, blink_visible);
+        if content_changed {
+            self.viewport.update(
                 &self.queue,
-                &mut self.font_system,
-                &mut self.atlas,
-                &self.viewport,
-                text_areas(&self.text),
-                &mut self.swash_cache,
-            )
-            .is_err()
-        {
-            self.atlas.trim();
-            self.text_renderer
+                Resolution {
+                    width: self.config.width,
+                    height: self.config.height,
+                },
+            );
+            if self
+                .text_renderer
                 .prepare(
                     &self.device,
                     &self.queue,
@@ -382,7 +625,21 @@ impl Renderer {
                     text_areas(&self.text),
                     &mut self.swash_cache,
                 )
-                .map_err(display_error("the Venus glyph atlas is full"))?;
+                .is_err()
+            {
+                self.atlas.trim();
+                self.text_renderer
+                    .prepare(
+                        &self.device,
+                        &self.queue,
+                        &mut self.font_system,
+                        &mut self.atlas,
+                        &self.viewport,
+                        text_areas(&self.text),
+                        &mut self.swash_cache,
+                    )
+                    .map_err(display_error("the Venus glyph atlas is full"))?;
+            }
         }
 
         let frame = match self.surface.get_current_texture() {
@@ -391,14 +648,19 @@ impl Renderer {
                 self.window.request_redraw();
                 return Ok(PresentOutcome::Deferred);
             }
-            CurrentSurfaceTexture::Occluded => return Ok(PresentOutcome::Deferred),
+            CurrentSurfaceTexture::Occluded => {
+                self.reset_cursor_animation();
+                return Ok(PresentOutcome::Deferred);
+            }
             CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
+                self.reset_cursor_animation();
                 return Ok(PresentOutcome::Recovered);
             }
             CurrentSurfaceTexture::Suboptimal(frame) => {
                 drop(frame);
                 self.surface.configure(&self.device, &self.config);
+                self.reset_cursor_animation();
                 return Ok(PresentOutcome::Recovered);
             }
             CurrentSurfaceTexture::Lost => {
@@ -407,6 +669,7 @@ impl Renderer {
                     .create_surface(Arc::clone(&self.window))
                     .map_err(display_error("cannot recover the Venus GPU surface"))?;
                 self.surface.configure(&self.device, &self.config);
+                self.reset_cursor_animation();
                 return Ok(PresentOutcome::Recovered);
             }
             CurrentSurfaceTexture::Validation => {
@@ -436,10 +699,25 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            if self.vertex_count > 0 {
+            let cursor_boundary = cursor_vertex_boundary(
+                self.vertex_count,
+                self.cursor_vertex_boundary,
+                self.dynamic_vertex_count > 0,
+            );
+            if self.vertex_count > 0 || self.dynamic_vertex_count > 0 {
                 pass.set_pipeline(&self.rectangle_pipeline);
+            }
+            if cursor_boundary > 0 {
                 pass.set_vertex_buffer(0, self.vertices.slice(..));
-                pass.draw(0..self.vertex_count, 0..1);
+                pass.draw(0..cursor_boundary, 0..1);
+            }
+            if self.dynamic_vertex_count > 0 {
+                pass.set_vertex_buffer(0, self.dynamic_vertices.slice(..));
+                pass.draw(0..self.dynamic_vertex_count, 0..1);
+            }
+            if cursor_boundary < self.vertex_count {
+                pass.set_vertex_buffer(0, self.vertices.slice(..));
+                pass.draw(cursor_boundary..self.vertex_count, 0..1);
             }
             self.text_renderer
                 .render(&self.atlas, &self.viewport, &mut pass)
@@ -459,7 +737,7 @@ impl Renderer {
         status: &str,
         blink_visible: bool,
         preedit: &str,
-    ) {
+    ) -> bool {
         let key = ContentKey {
             revision: scene.map(|scene| scene.revision),
             workspace: workspace.cloned(),
@@ -469,11 +747,12 @@ impl Renderer {
             status: status.to_owned(),
         };
         if self.content_key.as_ref() == Some(&key) {
-            return;
+            return false;
         }
 
         self.text.clear();
         let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
+        let mut cursor_vertex_boundary = 0;
         if let Some(workspace) = workspace {
             self.clear = wgpu::Color::TRANSPARENT;
             self.build_workspace(workspace, workspace_focus, &mut rectangles);
@@ -489,12 +768,13 @@ impl Renderer {
                 if let Some(scene) = scene {
                     rectangles.clip = Some(terminal);
                     self.build_scene_text(scene, blink_visible, workspace.terminal, terminal);
-                    build_scene_rectangles(
+                    cursor_vertex_boundary = build_scene_rectangles(
                         &mut rectangles,
                         scene,
                         blink_visible,
                         self.metrics,
                         workspace.terminal,
+                        self.cursor_tail.is_none(),
                     );
                     self.build_preedit(
                         scene,
@@ -538,12 +818,13 @@ impl Renderer {
                 height: self.config.height as f32,
             };
             self.build_scene_text(scene, blink_visible, viewport, viewport);
-            build_scene_rectangles(
+            cursor_vertex_boundary = build_scene_rectangles(
                 &mut rectangles,
                 scene,
                 blink_visible,
                 self.metrics,
                 viewport,
+                self.cursor_tail.is_none(),
             );
             self.build_preedit(scene, preedit, &mut rectangles, viewport, viewport);
             if !status.is_empty() {
@@ -582,8 +863,72 @@ impl Renderer {
                 DrawStyleKind::Status,
             );
         }
+        self.cursor_vertex_boundary = cursor_vertex_boundary;
         self.upload_vertices(&rectangles.bytes);
         self.content_key = Some(key);
+        true
+    }
+
+    fn rebuild_dynamic_cursor(
+        &mut self,
+        scene: Option<&Scene>,
+        workspace: Option<&WorkspaceScene>,
+        blink_visible: bool,
+    ) {
+        let Some((trail_color, duration_scale)) = self.cursor_tail else {
+            self.reset_cursor_animation();
+            return;
+        };
+        let (viewport, clip, route) = if let Some(workspace) = workspace {
+            let Some(clip) = workspace.visible_terminal() else {
+                self.reset_cursor_animation();
+                return;
+            };
+            (
+                workspace.terminal,
+                Some(clip),
+                workspace
+                    .panes
+                    .iter()
+                    .find(|pane| pane.selected)
+                    .map(|pane| pane.id.as_str()),
+            )
+        } else {
+            (
+                SceneRect {
+                    left: 0.0,
+                    top: 0.0,
+                    width: self.config.width as f32,
+                    height: self.config.height as f32,
+                },
+                None,
+                None,
+            )
+        };
+        let now = Instant::now();
+        let delta = self
+            .last_cursor_frame
+            .replace(now)
+            .map_or(0.0, |last| now.duration_since(last).as_secs_f32());
+        let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
+        rectangles.clip = clip;
+        if let Some(scene) = scene {
+            build_tail_cursor(
+                &mut rectangles,
+                &mut self.cursor_animation,
+                scene,
+                blink_visible,
+                self.metrics,
+                viewport,
+                route,
+                trail_color,
+                duration_scale,
+                delta,
+            );
+        } else {
+            self.cursor_animation.reset();
+        }
+        self.upload_dynamic_vertices(&rectangles.bytes);
     }
 
     fn build_workspace(
@@ -1002,23 +1347,61 @@ impl Renderer {
     }
 
     fn upload_vertices(&mut self, bytes: &[u8]) {
-        self.vertex_count = u32::try_from(bytes.len() / VERTEX_SIZE as usize)
-            .expect("bounded Orbit frames fit the vertex count");
-        if bytes.is_empty() {
-            return;
-        }
-        let needed = bytes.len() as u64;
-        if needed > self.vertex_capacity {
-            self.vertex_capacity = needed.next_power_of_two();
-            self.vertices = self.device.create_buffer(&BufferDescriptor {
-                label: Some("venus rectangle vertices"),
-                size: self.vertex_capacity,
-                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
-        self.queue.write_buffer(&self.vertices, 0, bytes);
+        self.vertex_count = upload_vertices(
+            &self.device,
+            &self.queue,
+            &mut self.vertices,
+            &mut self.vertex_capacity,
+            bytes,
+            "venus rectangle vertices",
+        );
     }
+
+    fn upload_dynamic_vertices(&mut self, bytes: &[u8]) {
+        self.dynamic_vertex_count = upload_vertices(
+            &self.device,
+            &self.queue,
+            &mut self.dynamic_vertices,
+            &mut self.dynamic_vertex_capacity,
+            bytes,
+            "venus dynamic cursor vertices",
+        );
+    }
+}
+
+fn vertex_count(bytes: &[u8]) -> u32 {
+    u32::try_from(bytes.len() / VERTEX_SIZE as usize)
+        .expect("bounded draw inputs fit the vertex count")
+}
+
+fn cursor_vertex_boundary(total: u32, boundary: u32, dynamic: bool) -> u32 {
+    (if dynamic { boundary } else { total }).min(total)
+}
+
+fn upload_vertices(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffer: &mut wgpu::Buffer,
+    capacity: &mut u64,
+    bytes: &[u8],
+    label: &'static str,
+) -> u32 {
+    let count = vertex_count(bytes);
+    if bytes.is_empty() {
+        return count;
+    }
+    let needed = bytes.len() as u64;
+    if needed > *capacity {
+        *capacity = needed.next_power_of_two();
+        *buffer = device.create_buffer(&BufferDescriptor {
+            label: Some(label),
+            size: *capacity,
+            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+    }
+    queue.write_buffer(buffer, 0, bytes);
+    count
 }
 
 #[derive(Clone, Copy)]
@@ -1202,26 +1585,57 @@ impl RectangleBatch {
         if rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
+        let [top_left, top_right, bottom_right, bottom_left] = rect_corners(rect);
+        self.push_points(
+            [
+                top_left,
+                bottom_left,
+                bottom_right,
+                top_left,
+                bottom_right,
+                top_right,
+            ],
+            color,
+            alpha,
+        );
+    }
+
+    fn push_quad(&mut self, points: [CursorPoint; 4], color: SceneColor, alpha: f32) {
+        if !alpha.is_finite()
+            || !points
+                .iter()
+                .all(|point| point.x.is_finite() && point.y.is_finite())
+        {
+            return;
+        }
+        let points = points.map(|mut point| {
+            if let Some(clip) = self.clip {
+                point.x = point.x.clamp(clip.left, clip.right());
+                point.y = point.y.clamp(clip.top, clip.bottom());
+            }
+            point
+        });
+        self.push_points(
+            [
+                points[0], points[1], points[2], points[0], points[2], points[3],
+            ],
+            color,
+            alpha,
+        );
+    }
+
+    fn push_points(&mut self, points: [CursorPoint; 6], color: SceneColor, alpha: f32) {
         let to_x = |value: f32| value / self.width as f32 * 2.0 - 1.0;
         let to_y = |value: f32| 1.0 - value / self.height as f32 * 2.0;
-        let left = to_x(rect.left);
-        let right = to_x(rect.right());
-        let top = to_y(rect.top);
-        let bottom = to_y(rect.bottom());
         let rgba = [
             f32::from(color.r) / 255.0,
             f32::from(color.g) / 255.0,
             f32::from(color.b) / 255.0,
             alpha,
         ];
-        for [x, y] in [
-            [left, top],
-            [left, bottom],
-            [right, bottom],
-            [left, top],
-            [right, bottom],
-            [right, top],
-        ] {
+        for point in points {
+            let x = to_x(point.x);
+            let y = to_y(point.y);
             for value in [x, y, rgba[0], rgba[1], rgba[2], rgba[3]] {
                 self.bytes.extend_from_slice(&value.to_ne_bytes());
             }
@@ -1254,7 +1668,8 @@ fn build_scene_rectangles(
     blink_visible: bool,
     metrics: CellMetrics,
     viewport: SceneRect,
-) {
+    draw_cursor: bool,
+) -> u32 {
     for (row_index, row) in scene.content.iter().enumerate() {
         let mut start = 0_usize;
         while start < row.cells.len() {
@@ -1383,45 +1798,121 @@ fn build_scene_rectangles(
             }
         }
     }
-    if let Some(cursor) = scene
+    if draw_cursor
+        && let Some(cursor) = scene
+            .cursor
+            .filter(|cursor| cursor.visible && (blink_visible || !cursor.blinking))
+        && let Some(bounds) = cursor_bounds(scene, cursor, metrics, viewport)
+    {
+        push_cursor(rectangles, cursor, bounds, metrics);
+    }
+    vertex_count(&rectangles.bytes)
+}
+
+fn cursor_bounds(
+    scene: &Scene,
+    cursor: DrawCursor,
+    metrics: CellMetrics,
+    viewport: SceneRect,
+) -> Option<SceneRect> {
+    if !valid_rect(viewport)
+        || !metrics.width.is_finite()
+        || !metrics.height.is_finite()
+        || !metrics.padding.is_finite()
+        || metrics.width <= 0.0
+        || metrics.height <= 0.0
+        || cursor.row >= scene.rows
+    {
+        return None;
+    }
+    let column = cursor.leading_column();
+    let wide = cursor.at_wide_tail
+        || scene
+            .content
+            .get(usize::from(cursor.row))
+            .and_then(|row| row.cells.get(usize::from(column)))
+            .is_some_and(|cell| cell.width == CellWidth::Wide);
+    let columns = if wide { 2 } else { 1 };
+    if column.checked_add(columns)? > scene.columns {
+        return None;
+    }
+    Some(SceneRect {
+        left: viewport.left + metrics.padding + f32::from(column) * metrics.width,
+        top: viewport.top + metrics.padding + f32::from(cursor.row) * metrics.height,
+        width: metrics.width * f32::from(columns),
+        height: metrics.height,
+    })
+}
+
+fn push_cursor(
+    rectangles: &mut RectangleBatch,
+    cursor: DrawCursor,
+    bounds: SceneRect,
+    metrics: CellMetrics,
+) {
+    let thickness = (metrics.width / 7.0).max(1.0);
+    let (x, y, width, height, alpha) = match cursor.shape {
+        CursorShape::Bar => (bounds.left, bounds.top, thickness, bounds.height, 1.0),
+        CursorShape::Underline => (
+            bounds.left,
+            bounds.bottom() - thickness,
+            bounds.width,
+            thickness,
+            1.0,
+        ),
+        CursorShape::Block => (bounds.left, bounds.top, bounds.width, bounds.height, 0.55),
+        CursorShape::BlockHollow => {
+            rectangles.push_hollow(
+                bounds.left,
+                bounds.top,
+                bounds.width,
+                bounds.height,
+                thickness,
+                cursor.color,
+            );
+            return;
+        }
+    };
+    rectangles.push(x, y, width, height, cursor.color, alpha);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_tail_cursor(
+    rectangles: &mut RectangleBatch,
+    animation: &mut CursorAnimation,
+    scene: &Scene,
+    blink_visible: bool,
+    metrics: CellMetrics,
+    viewport: SceneRect,
+    route: Option<&str>,
+    trail_color: SceneColor,
+    duration_scale: f32,
+    delta: f32,
+) -> bool {
+    let Some(cursor) = scene
         .cursor
         .filter(|cursor| cursor.visible && (blink_visible || !cursor.blinking))
-    {
-        let column = cursor.leading_column();
-        let wide = cursor.at_wide_tail
-            || scene
-                .content
-                .get(usize::from(cursor.row))
-                .and_then(|row| row.cells.get(usize::from(column)))
-                .is_some_and(|cell| cell.width == CellWidth::Wide);
-        let cursor_width = metrics.width * if wide { 2.0 } else { 1.0 };
-        let left = viewport.left + metrics.padding + f32::from(column) * metrics.width;
-        let top = viewport.top + metrics.padding + f32::from(cursor.row) * metrics.height;
-        let thickness = (metrics.width / 7.0).max(1.0);
-        let (x, y, w, h, alpha) = match cursor.shape {
-            CursorShape::Bar => (left, top, thickness, metrics.height, 1.0),
-            CursorShape::Underline => (
-                left,
-                top + metrics.height - thickness,
-                cursor_width,
-                thickness,
-                1.0,
-            ),
-            CursorShape::Block => (left, top, cursor_width, metrics.height, 0.55),
-            CursorShape::BlockHollow => {
-                rectangles.push_hollow(
-                    left,
-                    top,
-                    cursor_width,
-                    metrics.height,
-                    thickness,
-                    cursor.color,
-                );
-                return;
-            }
-        };
-        rectangles.push(x, y, w, h, cursor.color, alpha);
+    else {
+        animation.reset();
+        return false;
+    };
+    let Some(bounds) = cursor_bounds(scene, cursor, metrics, viewport) else {
+        animation.reset();
+        return false;
+    };
+    let active = animation.update(
+        bounds,
+        route,
+        viewport,
+        metrics.width,
+        delta,
+        duration_scale,
+    );
+    if active {
+        rectangles.push_quad(animation.corners(), trail_color, 1.0);
     }
+    push_cursor(rectangles, cursor, bounds, metrics);
+    active
 }
 
 fn build_notice_rectangles(rectangles: &mut RectangleBatch, metrics: CellMetrics) {
@@ -1589,6 +2080,7 @@ mod tests {
                 width: 100.0,
                 height: 100.0,
             },
+            true,
         );
 
         assert!(rectangles.bytes.is_empty());
@@ -1652,7 +2144,7 @@ mod tests {
                 height: 200.0,
             };
             let mut actual = RectangleBatch::new(300, 300);
-            build_scene_rectangles(&mut actual, &scene, true, metrics, viewport);
+            build_scene_rectangles(&mut actual, &scene, true, metrics, viewport, true);
             let mut expected = RectangleBatch::new(300, 300);
             for (index, color) in colors.into_iter().enumerate() {
                 expected.push(
@@ -1721,6 +2213,7 @@ mod tests {
                     width: 100.0,
                     height: 100.0,
                 },
+                true,
             );
             rectangles.bytes
         };
@@ -1752,6 +2245,314 @@ mod tests {
                 ..cursor
             }),
             expected(1.0, 2.0)
+        );
+    }
+
+    #[test]
+    fn cursor_spring_snaps_then_distinguishes_short_long_and_scaled_motion() {
+        let origin = SceneRect {
+            left: 10.0,
+            top: 20.0,
+            width: 10.0,
+            height: 18.0,
+        };
+        let short = SceneRect {
+            left: 20.0,
+            ..origin
+        };
+        let long = SceneRect {
+            left: 60.0,
+            top: 74.0,
+            ..origin
+        };
+        let viewport = SceneRect {
+            left: 0.0,
+            top: 0.0,
+            width: 200.0,
+            height: 200.0,
+        };
+        let cell_width = origin.width;
+
+        let mut animation = CursorAnimation::default();
+        assert!(!animation.update(origin, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
+        assert_eq!(animation.corners(), rect_corners(origin));
+        assert!(animation.update(short, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
+        assert!(!animation.update(short, Some("pane-1"), viewport, cell_width, 0.05, 1.0));
+        assert_eq!(animation.corners(), rect_corners(short));
+
+        animation.reset();
+        assert!(!animation.update(origin, None, viewport, cell_width, 0.0, 1.0));
+        assert!(animation.update(long, None, viewport, cell_width, 0.0, 1.0));
+        assert!(animation.update(long, None, viewport, cell_width, 0.05, 1.0));
+
+        let wide_origin = SceneRect {
+            width: 20.0,
+            ..origin
+        };
+        let mut wide_three_cells = SceneRect {
+            left: 40.0,
+            ..wide_origin
+        };
+        let mut wide_animation = CursorAnimation::default();
+        assert!(!wide_animation.update(wide_origin, None, viewport, cell_width, 0.0, 1.0));
+        assert!(wide_animation.update(wide_three_cells, None, viewport, cell_width, 0.0, 1.0));
+        assert!(wide_animation.update(wide_three_cells, None, viewport, cell_width, 0.05, 1.0));
+        let before_retarget = wide_animation.corners()[0].x;
+        wide_three_cells.left = 80.0;
+        assert!(wide_animation.update(wide_three_cells, None, viewport, cell_width, 0.0, 1.0));
+        assert!((wide_animation.corners()[0].x - before_retarget).abs() < CURSOR_SETTLED);
+
+        let started = |scale| {
+            let mut animation = CursorAnimation::default();
+            assert!(!animation.update(origin, None, viewport, cell_width, 0.0, scale));
+            assert!(animation.update(long, None, viewport, cell_width, 0.0, scale));
+            animation
+        };
+        let mut fast = started(0.25);
+        let mut slow = started(4.0);
+        assert!(!fast.update(long, None, viewport, cell_width, 0.05, 0.25));
+        assert!(slow.update(long, None, viewport, cell_width, 0.05, 4.0));
+
+        let mut bounded = started(4.0);
+        let mut huge_delta = bounded.clone();
+        assert_eq!(
+            bounded.update(long, None, viewport, cell_width, 0.1, 4.0),
+            huge_delta.update(long, None, viewport, cell_width, 10.0, 4.0)
+        );
+        assert_eq!(bounded.corners(), huge_delta.corners());
+
+        for _ in 0..120 {
+            if !slow.update(long, None, viewport, cell_width, 1.0 / 60.0, 4.0) {
+                break;
+            }
+        }
+        assert!(!slow.is_active());
+        assert_eq!(slow.corners(), rect_corners(long));
+
+        let moved = SceneRect { left: 80.0, ..long };
+        assert!(!slow.update(long, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
+        assert!(slow.update(moved, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
+        assert!(!slow.update(moved, Some("pane-2"), viewport, cell_width, 0.0, 1.0));
+        assert_eq!(slow.corners(), rect_corners(moved));
+        assert!(!slow.update(
+            moved,
+            Some("pane-2"),
+            SceneRect {
+                top: 10.0,
+                ..viewport
+            },
+            cell_width,
+            0.0,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn tail_cursor_uses_one_color_and_resets_when_hidden_or_blinking_off() {
+        let style = plain_style();
+        let mut scene = Scene {
+            revision: 1,
+            columns: 4,
+            rows: 1,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: DEFAULT_BACKGROUND,
+            foreground: SceneColor::default(),
+            cursor: Some(DrawCursor {
+                visible: true,
+                blinking: false,
+                password_input: false,
+                shape: CursorShape::Block,
+                column: 0,
+                row: 0,
+                at_wide_tail: false,
+                color: SceneColor { r: 1, g: 2, b: 3 },
+            }),
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells: [
+                    CellWidth::Narrow,
+                    CellWidth::Wide,
+                    CellWidth::SpacerTail,
+                    CellWidth::Narrow,
+                ]
+                .into_iter()
+                .map(|width| DrawCell {
+                    width,
+                    text: String::new(),
+                    hyperlink: String::new(),
+                    style,
+                })
+                .collect(),
+            }],
+        };
+        let viewport = SceneRect {
+            left: 0.0,
+            top: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        let metrics = CellMetrics::for_scale(1.0);
+        let trail = SceneColor {
+            r: 0x12,
+            g: 0xab,
+            b: 0xcf,
+        };
+        let mut animation = CursorAnimation::default();
+        let mut first = RectangleBatch::new(100, 100);
+        assert!(!build_tail_cursor(
+            &mut first,
+            &mut animation,
+            &scene,
+            true,
+            metrics,
+            viewport,
+            None,
+            trail,
+            1.0,
+            0.0,
+        ));
+        assert_eq!(
+            first.bytes.len(),
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize
+        );
+
+        scene.cursor.as_mut().unwrap().column = 2;
+        scene.cursor.as_mut().unwrap().at_wide_tail = true;
+        let mut moving = RectangleBatch::new(100, 100);
+        assert!(build_tail_cursor(
+            &mut moving,
+            &mut animation,
+            &scene,
+            true,
+            metrics,
+            viewport,
+            None,
+            trail,
+            1.0,
+            0.0,
+        ));
+        assert_eq!(
+            moving.bytes.len(),
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize * 2
+        );
+        for vertex in moving.bytes[..VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize]
+            .chunks_exact(VERTEX_SIZE as usize)
+        {
+            assert_eq!(
+                f32::from_ne_bytes(vertex[8..12].try_into().unwrap()),
+                0x12 as f32 / 255.0
+            );
+            assert_eq!(
+                f32::from_ne_bytes(vertex[12..16].try_into().unwrap()),
+                0xab as f32 / 255.0
+            );
+            assert_eq!(
+                f32::from_ne_bytes(vertex[16..20].try_into().unwrap()),
+                0xcf as f32 / 255.0
+            );
+        }
+        let mut tick = RectangleBatch::new(100, 100);
+        assert!(build_tail_cursor(
+            &mut tick,
+            &mut animation,
+            &scene,
+            true,
+            metrics,
+            viewport,
+            None,
+            trail,
+            1.0,
+            0.016,
+        ));
+
+        scene.cursor.as_mut().unwrap().blinking = true;
+        let mut hidden = RectangleBatch::new(100, 100);
+        assert!(!build_tail_cursor(
+            &mut hidden,
+            &mut animation,
+            &scene,
+            false,
+            metrics,
+            viewport,
+            None,
+            trail,
+            1.0,
+            0.01,
+        ));
+        assert!(hidden.bytes.is_empty());
+        assert!(!animation.is_active());
+    }
+
+    #[test]
+    fn dynamic_cursor_keeps_later_static_overlays_on_top() {
+        assert_eq!(cursor_vertex_boundary(18, 12, true), 12);
+        assert_eq!(cursor_vertex_boundary(18, 12, false), 18);
+        assert_eq!(cursor_vertex_boundary(18, 24, true), 18);
+    }
+
+    #[test]
+    fn trail_quad_is_two_clipped_finite_triangles_in_stable_order() {
+        let mut rectangles = RectangleBatch::new(100, 100);
+        rectangles.clip = Some(SceneRect {
+            left: 10.0,
+            top: 20.0,
+            width: 50.0,
+            height: 40.0,
+        });
+        let points = [
+            CursorPoint { x: -5.0, y: 10.0 },
+            CursorPoint { x: 70.0, y: 15.0 },
+            CursorPoint { x: 65.0, y: 70.0 },
+            CursorPoint { x: 5.0, y: 65.0 },
+        ];
+        rectangles.push_quad(points, SceneColor { r: 1, g: 2, b: 3 }, 1.0);
+
+        assert_eq!(
+            rectangles.bytes.len(),
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize
+        );
+        let positions = rectangles
+            .bytes
+            .chunks_exact(VERTEX_SIZE as usize)
+            .map(|vertex| {
+                (
+                    f32::from_ne_bytes(vertex[..4].try_into().unwrap()),
+                    f32::from_ne_bytes(vertex[4..8].try_into().unwrap()),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            positions,
+            [
+                points[0], points[1], points[2], points[0], points[2], points[3]
+            ]
+            .map(|point| {
+                let x = point.x.clamp(10.0, 60.0) / 100.0 * 2.0 - 1.0;
+                let y = 1.0 - point.y.clamp(20.0, 60.0) / 100.0 * 2.0;
+                (x, y)
+            })
+        );
+        assert!(
+            positions
+                .iter()
+                .all(|(x, y)| x.is_finite() && y.is_finite())
+        );
+
+        rectangles.push_quad(
+            [CursorPoint {
+                x: f32::NAN,
+                y: 0.0,
+            }; 4],
+            SceneColor::default(),
+            1.0,
+        );
+        assert_eq!(
+            rectangles.bytes.len(),
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize
         );
     }
 
@@ -1869,7 +2670,7 @@ mod tests {
             height: 100.0,
         };
         let mut actual = RectangleBatch::new(100, 100);
-        build_scene_rectangles(&mut actual, &scene, true, metrics, viewport);
+        build_scene_rectangles(&mut actual, &scene, true, metrics, viewport, true);
         let mut expected = RectangleBatch::new(100, 100);
         expected.push(
             metrics.padding + metrics.width,

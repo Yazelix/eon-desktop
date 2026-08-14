@@ -189,6 +189,39 @@ in EONW, compositor-specific commands, D-Bus application infrastructure, polling
 files, and a signal-handler dependency. The compositor retains final activation
 policy, so native acceptance is platform-specific.
 
+## Required for native cursor-tail materialization
+
+`ven-rio-cursor-animation-u57` consumes unchanged canonical ORBS v2 cursor
+values at Orbit proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`
+through the current exact `orbit-protocol` source
+`3ee7c80005f3d2bbe81e539799327803716f6174`. Orbit remains authoritative for
+destination, shape, visibility, blink state, wide-tail state, and cursor color.
+
+[Rio](https://github.com/raphamorim/rio/tree/e019a9325b59a025cffa03a21d0788168514d502)
+at `e019a9325b59a025cffa03a21d0788168514d502` is MIT-licensed required evidence
+for its complete trail cursor, spring helper, renderer glue, route reset, and
+redraw scheduling. Venus adopts the independently useful four-corner critically
+damped spring, 40 ms short-horizontal and 150 ms longer timing classes, 100 ms
+delta cap, first-frame and route snap, direction-ranked lag, one two-triangle
+quad, and redraw only while unsettled. It reuses no Rio source and rejects Rio's
+terminal state, Sugarloaf, renderer framework, configuration, panels, and
+polling.
+
+[Yazelix Cursors](https://github.com/Yazelix/cursors/tree/f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf)
+at `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf` is Apache-2.0 required boundary
+evidence. Its `eon-venus-native-v1` target resolves exactly `none` or `tail`
+with the first resolved palette color and a duration multiplier. Venus consumes
+only strict Eon-serialized scalar launch values; it neither depends on Yazelix
+Cursors nor reads its registry. Eon launcher
+`013ffb34acfd01b90dc4999f10526a4f2d8ec068` confirms that bounded options precede
+one or two positional sockets. Eon serialization remains separately owned and
+does not expand this Venus implementation.
+
+The existing wgpu rectangle pipeline and dynamic buffer upload are sufficient.
+The conditional wgpu post-processing comparison is rejected: no shader ABI,
+new dependency, renderer replacement, general effects engine, or persistent
+Venus setting is introduced.
+
 ## Rejected initial routing
 
 - Rio VT is not a Venus dependency; replacing Orbit's terminal engine is an

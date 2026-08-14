@@ -83,6 +83,26 @@ input. Venus rejects invalid values during launch and rejects translucent
 launches before showing the window when the native surface lacks premultiplied
 alpha support. Eon owns persistence and product defaults for composed launches.
 
+Direct Venus launches use a static cursor when the cursor profile is absent or
+`--cursor-effect-v1 none` is present. A complete tail profile requires one
+`#RRGGBB` trail color and a finite duration multiplier from `0.25` through
+`4.0`:
+
+```sh
+cargo run --locked -- \
+  --cursor-effect-v1 tail \
+  --cursor-trail-color-v1 '#89b4fa' \
+  --cursor-trail-duration-v1 1.0 \
+  /path/to/orbit.sock
+```
+
+The tail animates only its bounded geometry; Orbit remains authoritative for
+the cursor destination, shape, visibility, blink state, wide-cell geometry, and
+cursor color. Venus rejects duplicate, incomplete, malformed, non-finite, or
+out-of-range profile values before opening a window. Yazelix Cursors owns value
+resolution and Eon owns serialization and persistence for composed launches;
+that Eon producer is tracked separately and is not part of the current launcher.
+
 When Eon supervises Venus, it supplies one private bounded presentation channel.
 A repeated Eon launch keeps the same Venus process and terminal attachment
 and asks the native window system to present its existing window. Direct focus
@@ -148,11 +168,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 158 |
-| Contracts and references | 228 |
+| README | 178 |
+| Contracts and references | 261 |
 | Crate decisions | 127 |
-| Changelog | 63 |
-| Rust source, including unit tests | 7,670 |
+| Changelog | 67 |
+| Rust source, including unit tests | 8,737 |
 | Rust integration tests | 591 |
 | Cargo manifest | 20 |
-| **Total** | **9,273** |
+| **Total** | **10,397** |
