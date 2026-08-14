@@ -318,6 +318,7 @@ pub struct DrawStyle {
     pub strikethrough: bool,
     pub overline: bool,
     pub selected: bool,
+    pub background_is_default: bool,
     pub protected: bool,
     pub underline: Underline,
 }
@@ -696,6 +697,10 @@ impl DrawCell {
     }
 }
 
+fn is_default_background(style: CellStyle) -> bool {
+    matches!(style.background, StyleColor::None) && !style.inverse && !style.selected
+}
+
 fn resolved_style(
     style: CellStyle,
     foreground: Color,
@@ -714,6 +719,7 @@ fn resolved_style(
         strikethrough: style.strikethrough,
         overline: style.overline,
         selected: style.selected,
+        background_is_default: is_default_background(style),
         protected: style.protected,
         underline: style.underline,
     }
@@ -740,6 +746,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn background_opacity_provenance_distinguishes_default_explicit_selection_and_inverse() {
+        let mut style = CellStyle {
+            foreground: StyleColor::None,
+            background: StyleColor::None,
+            underline_color: StyleColor::None,
+            bold: false,
+            italic: false,
+            faint: false,
+            blink: false,
+            inverse: false,
+            invisible: false,
+            strikethrough: false,
+            overline: false,
+            selected: false,
+            protected: false,
+            underline: Underline::None,
+        };
+
+        assert!(is_default_background(style));
+        style.background = StyleColor::Rgb(Rgb::BLACK);
+        assert!(!is_default_background(style));
+        style.background = StyleColor::None;
+        style.selected = true;
+        assert!(!is_default_background(style));
+        style.selected = false;
+        style.inverse = true;
+        assert!(!is_default_background(style));
+    }
+
+    #[test]
     fn accessibility_projection_keeps_authoritative_selected_cells() {
         let style = |selected| DrawStyle {
             foreground: Color::default(),
@@ -753,6 +789,7 @@ mod tests {
             strikethrough: false,
             overline: false,
             selected,
+            background_is_default: !selected,
             protected: false,
             underline: Underline::None,
         };

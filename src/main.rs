@@ -46,7 +46,7 @@ type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
-const USAGE: &str = "usage: yazelix-venus [--no-decorations] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
+const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 struct OrbitRetry {
     deadline: Option<Instant>,
@@ -110,6 +110,7 @@ struct Application {
     orbit_socket: PathBuf,
     workspace_socket: Option<PathBuf>,
     decorations: bool,
+    background_opacity: f32,
     proxy: EventLoopProxy<UserEvent>,
     window: Option<WindowState>,
     transport: Option<Transport>,
@@ -139,12 +140,14 @@ impl Application {
         orbit_socket: PathBuf,
         workspace_socket: Option<PathBuf>,
         decorations: bool,
+        background_opacity: f32,
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
         Self {
             orbit_socket,
             workspace_socket,
             decorations,
+            background_opacity,
             proxy,
             window: None,
             transport: None,
@@ -175,6 +178,7 @@ impl Application {
             .with_title("Venus")
             .with_inner_size(LogicalSize::new(960.0, 600.0))
             .with_decorations(self.decorations)
+            .with_transparent(self.background_opacity < 1.0)
             .with_visible(false);
         #[cfg(target_os = "linux")]
         let attributes = if event_loop.is_wayland() {
@@ -195,7 +199,11 @@ impl Application {
             accessibility.activation(),
             self.proxy.clone(),
         );
-        let renderer = pollster::block_on(Renderer::new(Arc::clone(&window), event_loop))?;
+        let renderer = pollster::block_on(Renderer::new(
+            Arc::clone(&window),
+            event_loop,
+            self.background_opacity,
+        ))?;
         window.set_ime_allowed(true);
         window.set_visible(true);
 
@@ -1272,6 +1280,7 @@ fn main() -> Result {
         arguments.orbit_socket,
         arguments.workspace_socket,
         arguments.decorations,
+        arguments.background_opacity,
         event_loop.create_proxy(),
     );
     event_loop.run_app(&mut application)?;
@@ -1283,16 +1292,32 @@ struct LaunchArguments {
     orbit_socket: PathBuf,
     workspace_socket: Option<PathBuf>,
     decorations: bool,
+    background_opacity: f32,
 }
 
 fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<LaunchArguments> {
+    let mut arguments = arguments.into_iter();
     let mut orbit_socket = None;
     let mut workspace_socket = None;
     let mut decorations = true;
+    let mut background_opacity = None;
 
-    for argument in arguments {
+    while let Some(argument) = arguments.next() {
         if argument == "--no-decorations" {
             decorations = false;
+        } else if argument == "--background-opacity" {
+            if background_opacity.is_some() {
+                return Err(USAGE.into());
+            }
+            let Some(value) = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .and_then(|value| value.parse::<f32>().ok())
+                .filter(|value| value.is_finite() && (0.0..=1.0).contains(value))
+            else {
+                return Err(USAGE.into());
+            };
+            background_opacity = Some(value);
         } else if argument.as_encoded_bytes().starts_with(b"-") {
             return Err(USAGE.into());
         } else if orbit_socket.is_none() {
@@ -1308,6 +1333,7 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
         orbit_socket: orbit_socket.map_or_else(default_socket_path, Ok)?,
         workspace_socket,
         decorations,
+        background_opacity: background_opacity.unwrap_or(1.0),
     })
 }
 
@@ -1344,26 +1370,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn launch_arguments_preserve_the_default_and_reject_invalid_input() {
+    fn background_opacity_launch_arguments_are_bounded_and_default_opaque() {
         let parse = |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from));
 
         let default = parse(&[]).unwrap();
         assert!(default.decorations && default.workspace_socket.is_none());
+        assert_eq!(default.background_opacity, 1.0);
 
-        let borderless = parse(&["--no-decorations"]).unwrap();
-        assert!(!borderless.decorations && borderless.workspace_socket.is_none());
+        for value in ["0", "0.88", "1"] {
+            let parsed = parse(&[
+                "--no-decorations",
+                "--background-opacity",
+                value,
+                "orbit.sock",
+                "eon.sock",
+            ])
+            .unwrap();
+            assert!(!parsed.decorations);
+            assert_eq!(parsed.background_opacity, value.parse::<f32>().unwrap());
+            assert_eq!(parsed.orbit_socket, PathBuf::from("orbit.sock"));
+            assert_eq!(parsed.workspace_socket, Some(PathBuf::from("eon.sock")));
+        }
 
-        let borderless = parse(&["orbit.sock", "--no-decorations"]).unwrap();
-        assert!(!borderless.decorations);
-        assert_eq!(borderless.orbit_socket, PathBuf::from("orbit.sock"));
-        assert_eq!(borderless.workspace_socket, None);
-
-        let borderless = parse(&["--no-decorations", "orbit.sock", "eon.sock"]).unwrap();
-        assert!(!borderless.decorations);
-        assert_eq!(borderless.orbit_socket, PathBuf::from("orbit.sock"));
-        assert_eq!(borderless.workspace_socket, Some(PathBuf::from("eon.sock")));
-
-        for invalid in [&["--unknown"][..], &["one", "two", "three"][..]] {
+        for invalid in [
+            &["--unknown"][..],
+            &["one", "two", "three"][..],
+            &["--background-opacity"][..],
+            &["--background-opacity", "bad"][..],
+            &["--background-opacity", "NaN"][..],
+            &["--background-opacity", "inf"][..],
+            &["--background-opacity", "-0.01"][..],
+            &["--background-opacity", "1.01"][..],
+            &["--background-opacity", "0.5", "--background-opacity", "0.6"][..],
+        ] {
             assert_eq!(parse(invalid).unwrap_err().to_string(), USAGE);
         }
     }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Accept a finite `--background-opacity` value from `0.0` through `1.0`, apply
+  it only to the terminal default background, and keep explicit cell
+  backgrounds, workspace chrome, selection, inverse video, text, and cursors
+  independent from that launch setting.
 - Use a nominal 16 px terminal font with one shared 10×18 logical cell grid so
   rendering, resizing, pointer mapping, input methods, and accessibility retain
   coherent geometry at supported display scales.

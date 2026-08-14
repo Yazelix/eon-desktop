@@ -162,6 +162,7 @@ pub struct Renderer {
     text: Vec<PlacedText>,
     content_key: Option<ContentKey>,
     clear: wgpu::Color,
+    background_opacity: f32,
     metrics: CellMetrics,
     cell_font: CellFont,
     window: Arc<Window>,
@@ -171,6 +172,7 @@ impl Renderer {
     pub async fn new(
         window: Arc<Window>,
         event_loop: &ActiveEventLoop,
+        background_opacity: f32,
     ) -> Result<Self, RenderError> {
         let size = nonzero(window.inner_size());
         let instance = Instance::new(InstanceDescriptor::new_with_display_handle(Box::new(
@@ -193,17 +195,18 @@ impl Renderer {
         let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
             .ok_or_else(|| RenderError("the GPU surface has no supported format".into()))?;
-        if let Some(format) = surface
-            .get_capabilities(&adapter)
+        let capabilities = surface.get_capabilities(&adapter);
+        if let Some(format) = capabilities
             .formats
-            .into_iter()
+            .iter()
+            .copied()
             .find(wgpu::TextureFormat::is_srgb)
         {
             config.format = format;
         }
         let srgb_target = config.format.is_srgb();
         config.present_mode = PresentMode::Fifo;
-        config.alpha_mode = CompositeAlphaMode::Opaque;
+        config.alpha_mode = surface_alpha_mode(background_opacity, &capabilities.alpha_modes)?;
         surface.configure(&device, &config);
 
         let shader = device.create_shader_module(ShaderModuleDescriptor {
@@ -299,7 +302,8 @@ impl Renderer {
             text_renderer,
             text: Vec::new(),
             content_key: None,
-            clear: color(DEFAULT_BACKGROUND, srgb_target),
+            clear: clear_color(DEFAULT_BACKGROUND, background_opacity, srgb_target),
+            background_opacity,
             metrics,
             cell_font,
             window,
@@ -471,36 +475,36 @@ impl Renderer {
         self.text.clear();
         let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
         if let Some(workspace) = workspace {
-            self.clear = color(DEFAULT_BACKGROUND, self.config.format.is_srgb());
+            self.clear = wgpu::Color::TRANSPARENT;
             self.build_workspace(workspace, workspace_focus, &mut rectangles);
-            if let Some(scene) = scene
-                && let Some(terminal) = workspace.visible_terminal()
-            {
+            if let Some(terminal) = workspace.visible_terminal() {
                 rectangles.push(
                     terminal.left,
                     terminal.top,
                     terminal.width,
                     terminal.height,
-                    scene.background,
-                    1.0,
+                    scene.map_or(DEFAULT_BACKGROUND, |scene| scene.background),
+                    self.background_opacity,
                 );
-                rectangles.clip = Some(terminal);
-                self.build_scene_text(scene, blink_visible, workspace.terminal, terminal);
-                build_scene_rectangles(
-                    &mut rectangles,
-                    scene,
-                    blink_visible,
-                    self.metrics,
-                    workspace.terminal,
-                );
-                self.build_preedit(
-                    scene,
-                    preedit,
-                    &mut rectangles,
-                    workspace.terminal,
-                    terminal,
-                );
-                rectangles.clip = None;
+                if let Some(scene) = scene {
+                    rectangles.clip = Some(terminal);
+                    self.build_scene_text(scene, blink_visible, workspace.terminal, terminal);
+                    build_scene_rectangles(
+                        &mut rectangles,
+                        scene,
+                        blink_visible,
+                        self.metrics,
+                        workspace.terminal,
+                    );
+                    self.build_preedit(
+                        scene,
+                        preedit,
+                        &mut rectangles,
+                        workspace.terminal,
+                        terminal,
+                    );
+                    rectangles.clip = None;
+                }
             }
             if workspace_focus == WorkspaceFocus::Terminal
                 && let Some(terminal) = workspace.visible_terminal()
@@ -522,7 +526,11 @@ impl Renderer {
                 self.build_notice(status, &mut rectangles);
             }
         } else if let Some(scene) = scene {
-            self.clear = color(scene.background, self.config.format.is_srgb());
+            self.clear = clear_color(
+                scene.background,
+                self.background_opacity,
+                self.config.format.is_srgb(),
+            );
             let viewport = SceneRect {
                 left: 0.0,
                 top: 0.0,
@@ -542,7 +550,11 @@ impl Renderer {
                 self.build_notice(status, &mut rectangles);
             }
         } else {
-            self.clear = color(DEFAULT_BACKGROUND, self.config.format.is_srgb());
+            self.clear = clear_color(
+                DEFAULT_BACKGROUND,
+                self.background_opacity,
+                self.config.format.is_srgb(),
+            );
             self.push_text(
                 "VENUS",
                 self.metrics.padding * 2.0,
@@ -1247,11 +1259,15 @@ fn build_scene_rectangles(
         let mut start = 0_usize;
         while start < row.cells.len() {
             let background = row.cells[start].style.background;
+            let background_is_default = row.cells[start].style.background_is_default;
             let mut end = start + 1;
-            while end < row.cells.len() && row.cells[end].style.background == background {
+            while end < row.cells.len()
+                && row.cells[end].style.background == background
+                && row.cells[end].style.background_is_default == background_is_default
+            {
                 end += 1;
             }
-            if background != scene.background {
+            if !background_is_default {
                 rectangles.push(
                     viewport.left + metrics.padding + start as f32 * metrics.width,
                     viewport.top + metrics.padding + row_index as f32 * metrics.height,
@@ -1427,23 +1443,38 @@ fn nonzero(size: PhysicalSize<u32>) -> PhysicalSize<u32> {
     PhysicalSize::new(size.width.max(1), size.height.max(1))
 }
 
-fn color(color: SceneColor, srgb_target: bool) -> wgpu::Color {
+fn surface_alpha_mode(
+    background_opacity: f32,
+    supported: &[CompositeAlphaMode],
+) -> Result<CompositeAlphaMode, RenderError> {
+    if background_opacity == 1.0 {
+        return Ok(CompositeAlphaMode::Auto);
+    }
+    supported
+        .contains(&CompositeAlphaMode::PreMultiplied)
+        .then_some(CompositeAlphaMode::PreMultiplied)
+        .ok_or_else(|| {
+            RenderError("the GPU surface does not support premultiplied transparency".into())
+        })
+}
+
+fn clear_color(color: SceneColor, background_opacity: f32, srgb_target: bool) -> wgpu::Color {
     let channel = |value| {
         let value = f64::from(value) / 255.0;
-        if !srgb_target {
-            return value;
-        }
-        if value <= 0.04045 {
+        let linear = if !srgb_target {
+            value
+        } else if value <= 0.04045 {
             value / 12.92
         } else {
             ((value + 0.055) / 1.055).powf(2.4)
-        }
+        };
+        linear * f64::from(background_opacity)
     };
     wgpu::Color {
         r: channel(color.r),
         g: channel(color.g),
         b: channel(color.b),
-        a: 1.0,
+        a: f64::from(background_opacity),
     }
 }
 
@@ -1473,6 +1504,7 @@ mod tests {
             strikethrough: false,
             overline: false,
             selected: false,
+            background_is_default: true,
             protected: false,
             underline: Underline::None,
         }
@@ -1759,19 +1791,96 @@ mod tests {
     }
 
     #[test]
-    fn clear_colors_match_the_surface_color_space() {
+    fn background_opacity_selects_only_proved_surface_modes() {
+        assert_eq!(
+            surface_alpha_mode(1.0, &[CompositeAlphaMode::Inherit]).unwrap(),
+            CompositeAlphaMode::Auto
+        );
+        assert_eq!(
+            surface_alpha_mode(
+                0.88,
+                &[
+                    CompositeAlphaMode::Opaque,
+                    CompositeAlphaMode::PreMultiplied,
+                ],
+            )
+            .unwrap(),
+            CompositeAlphaMode::PreMultiplied
+        );
+        assert!(surface_alpha_mode(0.0, &[CompositeAlphaMode::Opaque]).is_err());
+        assert!(surface_alpha_mode(0.5, &[CompositeAlphaMode::PostMultiplied]).is_err());
+    }
+
+    #[test]
+    fn background_opacity_premultiplies_clear_colors() {
         let source = SceneColor {
             r: 128,
             g: 0,
             b: 255,
         };
-        let linear = color(source, true);
-        let encoded = color(source, false);
+        let opaque = clear_color(source, 1.0, true);
+        let translucent = clear_color(source, 0.5, true);
+        let encoded = clear_color(source, 1.0, false);
 
-        assert!((linear.r - 0.215_860_5).abs() < 0.000_001);
-        assert_eq!(linear.g, 0.0);
-        assert_eq!(linear.b, 1.0);
+        assert!((opaque.r - 0.215_860_5).abs() < 0.000_001);
+        assert_eq!(opaque.a, 1.0);
+        assert!((translucent.r - 0.107_930_25).abs() < 0.000_001);
+        assert_eq!(translucent.g, 0.0);
+        assert_eq!(translucent.b, 0.5);
+        assert_eq!(translucent.a, 0.5);
         assert_eq!(encoded.r, 128.0 / 255.0);
+    }
+
+    #[test]
+    fn background_opacity_skips_only_default_cell_backgrounds() {
+        let mut scene = Scene {
+            revision: 1,
+            columns: 4,
+            rows: 1,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: DEFAULT_BACKGROUND,
+            foreground: SceneColor::default(),
+            cursor: None,
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells: (0..4)
+                    .map(|_| DrawCell {
+                        width: CellWidth::Narrow,
+                        text: String::new(),
+                        hyperlink: String::new(),
+                        style: plain_style(),
+                    })
+                    .collect(),
+            }],
+        };
+        scene.content[0].cells[1].style.background_is_default = false;
+        scene.content[0].cells[2].style.background_is_default = false;
+        scene.content[0].cells[3].style.background_is_default = false;
+
+        let metrics = CellMetrics::for_scale(1.0);
+        let viewport = SceneRect {
+            left: 0.0,
+            top: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        let mut actual = RectangleBatch::new(100, 100);
+        build_scene_rectangles(&mut actual, &scene, true, metrics, viewport);
+        let mut expected = RectangleBatch::new(100, 100);
+        expected.push(
+            metrics.padding + metrics.width,
+            metrics.padding,
+            metrics.width * 3.0,
+            metrics.height,
+            DEFAULT_BACKGROUND,
+            1.0,
+        );
+
+        assert_eq!(actual.bytes, expected.bytes);
     }
 
     #[test]

@@ -67,6 +67,22 @@ default remains decorated:
 cargo run --locked -- --no-decorations /path/to/orbit.sock /path/to/eon.sock
 ```
 
+Pass `--background-opacity VALUE` with a finite value from `0.0` through `1.0`
+to control the terminal default background. Venus uses `1.0` when the option is
+absent. This example uses the Nova-selected opacity:
+
+```sh
+cargo run --locked -- --background-opacity 0.88 /path/to/orbit.sock
+```
+
+The opacity follows Orbit-authored default background changes and covers empty
+terminal padding. Explicit cell backgrounds, selection, inverse video,
+workspace chrome, notices, focus borders, text, and cursors retain their
+existing presentation. Visual transparency does not change pointer or keyboard
+input. Venus rejects invalid values during launch and rejects translucent
+launches before showing the window when the native surface lacks premultiplied
+alpha support. Eon owns persistence and product defaults for composed launches.
+
 When Eon supervises Venus, it supplies one private bounded presentation channel.
 A repeated Eon launch keeps the same Venus process and terminal attachment
 and asks the native window system to present its existing window. Direct focus
@@ -113,9 +129,9 @@ cargo clippy --locked --all-targets -- -D warnings
 ## Exclusions
 
 Arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
-popups, settings, visual effects, persistent configuration, plugins, remote and
-web access, macOS implementation, packaging, and distribution are outside this
-slice.
+popups, persistent Venus configuration, blur, background images, plugins,
+remote and web access, macOS implementation, packaging, and distribution are
+outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
 text-clipboard effect. macOS remains an architectural target, not an
@@ -132,11 +148,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 142 |
-| Contracts and references | 227 |
+| README | 158 |
+| Contracts and references | 228 |
 | Crate decisions | 127 |
-| Changelog | 59 |
-| Rust source, including unit tests | 7,485 |
+| Changelog | 63 |
+| Rust source, including unit tests | 7,670 |
 | Rust integration tests | 591 |
 | Cargo manifest | 20 |
-| **Total** | **9,067** |
+| **Total** | **9,273** |
