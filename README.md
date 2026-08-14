@@ -83,6 +83,22 @@ input. Venus rejects invalid values during launch and rejects translucent
 launches before showing the window when the native surface lacks premultiplied
 alpha support. Eon owns persistence and product defaults for composed launches.
 
+Pass `--background-blur` to ask the native compositor for full-surface blur
+before Venus shows the window. Blur and opacity are independent: an opaque
+default background hides the effect, while lower opacity reveals it. This
+COSMIC Wayland example leaves terminal-default pixels fully transparent:
+
+```sh
+cargo run --locked -- \
+  --background-opacity 0.0 \
+  --background-blur \
+  /path/to/orbit.sock
+```
+
+COSMIC owns the blur algorithm and strength. Unsupported or policy-disabled
+compositors may ignore the best-effort request without failing launch. Venus
+does not configure blur strength, and X11 and macOS blur remain unproved.
+
 Direct Venus launches use a static cursor when the cursor profile is absent or
 `--cursor-effect-v1 none` is present. A complete tail profile requires one
 `#RRGGBB` trail color and a finite duration multiplier from `0.25` through
@@ -149,9 +165,9 @@ cargo clippy --locked --all-targets -- -D warnings
 ## Exclusions
 
 Arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
-popups, persistent Venus configuration, blur, background images, plugins,
-remote and web access, macOS implementation, packaging, and distribution are
-outside this slice.
+popups, persistent Venus configuration, blur strength or live blur changes,
+background images, plugins, remote and web access, macOS implementation,
+packaging, and distribution are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
 text-clipboard effect. macOS remains an architectural target, not an
@@ -168,11 +184,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 178 |
-| Contracts and references | 261 |
-| Crate decisions | 127 |
-| Changelog | 67 |
-| Rust source, including unit tests | 8,737 |
+| README | 194 |
+| Contracts and references | 289 |
+| Crate decisions | 147 |
+| Changelog | 70 |
+| Rust source, including unit tests | 8,779 |
 | Rust integration tests | 591 |
-| Cargo manifest | 20 |
-| **Total** | **10,397** |
+| Cargo manifest | 23 |
+| **Total** | **10,509** |

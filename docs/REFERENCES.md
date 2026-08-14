@@ -222,6 +222,33 @@ The conditional wgpu post-processing comparison is rejected: no shader ABI,
 new dependency, renderer replacement, general effects engine, or persistent
 Venus setting is introduced.
 
+## Required for compositor-owned background blur
+
+`ven-wayland-background-blur-e06` keeps exact winit 0.30.13 and patches only its
+source to `chiyuki0325/winit-0.30` commit
+`fb45fbf901fbe70cc9a877b5d651d0b60c206b08`. That commit is directly above the
+v0.30.13 tag and is an exact backport of verified merged upstream commit
+`c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. It prefers
+`ext-background-effect-v1`, retains the KDE fallback, and leaves the public
+`WindowAttributes::with_blur` contract unchanged. The fork and upstream remain
+Apache-2.0.
+
+Wayland Protocols 1.46 at peeled commit
+`6141e1154303dadd5c3e480bc4a16e26f1dcb2af` is the first corrected protocol
+reference and is byte-identical to the XML bundled by locked
+`wayland-protocols` 0.32.13. Release 1.45 is rejected because it encodes the
+blur capability as zero. The protocol makes the region surface-local and
+double-buffered while leaving the algorithm and policy to the compositor.
+
+Installed COSMIC compositor 1.0.0 at
+`091583ac84abac02967ae358cf9570ddfef63b31` advertises the corrected blur
+capability, commits the requested region with surface state, and owns the
+rendering algorithm. Its source is GPL-3.0 evidence only; Venus copies and
+incorporates none of it. Venus adds one launch boolean at its existing window
+creation boundary. It rejects direct Wayland ownership, capability caching,
+blur strength, renderer effects, live updates, Eon persistence, and another
+window or event-loop owner.
+
 ## Rejected initial routing
 
 - Rio VT is not a Venus dependency; replacing Orbit's terminal engine is an

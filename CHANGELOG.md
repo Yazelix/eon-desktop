@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept `--background-blur` as one best-effort full-surface native compositor
+  request, prove it on COSMIC Wayland, and keep opacity, scene layers, input,
+  input methods, accessibility, and compositor-owned blur policy independent.
 - Accept a strict versioned launch profile for a static cursor or one bounded
   Rio-style cursor tail, using a single trail color and duration multiplier
   while preserving Orbit's authoritative cursor state and stopping redraws when

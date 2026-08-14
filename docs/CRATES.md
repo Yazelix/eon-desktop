@@ -12,7 +12,7 @@ without a local protocol mirror.
 |---|---|---|---|
 | Eon workspace protocol consumer | Exact Git revision `4af395aea06c230ee6b18cf0755ae25915c0b88d` of the dependency-free, publish-false `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v1 values, validation, topology, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. The user authorized Apache-2.0, matching Nova, if Eon needs a public license; the exact Eon revision has no durable license record, so public distribution remains blocked until Eon records it. |
 | Orbit protocol consumer | Exact Git revision `3ee7c80005f3d2bbe81e539799327803716f6174` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v3, ORBF v1, semantic values, history, selection, copied text, terminal clipboard effects, bounds, and revision reduction. Venus keeps no mirror or adapter. |
-| Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6 | Active | The host owns window and event-loop lifecycle, native input and IME collection, resize, surface recovery, socket scheduling, and bounded client failure UX. |
+| Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6, patched to exact `chiyuki0325/winit-0.30` commit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` | Active | The host owns window and event-loop lifecycle, native input and IME collection, compositor blur protocol selection, resize, surface recovery, socket scheduling, and bounded client failure UX. Replace the patch with the first accepted stable winit containing upstream `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
 | Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host reads ordinary clipboard text once after an explicit paste shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects. Orbit owns paste encoding and terminal text. Native Wayland without data-control and macOS remain unproved. |
@@ -66,6 +66,26 @@ proved glyphon failure. Ghostling and libghostty-derived shapes import terminal
 authority or demo-grade game rendering. A completely owned stack would
 duplicate windowing, GPU, shaping, font fallback, accessibility, and future
 macOS work.
+
+## Native background blur decision
+
+Stable winit 0.30.13 exposes blur but binds only KDE's Wayland protocol. The
+selected exact fork commit is one commit above that release and backports the
+merged upstream `ext-background-effect-v1` implementation: 200 additions and
+30 deletions across eight winit files, with no new Venus dependency, native
+library, build tool, service, unsafe code, or event-loop owner. One winit remains
+shared with `accesskit_winit`.
+
+The Git workspace resolves `dpi` 0.1.1 instead of registry 0.1.2. The older
+source lacks only the later no-std and inset additions, which neither winit
+0.30.13, AccessKit, nor Venus consumes. The locked package and Linux tree counts
+remain unchanged. Direct Wayland protocol ownership, upstream master, and a
+winit replacement were rejected because each adds substantially more lifecycle
+and portability cost for the same request. Exact Venus proof
+`7fc7e4ba97aaf48b586002934a580ef2d1c31694` resolves one shared winit, passes
+the complete locked suite, and visibly applies blur on COSMIC Wayland 1.0.0 at
+`091583ac84abac02967ae358cf9570ddfef63b31`. Other compositors remain best
+effort because the public API exposes neither capability nor acceptance.
 
 ## Native clipboard decision
 
