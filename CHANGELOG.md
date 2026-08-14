@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Shape each complete terminal cell at its Orbit-authored grid start so complex
+  Unicode cannot displace later cells or delimiters.
 - Accept `--background-blur` as one best-effort full-surface native compositor
   request, prove it on COSMIC Wayland, and keep opacity, scene layers, input,
   input methods, accessibility, and compositor-owned blur policy independent.

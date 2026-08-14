@@ -378,7 +378,7 @@ impl DrawCursor {
     }
 }
 
-/// A contiguous same-style text run positioned in terminal cells.
+/// One complete authoritative cell positioned on the terminal grid.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlyphRun {
     pub column: u16,
@@ -491,7 +491,6 @@ impl Scene {
     fn build_glyph_runs(&self, omit_full_blocks: bool) -> Vec<GlyphRun> {
         let mut runs = Vec::new();
         for (row_index, row) in self.content.iter().enumerate() {
-            let mut current: Option<GlyphRun> = None;
             let mut column = 0_u16;
             while usize::from(column) < row.cells.len() {
                 let cell = &row.cells[usize::from(column)];
@@ -499,42 +498,25 @@ impl Scene {
                     CellWidth::Narrow => 1,
                     CellWidth::Wide => 2,
                     CellWidth::SpacerHead | CellWidth::SpacerTail => {
-                        finish_run(&mut runs, &mut current);
                         column += 1;
                         continue;
                     }
                 };
                 if omit_full_blocks && cell.is_full_block() {
-                    finish_run(&mut runs, &mut current);
                     column += span;
                     continue;
                 }
-                let text = if cell.text.is_empty() {
-                    if span == 2 { "  " } else { " " }
-                } else {
-                    &cell.text
-                };
-                if !cell.style.foreground_visible(true) {
-                    finish_run(&mut runs, &mut current);
-                } else if let Some(run) = &mut current
-                    && run.style == cell.style
-                    && run.column + run.columns == column
-                {
-                    run.text.push_str(text);
-                    run.columns += span;
-                } else {
-                    finish_run(&mut runs, &mut current);
-                    current = Some(GlyphRun {
+                if cell.style.foreground_visible(true) && !cell.text.trim_matches(' ').is_empty() {
+                    runs.push(GlyphRun {
                         column,
                         row: u16::try_from(row_index).expect("frame row count fits u16"),
                         columns: span,
-                        text: text.to_owned(),
+                        text: cell.text.clone(),
                         style: cell.style,
                     });
                 }
                 column = column.saturating_add(span);
             }
-            finish_run(&mut runs, &mut current);
         }
         runs
     }
@@ -733,17 +715,28 @@ fn resolve_color(color: StyleColor, default: Rgb, palette: &[Rgb; 256]) -> Color
     })
 }
 
-fn finish_run(runs: &mut Vec<GlyphRun>, current: &mut Option<GlyphRun>) {
-    if let Some(run) = current.take()
-        && !run.text.trim_matches(' ').is_empty()
-    {
-        runs.push(run);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn draw_style(selected: bool) -> DrawStyle {
+        DrawStyle {
+            foreground: Color::default(),
+            background: Color::default(),
+            underline_color: Color::default(),
+            bold: false,
+            italic: false,
+            faint: false,
+            blink: false,
+            invisible: false,
+            strikethrough: false,
+            overline: false,
+            selected,
+            background_is_default: !selected,
+            protected: false,
+            underline: Underline::None,
+        }
+    }
 
     #[test]
     fn background_opacity_provenance_distinguishes_default_explicit_selection_and_inverse() {
@@ -776,28 +769,71 @@ mod tests {
     }
 
     #[test]
-    fn accessibility_projection_keeps_authoritative_selected_cells() {
-        let style = |selected| DrawStyle {
-            foreground: Color::default(),
-            background: Color::default(),
-            underline_color: Color::default(),
-            bold: false,
-            italic: false,
-            faint: false,
-            blink: false,
-            invisible: false,
-            strikethrough: false,
-            overline: false,
-            selected,
-            background_is_default: !selected,
-            protected: false,
-            underline: Underline::None,
+    fn glyph_runs_preserve_authoritative_cell_starts() {
+        let style = draw_style(false);
+        let cell = |text: &str, width| DrawCell {
+            width,
+            text: text.into(),
+            hyperlink: String::new(),
+            style,
         };
+        let scene = Scene {
+            revision: 1,
+            columns: 10,
+            rows: 1,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: Color::default(),
+            foreground: Color::default(),
+            cursor: None,
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells: vec![
+                    cell("A", CellWidth::Narrow),
+                    cell("e\u{301}", CellWidth::Narrow),
+                    cell("क्ष", CellWidth::Narrow),
+                    cell("界", CellWidth::Wide),
+                    cell("", CellWidth::SpacerTail),
+                    cell("👩‍💻", CellWidth::Wide),
+                    cell("", CellWidth::SpacerTail),
+                    cell("א", CellWidth::Narrow),
+                    cell("𐐀", CellWidth::Narrow),
+                    cell("│", CellWidth::Narrow),
+                ],
+            }],
+        };
+
+        let actual = scene
+            .text_glyph_runs()
+            .into_iter()
+            .map(|run| (run.column, run.columns, run.text))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            [
+                (0, 1, "A"),
+                (1, 1, "e\u{301}"),
+                (2, 1, "क्ष"),
+                (3, 2, "界"),
+                (5, 2, "👩‍💻"),
+                (7, 1, "א"),
+                (8, 1, "𐐀"),
+                (9, 1, "│"),
+            ]
+            .map(|(column, columns, text)| (column, columns, text.to_owned()))
+        );
+    }
+
+    #[test]
+    fn accessibility_projection_keeps_authoritative_selected_cells() {
         let cell = |text: &str, width, selected| DrawCell {
             width,
             text: text.into(),
             hyperlink: String::new(),
-            style: style(selected),
+            style: draw_style(selected),
         };
         let scene = Scene {
             revision: 3,
