@@ -2,7 +2,10 @@ use eon_workspace_protocol::{Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
-    session::{self, ClipboardLocation, Failure, FailureCode, ServerMessage},
+    session::{
+        self, ClipboardLocation, Failure, FailureCode, PreviewOutcome, ServerMessage,
+        VerticalDirection, VerticalPreview, WheelOutcome,
+    },
 };
 use winit::dpi::PhysicalSize;
 use yazelix_venus::{
@@ -171,15 +174,14 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
 }
 
 #[test]
+fn canonical_session_revision_is_orbs_v4() {
+    assert_eq!(session::VERSION, 4);
+}
+
+#[test]
 fn canonical_orbit_frame_becomes_one_deterministic_scene() {
     let mut model = SessionModel::new();
-    apply_wire(
-        &mut model,
-        ServerMessage::Attached {
-            version: session::VERSION,
-        },
-    )
-    .unwrap();
+    apply_wire(&mut model, ServerMessage::Attached).unwrap();
     apply_wire(
         &mut model,
         ServerMessage::Frame(Box::new(frame(7, Screen::Alternate))),
@@ -260,6 +262,41 @@ fn ordered_frames_reject_stale_revisions_without_replacing_state() {
 }
 
 #[test]
+fn orbs_v4_wheel_outcomes_reuse_the_existing_result_and_frame_owners() {
+    let mut model = attached_model();
+    model
+        .apply(ServerMessage::Failure(Failure {
+            code: FailureCode::InvalidInput,
+            detail: "stale wheel".into(),
+        }))
+        .unwrap();
+    model
+        .apply(ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted))
+        .unwrap();
+    assert!(model.notice().is_none());
+
+    model
+        .apply(ServerMessage::WheelOutcome(WheelOutcome::Viewport {
+            applied_rows: -1,
+            frame: Box::new(frame(1, Screen::Primary)),
+        }))
+        .unwrap();
+    assert_eq!(model.scene().unwrap().revision, 1);
+
+    assert_eq!(
+        model
+            .apply(ServerMessage::VerticalPreview(VerticalPreview {
+                frame_revision: 1,
+                direction: VerticalDirection::Up,
+                outcome: PreviewOutcome::TerminalRouted,
+            }))
+            .unwrap_err(),
+        ModelError::UnexpectedMessage
+    );
+    assert_eq!(model.scene().unwrap().revision, 1);
+}
+
+#[test]
 fn a_new_attachment_replaces_state_without_a_compatibility_window() {
     let mut first = attached_model();
     first
@@ -297,11 +334,7 @@ fn reconnect_preserves_the_last_scene_and_accepts_a_fresh_revision() {
     assert_eq!(model.scene().unwrap().revision, 42);
     model.prepare_reconnect();
 
-    model
-        .apply(ServerMessage::Attached {
-            version: session::VERSION,
-        })
-        .unwrap();
+    model.apply(ServerMessage::Attached).unwrap();
     assert!(model.awaiting_current_frame());
     model
         .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Alternate))))
@@ -320,18 +353,10 @@ fn attachment_and_server_failures_are_explicit_and_bounded() {
     assert!(busy.is_terminal());
 
     let mut incompatible = SessionModel::new();
-    incompatible
-        .apply(ServerMessage::Incompatible {
-            minimum_version: 2,
-            maximum_version: 3,
-        })
-        .unwrap();
+    incompatible.mark_incompatible(3);
     assert_eq!(
         incompatible.connection(),
-        &ConnectionState::Incompatible {
-            minimum: 2,
-            maximum: 3
-        }
+        &ConnectionState::Incompatible { version: 3 }
     );
     assert!(incompatible.is_terminal());
 
@@ -486,11 +511,7 @@ fn invalid_session_and_frame_bytes_never_reach_draw_state() {
 
 fn attached_model() -> SessionModel {
     let mut model = SessionModel::new();
-    model
-        .apply(ServerMessage::Attached {
-            version: session::VERSION,
-        })
-        .unwrap();
+    model.apply(ServerMessage::Attached).unwrap();
     model
 }
 

@@ -116,6 +116,23 @@ native accumulation. Exact AccessKit 0.24.1 text runs and text positions support
 selection derived from the accepted scene. Exact arboard 3.6.1 supplies the
 isolated native text write selected in `docs/CRATES.md`.
 
+## Required for exact ORBS v4 consumption
+
+`ven-adopt-orbs-v4-without-interaction-expansion-zdc` consumes canonical ORBS
+v4 and proved `ORB-C1` through `ORB-C12` from exact Orbit source
+`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; accepted proof metadata is at
+`4a8da857bafd980c199e6c49d2718ad9cae26dc0`. The exact diff from the prior
+`3ee7c80005f3d2bbe81e539799327803716f6174` consumer replaces version-range
+Hello/Attached/Incompatible negotiation with exact-header Hello and Attached,
+and adds read-only vertical previews plus typed committed-wheel outcomes.
+
+Venus sends no preview request and rejects an unsolicited preview at its model
+ordering boundary. Terminal-routed wheel outcomes reuse the accepted-result
+owner; viewport outcomes enter the existing complete-frame reducer and bounded
+frame queue. An unsupported header version retains explicit incompatibility UX
+without decoding another revision. No input, renderer, gesture, retry, schema,
+adapter, or compatibility path is added.
+
 ## Required for native paste
 
 `ven-native-clipboard-paste-uas` consumes Orbit `ORB-C5` at accepted proof
@@ -129,11 +146,12 @@ non-text content. Mars `21109e3ebc24b63da11bae644dfb9bab28ce0e18` confirms
 the same Linux shortcuts. Venus reuses no Mars binding, clipboard, or terminal
 code.
 
-`ven-consume-terminal-clipboard-writes-zgh` consumes Orbit `ORB-C11` and
+`ven-consume-terminal-clipboard-writes-zgh` first consumed Orbit `ORB-C11` and
 canonical ORBS v3 at proof `3ee7c80005f3d2bbe81e539799327803716f6174`.
 Orbit supplies bounded UTF-8 and the normalized standard, selection, or primary
 destination. Venus accepts the effect only while attached and passes it to the
-existing native clipboard owner without a local decoder or replay state.
+existing native clipboard owner without a local decoder or replay state. The
+ORBS v4 gate above preserves that unchanged effect at `7f067b30`.
 
 Exact arboard 3.6.1 exposes the ordinary and primary Linux clipboards through
 its selected `wayland-data-control` build. The pinned Ghostty comparable maps
@@ -194,7 +212,7 @@ policy, so native acceptance is platform-specific.
 `ven-rio-cursor-animation-u57` consumes unchanged canonical ORBS v2 cursor
 values at Orbit proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`
 through the current exact `orbit-protocol` source
-`3ee7c80005f3d2bbe81e539799327803716f6174`. Orbit remains authoritative for
+`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`. Orbit remains authoritative for
 destination, shape, visibility, blink state, wide-tail state, and cursor color.
 
 [Rio](https://github.com/raphamorim/rio/tree/e019a9325b59a025cffa03a21d0788168514d502)

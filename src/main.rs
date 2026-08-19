@@ -7,7 +7,7 @@ use orbit_protocol::{
     MAX_CELLS,
     session::{
         self, ClientMessage, ClipboardLocation, FailureCode, SelectionAction, ServerMessage,
-        SurfaceSize,
+        SurfaceSize, WheelOutcome,
     },
 };
 use std::{
@@ -483,20 +483,19 @@ impl Application {
     }
 
     fn handle_transport(&mut self, event: TransportEvent) {
-        let transport_ended = matches!(
-            &event,
-            TransportEvent::RetryableLoss(_) | TransportEvent::Lost(_)
-        );
-        let retryable_loss = matches!(&event, TransportEvent::RetryableLoss(_))
-            && !self.model.is_terminal()
-            && !self.retry_suppressed;
+        let retryable_event = matches!(&event, TransportEvent::RetryableLoss(_));
+        let retryable_loss = retryable_event && !self.model.is_terminal() && !self.retry_suppressed;
         match event {
             TransportEvent::Server(message) => {
                 if server_failure_suppresses_retry(&message) {
                     self.retry_suppressed = true;
                 }
                 let was_attached = self.model.is_attached();
-                let frame = matches!(&message, ServerMessage::Frame(_));
+                let frame = matches!(
+                    &message,
+                    ServerMessage::Frame(_)
+                        | ServerMessage::WheelOutcome(WheelOutcome::Viewport { .. })
+                );
                 match self.model.apply(message) {
                     Ok(Some((location, text))) => self.write_clipboard(location, text),
                     Ok(None) => {}
@@ -521,6 +520,7 @@ impl Application {
                     }
                 }
             }
+            TransportEvent::Incompatible { version } => self.model.mark_incompatible(version),
             TransportEvent::InvalidInput(detail) => {
                 self.model.set_venus_notice(
                     LocalNoticeSource::Input,
@@ -528,19 +528,15 @@ impl Application {
                 );
             }
             TransportEvent::RetryableLoss(detail) => {
-                self.input.reset_scroll();
-                self.input.cancel_selection();
                 if retryable_loss {
                     self.model.mark_lost(detail);
                 }
             }
-            TransportEvent::Lost(detail) => {
-                self.input.reset_scroll();
-                self.input.cancel_selection();
-                self.model.mark_lost(detail);
-            }
+            TransportEvent::Lost(detail) => self.model.mark_lost(detail),
         }
-        if transport_ended || self.model.is_terminal() {
+        if retryable_event || self.model.is_terminal() {
+            self.input.reset_scroll();
+            self.input.cancel_selection();
             self.reset_cursor_animation();
             self.transport = None;
             self.presented_revision = None;
@@ -727,13 +723,13 @@ impl Application {
             ConnectionState::Connecting => {
                 format!("Connecting to Orbit at {}", self.orbit_socket.display())
             }
-            ConnectionState::Attached { .. } if self.model.awaiting_current_frame() => {
+            ConnectionState::Attached if self.model.awaiting_current_frame() => {
                 "Attached to Orbit. Waiting for its current frame.".into()
             }
-            ConnectionState::Attached { .. } => String::new(),
+            ConnectionState::Attached => String::new(),
             ConnectionState::Busy => "Orbit already has an attached presentation client.".into(),
-            ConnectionState::Incompatible { minimum, maximum } => format!(
-                "Orbit requires local-session revision {minimum} through {maximum}; Venus accepts revision {}.",
+            ConnectionState::Incompatible { version } => format!(
+                "Orbit uses local-session revision {version}; Venus requires revision {}.",
                 session::VERSION
             ),
             ConnectionState::Lost { detail } => format!("Orbit connection lost: {detail}"),

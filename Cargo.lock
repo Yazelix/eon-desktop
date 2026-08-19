@@ -1681,7 +1681,7 @@ dependencies = [
 [[package]]
 name = "orbit-protocol"
 version = "0.1.0"
-source = "git+https://github.com/luccahuguet/orbit.git?rev=3ee7c80005f3d2bbe81e539799327803716f6174#3ee7c80005f3d2bbe81e539799327803716f6174"
+source = "git+https://github.com/luccahuguet/orbit.git?rev=7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c#7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c"
 
 [[package]]
 name = "ordered-float"

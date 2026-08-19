@@ -25,8 +25,8 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
 `4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
 selection, identities, actions, and pane-to-Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v1, and ORBS v3 at exact Orbit proof
-`3ee7c80005f3d2bbe81e539799327803716f6174`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v1, and ORBS v4 at exact Orbit proof
+`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -172,8 +172,8 @@ packaging, and distribution are outside this slice.
 The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
 text-clipboard effect. macOS remains an architectural target, not an
 implemented or proved platform. The exact
-`3ee7c80005f3d2bbe81e539799327803716f6174` Orbit package revision is published
-and resolves from GitHub.
+`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` Orbit package revision supplies
+accepted ORBS v4 and ORB-C12 and resolves from GitHub.
 
 ## LOC scorecard
 
@@ -185,10 +185,10 @@ lock files, and other generated artifacts.
 |---|---:|
 | Agent policy | 416 |
 | README | 194 |
-| Contracts and references | 289 |
-| Crate decisions | 147 |
-| Changelog | 74 |
-| Rust source, including unit tests | 8,834 |
-| Rust integration tests | 591 |
+| Contracts and references | 307 |
+| Crate decisions | 157 |
+| Changelog | 78 |
+| Rust source, including unit tests | 8,823 |
+| Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **10,568** |
+| **Total** | **10,610** |

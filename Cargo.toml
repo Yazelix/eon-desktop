@@ -10,7 +10,7 @@ accesskit_winit = { version = "=0.33.2", default-features = false, features = ["
 arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
 eon-workspace-protocol = { git = "https://github.com/Yazelix/eon.git", rev = "4af395aea06c230ee6b18cf0755ae25915c0b88d" }
 glyphon = "=0.12.0"
-orbit-protocol = { git = "https://github.com/luccahuguet/orbit.git", rev = "3ee7c80005f3d2bbe81e539799327803716f6174" }
+orbit-protocol = { git = "https://github.com/luccahuguet/orbit.git", rev = "7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c" }
 pollster = { version = "=1.0.1", default-features = false }
 wgpu = { version = "=30.0.0", default-features = false, features = ["std", "vulkan", "metal", "wgsl"] }
 winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }

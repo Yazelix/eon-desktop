@@ -1,16 +1,16 @@
 use crate::scene::Scene;
 use eon_workspace_protocol::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
-use orbit_protocol::session::{ClipboardLocation, FailureCode, ServerMessage};
+use orbit_protocol::session::{ClipboardLocation, FailureCode, ServerMessage, WheelOutcome};
 use std::{error::Error, fmt};
 
 /// Bounded lifecycle state for one local Orbit attachment.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConnectionState {
     Connecting,
-    Attached { version: u16 },
+    Attached,
     Busy,
-    Incompatible { minimum: u16, maximum: u16 },
+    Incompatible { version: u16 },
     Lost { detail: String },
     Exited { code: i32 },
 }
@@ -166,7 +166,7 @@ impl SessionModel {
 
     #[must_use]
     pub fn is_attached(&self) -> bool {
-        matches!(self.connection, ConnectionState::Attached { .. })
+        self.connection == ConnectionState::Attached
     }
 
     #[must_use]
@@ -189,40 +189,27 @@ impl SessionModel {
         &mut self,
         message: ServerMessage,
     ) -> Result<Option<(ClipboardLocation, String)>, ModelError> {
-        let in_order = match &message {
-            ServerMessage::Attached { .. }
-            | ServerMessage::Busy
-            | ServerMessage::Incompatible { .. } => {
-                matches!(self.connection, ConnectionState::Connecting)
-            }
-            ServerMessage::Frame(_)
-            | ServerMessage::Accepted
-            | ServerMessage::CopiedText(_)
-            | ServerMessage::ClipboardWrite { .. }
-            | ServerMessage::Exited { .. } => self.is_attached(),
-            ServerMessage::Failure(_) => matches!(
-                self.connection,
-                ConnectionState::Connecting | ConnectionState::Attached { .. }
-            ),
-        };
-        if !in_order {
-            return Err(ModelError::UnexpectedMessage);
-        }
-
+        let connecting = matches!(self.connection, ConnectionState::Connecting);
+        let attached = self.is_attached();
         match message {
-            ServerMessage::Attached { version } => {
-                self.connection = ConnectionState::Attached { version };
+            ServerMessage::Attached if connecting => {
+                self.connection = ConnectionState::Attached;
                 self.notices.clear();
             }
-            ServerMessage::Frame(frame) => {
+            ServerMessage::Frame(frame)
+            | ServerMessage::WheelOutcome(WheelOutcome::Viewport { frame, .. })
+                if attached =>
+            {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
                 self.awaiting_current_frame = false;
             }
-            ServerMessage::Accepted => {
+            ServerMessage::Accepted | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted)
+                if attached =>
+            {
                 self.clear_orbit_notice();
             }
-            ServerMessage::Failure(failure) => {
+            ServerMessage::Failure(failure) if connecting || attached => {
                 let label = match failure.code {
                     FailureCode::InvalidInput => "rejected input",
                     FailureCode::Protocol => "protocol failure",
@@ -234,33 +221,32 @@ impl SessionModel {
                     failure.detail
                 ))));
             }
-            ServerMessage::Busy => {
+            ServerMessage::Busy if connecting => {
                 self.connection = ConnectionState::Busy;
                 self.notices.clear();
             }
-            ServerMessage::Incompatible {
-                minimum_version,
-                maximum_version,
-            } => {
-                self.connection = ConnectionState::Incompatible {
-                    minimum: minimum_version,
-                    maximum: maximum_version,
-                };
-                self.notices.clear();
-            }
-            ServerMessage::Exited { code } => {
+            ServerMessage::Exited { code } if attached => {
                 self.connection = ConnectionState::Exited { code };
                 self.notices.clear();
             }
-            ServerMessage::CopiedText(text) => {
+            ServerMessage::CopiedText(text) if attached => {
                 self.clear_orbit_notice();
                 return Ok(Some((ClipboardLocation::Standard, text)));
             }
-            ServerMessage::ClipboardWrite { location, text } => {
+            ServerMessage::ClipboardWrite { location, text } if attached => {
                 return Ok(Some((location, text)));
             }
+            _ => return Err(ModelError::UnexpectedMessage),
         }
         Ok(None)
+    }
+
+    pub fn mark_incompatible(&mut self, version: u16) {
+        if self.is_terminal() {
+            return;
+        }
+        self.connection = ConnectionState::Incompatible { version };
+        self.notices.clear();
     }
 
     pub fn mark_lost(&mut self, detail: impl Into<String>) {

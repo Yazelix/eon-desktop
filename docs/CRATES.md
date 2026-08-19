@@ -6,16 +6,26 @@ shape. `ven-upt.2` implements it with exact direct versions and features in
 `ven-consume-terminal-clipboard-writes-zgh` advances the canonical session
 consumer to ORBS v3. `ven-native-clipboard-paste-uas` reuses that clipboard
 owner for explicit reads. `ven-c87` adds the exact Eon-owned EONW v1 consumer
-without a local protocol mirror.
+without a local protocol mirror. `ven-adopt-orbs-v4-without-interaction-expansion-zdc`
+advances the same canonical session consumer to ORBS v4.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
 | Eon workspace protocol consumer | Exact Git revision `4af395aea06c230ee6b18cf0755ae25915c0b88d` of the dependency-free, publish-false `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v1 values, validation, topology, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. The user authorized Apache-2.0, matching Nova, if Eon needs a public license; the exact Eon revision has no durable license record, so public distribution remains blocked until Eon records it. |
-| Orbit protocol consumer | Exact Git revision `3ee7c80005f3d2bbe81e539799327803716f6174` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v3, ORBF v1, semantic values, history, selection, copied text, terminal clipboard effects, bounds, and revision reduction. Venus keeps no mirror or adapter. |
+| Orbit protocol consumer | Exact Git revision `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v4, ORBF v1, semantic values, history, selection, typed wheel outcomes, copied text, terminal clipboard effects, bounds, revision reduction, and the accepted ORB-C12 lifecycle pair. Venus keeps no mirror, adapter, preview state, or kinetic policy. |
 | Native host | winit 0.30.13 with X11, Wayland, dynamic Wayland loading, and raw-window-handle 0.6, patched to exact `chiyuki0325/winit-0.30` commit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` | Active | The host owns window and event-loop lifecycle, native input and IME collection, compositor blur protocol selection, resize, surface recovery, socket scheduling, and bounded client failure UX. Replace the patch with the first accepted stable winit containing upstream `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. |
 | GPU and text | wgpu 30.0.0 with Vulkan, Metal, and WGSL; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
 | Native text clipboard | arboard 3.6.1 with default features disabled and `wayland-data-control` enabled | Active on Linux/Xwayland | The host reads ordinary clipboard text once after an explicit paste shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects. Orbit owns paste encoding and terminal text. Native Wayland without data-control and macOS remain unproved. |
+
+The ORBS v4 advance keeps one direct package with no transitive, native, build,
+feature, or Nix change. Orbit's canonical codec grows by 459 Rust lines to own
+standalone-row and typed preview/wheel validation; Venus copies none of it and
+maps only committed wheel outcomes. Staying on v3 cannot attach to the accepted
+producer, while a backport, dual decoder, or adapter would duplicate Orbit's
+schema. Replacement remains one exact pin plus exhaustive consumer matches.
+The unpublished Orbit source still records no durable license metadata, so this
+internal dependency decision makes no public-distribution claim.
 
 ## Measured comparison
 

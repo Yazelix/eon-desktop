@@ -2,7 +2,7 @@ use eon_workspace_protocol::{
     self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
     Response as WorkspaceResponse,
 };
-use orbit_protocol::session::{self, ClientMessage, ServerMessage};
+use orbit_protocol::session::{self, ClientMessage, ServerMessage, WheelOutcome};
 use std::{
     collections::VecDeque,
     fmt,
@@ -19,6 +19,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum TransportEvent {
     Server(ServerMessage),
+    Incompatible { version: u16 },
     InvalidInput(String),
     RetryableLoss(String),
     Lost(String),
@@ -250,7 +251,6 @@ struct EventQueue(Mutex<QueuedEvents>);
 #[derive(Default)]
 struct QueuedEvents {
     events: VecDeque<TransportEvent>,
-    frames: usize,
     delivered_frame_high_water: Option<u64>,
     stopped: bool,
 }
@@ -269,8 +269,14 @@ impl EventQueue {
             let mut replaced = None;
             for (index, queued) in state.events.iter().enumerate().rev() {
                 match queued {
-                    TransportEvent::Server(ServerMessage::Accepted) => {}
-                    TransportEvent::Server(ServerMessage::Frame(frame)) => {
+                    TransportEvent::Server(
+                        ServerMessage::Accepted
+                        | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted),
+                    ) => {}
+                    queued => {
+                        let Some(queued_revision) = frame_revision(queued) else {
+                            break;
+                        };
                         let previous_revision = state
                             .events
                             .iter()
@@ -278,14 +284,13 @@ impl EventQueue {
                             .filter_map(frame_revision)
                             .chain(state.delivered_frame_high_water)
                             .max();
-                        if revision > frame.revision
-                            && previous_revision.is_none_or(|previous| frame.revision > previous)
+                        if revision > queued_revision
+                            && previous_revision.is_none_or(|previous| queued_revision > previous)
                         {
                             replaced = Some(index);
                         }
                         break;
                     }
-                    _ => break,
                 }
             }
             if let Some(index) = replaced {
@@ -296,13 +301,13 @@ impl EventQueue {
         }
         let wake = state.events.is_empty();
         if state.events.len() == EVENT_QUEUE_CAPACITY
-            || (incoming_revision.is_some() && state.frames == FRAME_QUEUE_CAPACITY)
+            || (incoming_revision.is_some()
+                && state.events.iter().filter_map(frame_revision).count() == FRAME_QUEUE_CAPACITY)
         {
             state.events.clear();
             state.events.push_back(TransportEvent::Lost(
                 "Orbit event queue exceeded its bounded capacity".into(),
             ));
-            state.frames = 0;
             state.stopped = true;
             return wake;
         }
@@ -310,13 +315,9 @@ impl EventQueue {
             &event,
             TransportEvent::RetryableLoss(_)
                 | TransportEvent::Lost(_)
-                | TransportEvent::Server(
-                    ServerMessage::Busy
-                        | ServerMessage::Incompatible { .. }
-                        | ServerMessage::Exited { .. }
-                )
+                | TransportEvent::Incompatible { .. }
+                | TransportEvent::Server(ServerMessage::Busy | ServerMessage::Exited { .. })
         );
-        state.frames += usize::from(incoming_revision.is_some());
         state.events.push_back(event);
         wake
     }
@@ -329,14 +330,16 @@ impl EventQueue {
             .filter_map(frame_revision)
             .chain(state.delivered_frame_high_water)
             .max();
-        state.frames = 0;
         state.events.drain(..).collect()
     }
 }
 
 fn frame_revision(event: &TransportEvent) -> Option<u64> {
     match event {
-        TransportEvent::Server(ServerMessage::Frame(frame)) => Some(frame.revision),
+        TransportEvent::Server(
+            ServerMessage::Frame(frame)
+            | ServerMessage::WheelOutcome(WheelOutcome::Viewport { frame, .. }),
+        ) => Some(frame.revision),
         _ => None,
     }
 }
@@ -377,13 +380,7 @@ fn run(
             return;
         }
     };
-    if let Err(error) = write_message(
-        &mut stream,
-        &ClientMessage::Hello {
-            minimum_version: session::VERSION,
-            maximum_version: session::VERSION,
-        },
-    ) {
+    if let Err(error) = write_message(&mut stream, &ClientMessage::Hello) {
         let kind = error.kind();
         notify(socket_loss(
             format!("Cannot start the Orbit attachment: {error}"),
@@ -498,9 +495,12 @@ fn socket_loss(detail: String, kind: ErrorKind) -> TransportEvent {
 }
 
 fn protocol_loss(error: session::Error) -> TransportEvent {
-    TransportEvent::Lost(format!(
-        "Orbit sent an invalid local-session message: {error}"
-    ))
+    match error {
+        session::Error::UnsupportedVersion { version } => TransportEvent::Incompatible { version },
+        error => TransportEvent::Lost(format!(
+            "Orbit sent an invalid local-session message: {error}"
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -533,6 +533,10 @@ mod tests {
             protocol_loss(session::Error::InvalidMagic),
             TransportEvent::Lost(_)
         ));
+        assert_eq!(
+            protocol_loss(session::Error::UnsupportedVersion { version: 3 }),
+            TransportEvent::Incompatible { version: 3 }
+        );
         assert!(matches!(
             socket_loss("missing".into(), ErrorKind::NotFound),
             TransportEvent::RetryableLoss(_)
@@ -588,6 +592,14 @@ mod tests {
             events.drain(),
             [TransportEvent::Server(ServerMessage::Busy)]
         );
+
+        let events = EventQueue::default();
+        assert!(events.push(TransportEvent::Incompatible { version: 3 }));
+        assert!(!events.push(TransportEvent::Server(ServerMessage::Accepted)));
+        assert_eq!(
+            events.drain(),
+            [TransportEvent::Incompatible { version: 3 }]
+        );
     }
 
     #[test]
@@ -595,7 +607,7 @@ mod tests {
         let events = EventQueue::default();
         assert!(events.push(server_frame(1)));
         assert!(!events.push(TransportEvent::Server(ServerMessage::Accepted)));
-        assert!(!events.push(server_frame(2)));
+        assert!(!events.push(server_wheel_frame(2)));
         assert!(!events.push(TransportEvent::InvalidInput("input".into())));
         assert!(!events.push(server_frame(3)));
         assert!(!events.push(server_frame(4)));
@@ -604,7 +616,7 @@ mod tests {
             events.drain(),
             [
                 TransportEvent::Server(ServerMessage::Accepted),
-                server_frame(2),
+                server_wheel_frame(2),
                 TransportEvent::InvalidInput("input".into()),
                 server_frame(4),
             ]
@@ -617,6 +629,21 @@ mod tests {
         assert!(events.push(server_frame(6)));
         assert!(!events.push(server_frame(5)));
         assert_eq!(events.drain(), [server_frame(6), server_frame(5)]);
+
+        assert!(events.push(server_frame(7)));
+        assert!(
+            !events.push(TransportEvent::Server(ServerMessage::WheelOutcome(
+                WheelOutcome::TerminalRouted
+            )))
+        );
+        assert!(!events.push(server_wheel_frame(8)));
+        assert_eq!(
+            events.drain(),
+            [
+                TransportEvent::Server(ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted)),
+                server_wheel_frame(8),
+            ]
+        );
     }
 
     #[test]
@@ -624,7 +651,7 @@ mod tests {
         let events = EventQueue::default();
         events.push(server_frame(1));
         events.push(TransportEvent::InvalidInput("first barrier".into()));
-        events.push(server_frame(2));
+        events.push(server_wheel_frame(2));
         events.push(TransportEvent::InvalidInput("second barrier".into()));
         events.push(server_frame(3));
 
@@ -646,20 +673,9 @@ mod tests {
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
-            assert_eq!(
-                read_client(&mut stream),
-                ClientMessage::Hello {
-                    minimum_version: session::VERSION,
-                    maximum_version: session::VERSION
-                }
-            );
+            assert_eq!(read_client(&mut stream), ClientMessage::Hello);
             stream
-                .write_all(
-                    &session::encode_server_message(&ServerMessage::Attached {
-                        version: session::VERSION,
-                    })
-                    .unwrap(),
-                )
+                .write_all(&session::encode_server_message(&ServerMessage::Attached).unwrap())
                 .unwrap();
             assert_eq!(
                 read_client(&mut stream),
@@ -682,9 +698,7 @@ mod tests {
         receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(
             transport.drain_events(),
-            [TransportEvent::Server(ServerMessage::Attached {
-                version: session::VERSION
-            })]
+            [TransportEvent::Server(ServerMessage::Attached)]
         );
         transport
             .send(ClientMessage::Focus(FocusEvent::Gained))
@@ -692,18 +706,8 @@ mod tests {
         drop(transport);
 
         let mut reopened = UnixStream::connect(path).unwrap();
-        write_message(
-            &mut reopened,
-            &ClientMessage::Hello {
-                minimum_version: session::VERSION,
-                maximum_version: session::VERSION,
-            },
-        )
-        .unwrap();
-        assert!(matches!(
-            server.join().unwrap(),
-            ClientMessage::Hello { .. }
-        ));
+        write_message(&mut reopened, &ClientMessage::Hello).unwrap();
+        assert_eq!(server.join().unwrap(), ClientMessage::Hello);
     }
 
     #[test]
@@ -725,17 +729,9 @@ mod tests {
         let server = thread::spawn(move || {
             for _ in 0..2 {
                 let (mut stream, _) = listener.accept().unwrap();
-                assert!(matches!(
-                    read_client(&mut stream),
-                    ClientMessage::Hello { .. }
-                ));
+                assert_eq!(read_client(&mut stream), ClientMessage::Hello);
                 stream
-                    .write_all(
-                        &session::encode_server_message(&ServerMessage::Attached {
-                            version: session::VERSION,
-                        })
-                        .unwrap(),
-                    )
+                    .write_all(&session::encode_server_message(&ServerMessage::Attached).unwrap())
                     .unwrap();
                 releases.recv_timeout(Duration::from_secs(5)).unwrap();
             }
@@ -748,7 +744,7 @@ mod tests {
         second_events.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(
             second.drain_events().as_slice(),
-            [TransportEvent::Server(ServerMessage::Attached { .. })]
+            [TransportEvent::Server(ServerMessage::Attached)]
         ));
         release.send(()).unwrap();
         second_events.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -765,7 +761,7 @@ mod tests {
         third_events.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(
             third.drain_events().as_slice(),
-            [TransportEvent::Server(ServerMessage::Attached { .. })]
+            [TransportEvent::Server(ServerMessage::Attached)]
         ));
         release.send(()).unwrap();
         drop(third);
@@ -962,7 +958,18 @@ mod tests {
     }
 
     fn server_frame(revision: u64) -> TransportEvent {
-        TransportEvent::Server(ServerMessage::Frame(Box::new(Frame {
+        TransportEvent::Server(ServerMessage::Frame(Box::new(frame(revision))))
+    }
+
+    fn server_wheel_frame(revision: u64) -> TransportEvent {
+        TransportEvent::Server(ServerMessage::WheelOutcome(WheelOutcome::Viewport {
+            applied_rows: -1,
+            frame: Box::new(frame(revision)),
+        }))
+    }
+
+    fn frame(revision: u64) -> Frame {
+        Frame {
             revision,
             dimensions: Dimensions { cols: 0, rows: 0 },
             screen: Screen::Primary,
@@ -986,7 +993,7 @@ mod tests {
                 viewport: None,
             },
             rows: Vec::new(),
-        })))
+        }
     }
 
     struct TestSocket {

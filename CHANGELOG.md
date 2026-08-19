@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Consume exact canonical ORBS v4 and its accepted ORB-C12 Orbit revision,
+  mapping typed whole-row wheel outcomes into the existing result and frame
+  owners while retaining explicit protocol-incompatibility UX and adding no
+  preview or kinetic interaction.
 - Animate an omitted cursor profile with the documented `#89b4fa` tail at
   duration `1.0`, while retaining explicit `none` and strict custom profiles.
 - Shape each complete terminal cell at its Orbit-authored grid start so complex
