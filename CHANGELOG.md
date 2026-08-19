@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Animate an omitted cursor profile with the documented `#89b4fa` tail at
+  duration `1.0`, while retaining explicit `none` and strict custom profiles.
 - Shape each complete terminal cell at its Orbit-authored grid start so complex
   Unicode cannot displace later cells or delimiters.
 - Accept `--background-blur` as one best-effort full-surface native compositor

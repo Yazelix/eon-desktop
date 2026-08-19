@@ -99,10 +99,10 @@ COSMIC owns the blur algorithm and strength. Unsupported or policy-disabled
 compositors may ignore the best-effort request without failing launch. Venus
 does not configure blur strength, and X11 and macOS blur remain unproved.
 
-Direct Venus launches use a static cursor when the cursor profile is absent or
-`--cursor-effect-v1 none` is present. A complete tail profile requires one
-`#RRGGBB` trail color and a finite duration multiplier from `0.25` through
-`4.0`:
+Direct Venus launches use a tail with color `#89b4fa` and duration multiplier
+`1.0` when the cursor profile is absent. Pass `--cursor-effect-v1 none` for a
+static cursor. A complete explicit tail profile requires one `#RRGGBB` trail
+color and a finite duration multiplier from `0.25` through `4.0`:
 
 ```sh
 cargo run --locked -- \
@@ -187,8 +187,8 @@ lock files, and other generated artifacts.
 | README | 194 |
 | Contracts and references | 289 |
 | Crate decisions | 147 |
-| Changelog | 72 |
-| Rust source, including unit tests | 8,815 |
+| Changelog | 74 |
+| Rust source, including unit tests | 8,834 |
 | Rust integration tests | 591 |
 | Cargo manifest | 23 |
-| **Total** | **10,547** |
+| **Total** | **10,568** |

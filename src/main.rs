@@ -47,6 +47,14 @@ const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
+const DEFAULT_CURSOR_TAIL: (Color, f32) = (
+    Color {
+        r: 0x89,
+        g: 0xb4,
+        b: 0xfa,
+    },
+    1.0,
+);
 const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 struct OrbitRetry {
@@ -1463,7 +1471,8 @@ fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Lau
     }
 
     let cursor_tail = match (cursor_effect, cursor_trail_color, cursor_trail_duration) {
-        (None | Some(false), None, None) => None,
+        (None, None, None) => Some(DEFAULT_CURSOR_TAIL),
+        (Some(false), None, None) => None,
         (Some(true), Some(color), Some(duration)) => Some((color, duration)),
         _ => return Err(USAGE.into()),
     };
@@ -1524,14 +1533,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn presentation_launch_arguments_are_complete_bounded_and_default_static() {
+    fn presentation_launch_arguments_are_complete_bounded_and_default_tail() {
         let parse = |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from));
 
         let default = parse(&[]).unwrap();
         assert!(default.decorations && default.workspace_socket.is_none());
         assert_eq!(default.background_opacity, 1.0);
         assert!(!default.background_blur);
-        assert_eq!(default.cursor_tail, None);
+        assert_eq!(
+            default.cursor_tail,
+            Some((
+                yazelix_venus::Color {
+                    r: 0x89,
+                    g: 0xb4,
+                    b: 0xfa,
+                },
+                1.0,
+            ))
+        );
         let attributes = window_attributes(
             default.decorations,
             default.background_opacity,
