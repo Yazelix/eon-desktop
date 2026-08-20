@@ -1775,19 +1775,18 @@ mod tests {
 
     #[test]
     fn presentation_control_emits_complete_commands_then_exit() {
-        let mut present = 0;
-        let mut exit = 0;
+        let mut events = Vec::new();
 
         run_presentation_control(&b"ignored\npresent\npart"[..], |event| {
-            match event {
-                UserEvent::Present => present += 1,
-                UserEvent::Exit => exit += 1,
+            events.push(match event {
+                UserEvent::Present => "present",
+                UserEvent::Exit => "exit",
                 _ => panic!("unexpected presentation control event"),
-            }
+            });
             true
         });
 
-        assert_eq!((present, exit), (1, 1));
+        assert_eq!(events, ["present", "exit"]);
     }
 
     #[test]
