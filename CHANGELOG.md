@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve Orbit's flushed authoritative terminal completion when concurrent
+  Venus input observes socket loss, while retaining prompt bounded loss when no
+  complete authoritative terminal message is available.
 - Render supported packaged Nerd Font symbols completely through adjacent blank
   cells without moving or covering later nonblank cells or changing geometry
   between regular and bold terminal presentation.
