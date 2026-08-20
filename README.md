@@ -119,11 +119,14 @@ out-of-range profile values before opening a window. Yazelix Cursors owns value
 resolution and Eon owns serialization and persistence for composed launches;
 that Eon producer is tracked separately and is not part of the current launcher.
 
-When Eon supervises Venus, it supplies one private bounded presentation channel.
-A repeated Eon launch keeps the same Venus process and terminal attachment
-and asks the native window system to present its existing window. Direct focus
-and unminimize are unavailable through winit on Wayland; xdg activation remains
-compositor-controlled.
+In Eon's supervised mode, Venus reads one private bounded presentation stream.
+Each complete Present command keeps the same Venus process and terminal
+attachment and asks the native window system to present its existing window.
+If that stream closes or fails, Venus exits without stopping Orbit and releases
+its presentation attachment; an immediate supervised replacement retries a
+transient Busy while the departing client releases it. Standalone Busy remains
+terminal. Direct focus and unminimize are unavailable through winit on Wayland;
+xdg activation remains compositor-controlled.
 
 The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
@@ -184,11 +187,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 194 |
+| README | 197 |
 | Contracts and references | 330 |
 | Crate decisions | 157 |
-| Changelog | 87 |
-| Rust source, including unit tests | 9,077 |
+| Changelog | 90 |
+| Rust source, including unit tests | 9,119 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **10,896** |
+| **Total** | **10,944** |

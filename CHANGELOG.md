@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exit supervised Venus when its private presentation stream closes without
+  stopping Orbit, and let only an immediate supervised replacement retry the
+  departing client's transient Busy response.
 - Keep transport-loss state independent from retry policy: every ended Orbit
   transport becomes explicitly non-attached, while Protocol and Terminal
   failures still suppress retry and retain only a current constraining notice.

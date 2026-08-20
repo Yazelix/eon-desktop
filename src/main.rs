@@ -96,6 +96,7 @@ impl OrbitRetry {
 #[derive(Debug)]
 enum UserEvent {
     AccessKit(AccessKitEvent),
+    Exit,
     Present,
     Transport,
     Workspace,
@@ -118,6 +119,7 @@ struct WindowState {
 struct Application {
     orbit_socket: PathBuf,
     workspace_socket: Option<PathBuf>,
+    supervised: bool,
     decorations: bool,
     background_opacity: f32,
     background_blur: bool,
@@ -149,18 +151,19 @@ struct Application {
 }
 
 impl Application {
-    fn new(
-        orbit_socket: PathBuf,
-        workspace_socket: Option<PathBuf>,
-        decorations: bool,
-        background_opacity: f32,
-        background_blur: bool,
-        cursor_tail: Option<(Color, f32)>,
-        proxy: EventLoopProxy<UserEvent>,
-    ) -> Self {
+    fn new(arguments: LaunchArguments, supervised: bool, proxy: EventLoopProxy<UserEvent>) -> Self {
+        let LaunchArguments {
+            orbit_socket,
+            workspace_socket,
+            decorations,
+            background_opacity,
+            background_blur,
+            cursor_tail,
+        } = arguments;
         Self {
             orbit_socket,
             workspace_socket,
+            supervised,
             decorations,
             background_opacity,
             background_blur,
@@ -483,9 +486,17 @@ impl Application {
     }
 
     fn handle_transport(&mut self, event: TransportEvent) {
-        let retryable_event = matches!(&event, TransportEvent::RetryableLoss(_));
+        let retryable_busy = managed_busy_is_retryable(self.supervised, &event);
+        let retryable_event = retryable_busy || matches!(&event, TransportEvent::RetryableLoss(_));
         let mut schedule_retry = false;
         match event {
+            TransportEvent::Server(ServerMessage::Busy) if retryable_busy => {
+                schedule_retry = apply_retryable_loss(
+                    &mut self.model,
+                    "Orbit already has a departing presentation client; retrying".into(),
+                    self.retry_suppressed,
+                );
+            }
             TransportEvent::Server(message) => {
                 if server_failure_suppresses_retry(&message) {
                     self.retry_suppressed = true;
@@ -1038,8 +1049,9 @@ impl ApplicationHandler<UserEvent> for Application {
         }
     }
 
-    fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
+            UserEvent::Exit => event_loop.exit(),
             UserEvent::Present => {
                 if let Some(state) = &self.window {
                     state.window.set_minimized(false);
@@ -1197,6 +1209,10 @@ fn server_failure_suppresses_retry(message: &ServerMessage) -> bool {
         ServerMessage::Failure(failure)
             if matches!(failure.code, FailureCode::Protocol | FailureCode::Terminal)
     )
+}
+
+fn managed_busy_is_retryable(supervised: bool, event: &TransportEvent) -> bool {
+    supervised && matches!(event, TransportEvent::Server(ServerMessage::Busy))
 }
 
 fn apply_retryable_loss(model: &mut SessionModel, detail: String, retry_suppressed: bool) -> bool {
@@ -1370,18 +1386,11 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 fn main() -> Result {
     let arguments = launch_arguments(env::args_os().skip(1))?;
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
-    if env::var_os("EON_VENUS_PRESENTATION_CONTROL") == Some(OsString::from("stdin")) {
+    let supervised = env::var_os("EON_VENUS_PRESENTATION_CONTROL") == Some(OsString::from("stdin"));
+    if supervised {
         start_presentation_control(event_loop.create_proxy())?;
     }
-    let mut application = Application::new(
-        arguments.orbit_socket,
-        arguments.workspace_socket,
-        arguments.decorations,
-        arguments.background_opacity,
-        arguments.background_blur,
-        arguments.cursor_tail,
-        event_loop.create_proxy(),
-    );
+    let mut application = Application::new(arguments, supervised, event_loop.create_proxy());
     event_loop.run_app(&mut application)?;
     Ok(())
 }
@@ -1505,15 +1514,19 @@ fn start_presentation_control(proxy: EventLoopProxy<UserEvent>) -> Result {
     thread::Builder::new()
         .name("venus-presentation-control".into())
         .spawn(move || {
-            let mut input = io::stdin().lock();
-            let mut message = [0; 8];
-            while input.read_exact(&mut message).is_ok() {
-                if message == *b"present\n" && proxy.send_event(UserEvent::Present).is_err() {
-                    break;
-                }
-            }
+            run_presentation_control(io::stdin().lock(), |event| proxy.send_event(event).is_ok());
         })?;
     Ok(())
+}
+
+fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent) -> bool) {
+    let mut message = [0; 8];
+    while input.read_exact(&mut message).is_ok() {
+        if message == *b"present\n" && !send(UserEvent::Present) {
+            return;
+        }
+    }
+    let _ = send(UserEvent::Exit);
 }
 
 fn default_socket_path() -> Result<PathBuf> {
@@ -1761,6 +1774,23 @@ mod tests {
     }
 
     #[test]
+    fn presentation_control_emits_complete_commands_then_exit() {
+        let mut present = 0;
+        let mut exit = 0;
+
+        run_presentation_control(&b"ignored\npresent\npart"[..], |event| {
+            match event {
+                UserEvent::Present => present += 1,
+                UserEvent::Exit => exit += 1,
+                _ => panic!("unexpected presentation control event"),
+            }
+            true
+        });
+
+        assert_eq!((present, exit), (1, 1));
+    }
+
+    #[test]
     fn blinking_starts_with_a_complete_visible_phase_after_idle() {
         let now = Instant::now();
         let mut visible = false;
@@ -1802,6 +1832,18 @@ mod tests {
         assert!(retry_is_allowed(true, Some((first, true)), Some(first)));
         assert!(!retry_is_allowed(true, Some((first, false)), Some(first)));
         assert!(!retry_is_allowed(true, Some((second, true)), Some(first)));
+    }
+
+    #[test]
+    fn only_supervised_orbit_busy_is_retryable() {
+        let busy = TransportEvent::Server(ServerMessage::Busy);
+
+        assert!(managed_busy_is_retryable(true, &busy));
+        assert!(!managed_busy_is_retryable(false, &busy));
+        assert!(!managed_busy_is_retryable(
+            true,
+            &TransportEvent::Server(ServerMessage::Accepted),
+        ));
     }
 
     #[test]
