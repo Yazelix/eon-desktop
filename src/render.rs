@@ -143,6 +143,7 @@ struct PlacedText {
 
 #[derive(Clone, Debug, PartialEq)]
 struct ContentKey {
+    generation: u64,
     revision: Option<u64>,
     workspace: Option<WorkspaceScene>,
     workspace_focus: WorkspaceFocus,
@@ -590,6 +591,7 @@ impl Renderer {
         self.cursor_animation.is_active()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
         scene: Option<&Scene>,
@@ -598,6 +600,7 @@ impl Renderer {
         status: &str,
         blink_visible: bool,
         preedit: &str,
+        generation: u64,
     ) -> Result<PresentOutcome, RenderError> {
         let content_changed = self.rebuild_if_needed(
             scene,
@@ -606,6 +609,7 @@ impl Renderer {
             status,
             blink_visible,
             preedit,
+            generation,
         );
         self.rebuild_dynamic_cursor(scene, workspace, blink_visible);
         if content_changed {
@@ -731,6 +735,7 @@ impl Renderer {
         Ok(PresentOutcome::Presented)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn rebuild_if_needed(
         &mut self,
         scene: Option<&Scene>,
@@ -739,8 +744,10 @@ impl Renderer {
         status: &str,
         blink_visible: bool,
         preedit: &str,
+        generation: u64,
     ) -> bool {
         let key = ContentKey {
+            generation,
             revision: scene.map(|scene| scene.revision),
             workspace: workspace.cloned(),
             workspace_focus,
@@ -2025,6 +2032,21 @@ mod tests {
     use super::*;
     use crate::{DrawCell, DrawCursor, DrawRow};
     use orbit_protocol::{CellWidth, Screen};
+
+    #[test]
+    fn content_cache_separates_equal_revisions_from_different_generations() {
+        let key = |generation| ContentKey {
+            generation,
+            revision: Some(1),
+            workspace: None,
+            workspace_focus: WorkspaceFocus::Terminal,
+            blink_visible: true,
+            preedit: String::new(),
+            status: String::new(),
+        };
+
+        assert_ne!(key(1), key(2));
+    }
 
     fn plain_style() -> DrawStyle {
         DrawStyle {

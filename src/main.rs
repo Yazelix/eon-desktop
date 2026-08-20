@@ -93,6 +93,55 @@ impl OrbitRetry {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PresentationIdentity {
+    generation: u64,
+    revision: Option<u64>,
+}
+
+#[derive(Debug, Default)]
+struct PresentationState {
+    generation: u64,
+    presented: Option<PresentationIdentity>,
+}
+
+impl PresentationState {
+    fn candidate(&self, revision: Option<u64>) -> PresentationIdentity {
+        PresentationIdentity {
+            generation: self.generation,
+            revision,
+        }
+    }
+
+    fn invalidate(&mut self) {
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .expect("presentation generation exhausted");
+        self.unpublish();
+    }
+
+    fn publish(&mut self, candidate: PresentationIdentity) {
+        if candidate.generation == self.generation {
+            self.presented = Some(candidate);
+        }
+    }
+
+    fn unpublish(&mut self) {
+        self.presented = None;
+    }
+
+    fn is_current(&self, candidate: PresentationIdentity) -> bool {
+        self.presented == Some(candidate)
+    }
+
+    fn current_revision(&self, candidate: PresentationIdentity) -> Option<u64> {
+        self.is_current(candidate)
+            .then_some(candidate.revision)
+            .flatten()
+    }
+}
+
 #[derive(Debug)]
 enum UserEvent {
     AccessKit(AccessKitEvent),
@@ -132,7 +181,7 @@ struct Application {
     workspace_model: WorkspaceModel,
     input: InputState,
     last_resize: Option<SurfaceSize>,
-    presented_revision: Option<u64>,
+    presentation: PresentationState,
     render_notice: Option<String>,
     blink_visible: bool,
     next_blink: Option<Instant>,
@@ -176,7 +225,7 @@ impl Application {
             workspace_model: WorkspaceModel::default(),
             input: InputState::default(),
             last_resize: None,
-            presented_revision: None,
+            presentation: PresentationState::default(),
             render_notice: None,
             blink_visible: true,
             next_blink: None,
@@ -284,6 +333,19 @@ impl Application {
         ))
     }
 
+    fn presentation_candidate(&self, workspace: Option<&WorkspaceScene>) -> PresentationIdentity {
+        let revision = self
+            .model
+            .scene()
+            .filter(|_| self.model.is_attached() && !self.model.awaiting_current_frame())
+            .and_then(|scene| {
+                let state = self.window.as_ref()?;
+                let screen = terminal_screen(workspace, state.renderer.size());
+                surface_size(screen, state.renderer.metrics()).map(|_| scene.revision)
+            });
+        self.presentation.candidate(revision)
+    }
+
     fn reveal_workspace_selection(&mut self) {
         let Some(state) = &self.window else {
             return;
@@ -335,7 +397,7 @@ impl Application {
         self.input.reset_scroll();
         self.input.cancel_selection();
         self.last_resize = None;
-        self.presented_revision = None;
+        self.presentation.invalidate();
         if live {
             self.start_orbit(PathBuf::from(OsString::from_vec(endpoint)));
         }
@@ -361,7 +423,7 @@ impl Application {
         self.reset_cursor_animation();
         self.retry_suppressed = false;
         self.last_resize = None;
-        self.presented_revision = None;
+        self.presentation.invalidate();
         self.start_orbit(self.orbit_socket.clone());
         self.refresh_client_view();
     }
@@ -375,6 +437,7 @@ impl Application {
         };
         if snapshot_changed {
             self.reveal_workspace_selection();
+            self.presentation.invalidate();
             if let Some((endpoint, live)) = self.workspace_model.active_attachment()
                 && (self.active_endpoint.as_deref() != Some(endpoint)
                     || self.active_endpoint_live != live)
@@ -388,6 +451,11 @@ impl Application {
     }
 
     fn send_workspace(&mut self, action: WorkspaceAction) {
+        let workspace = self.workspace_scene();
+        let candidate = self.presentation_candidate(workspace.as_ref());
+        if !self.presentation.is_current(candidate) {
+            return;
+        }
         let Some(transport) = &self.workspace_transport else {
             return;
         };
@@ -471,18 +539,26 @@ impl Application {
             return;
         };
         self.input.reset_scroll();
-        if tabs {
+        let changed = if tabs {
             let movement = if horizontal == 0.0 {
                 vertical
             } else {
                 horizontal
             };
-            self.tab_scroll = (scene.tab_scroll() - movement).clamp(0.0, scene.tab_scroll_limit());
+            let next = (scene.tab_scroll() - movement).clamp(0.0, scene.tab_scroll_limit());
+            let changed = self.tab_scroll != next;
+            self.tab_scroll = next;
+            changed
         } else {
-            self.pane_scroll =
-                (scene.pane_scroll() - vertical).clamp(0.0, scene.pane_scroll_limit());
+            let next = (scene.pane_scroll() - vertical).clamp(0.0, scene.pane_scroll_limit());
+            let changed = self.pane_scroll != next;
+            self.pane_scroll = next;
+            changed
+        };
+        if changed {
+            self.presentation.invalidate();
+            self.refresh_client_view();
         }
-        self.refresh_client_view();
     }
 
     fn handle_transport(&mut self, event: TransportEvent) {
@@ -507,10 +583,15 @@ impl Application {
                     ServerMessage::Frame(_)
                         | ServerMessage::WheelOutcome(WheelOutcome::Viewport { .. })
                 );
-                match self.model.apply(message) {
+                let result = self.model.apply(message);
+                let accepted_frame = frame && result.is_ok();
+                match result {
                     Ok(Some((location, text))) => self.write_clipboard(location, text),
                     Ok(None) => {}
                     Err(error) => self.model.mark_lost(error.to_string()),
+                }
+                if accepted_frame {
+                    self.presentation.invalidate();
                 }
                 if frame
                     && self
@@ -549,7 +630,7 @@ impl Application {
             self.input.cancel_selection();
             self.reset_cursor_animation();
             self.transport = None;
-            self.presented_revision = None;
+            self.presentation.invalidate();
             if schedule_retry && self.retry_allowed() {
                 self.orbit_retry.schedule(Instant::now());
             } else {
@@ -759,6 +840,7 @@ impl Application {
         };
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
+        let candidate = self.presentation_candidate(workspace.as_ref());
         let mut refresh = false;
         let Some(state) = &mut self.window else {
             return;
@@ -770,23 +852,21 @@ impl Application {
             status,
             self.blink_visible,
             preedit,
+            candidate.generation,
         ) {
             Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
-                self.presented_revision = self.model.scene().and_then(|scene| {
-                    let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
-                    surface_size(screen, state.renderer.metrics()).map(|_| scene.revision)
-                });
+                self.presentation.publish(candidate);
             }
             Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Recovered) => {
-                self.presented_revision = None;
+                self.presentation.unpublish();
                 state.window.request_redraw();
             }
             Err(error) => {
                 if let Some(notice) = record_render_failure(
                     &mut self.render_notice,
-                    &mut self.presented_revision,
+                    &mut self.presentation,
                     error,
                     |title| state.window.set_title(title),
                     |message| report(message),
@@ -838,11 +918,10 @@ impl ApplicationHandler<UserEvent> for Application {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let presented_revision = current_presentation(
-            self.model.scene().map(|scene| scene.revision),
-            self.presented_revision,
-        );
         let workspace = self.workspace_scene();
+        let candidate = self.presentation_candidate(workspace.as_ref());
+        let presentation_current = self.presentation.is_current(candidate);
+        let presented_revision = self.presentation.current_revision(candidate);
         let Some(state) = &mut self.window else {
             return;
         };
@@ -858,7 +937,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.input.reset_scroll();
                 state.renderer.resize(size, state.window.scale_factor());
                 self.reveal_workspace_selection();
-                self.presented_revision = None;
+                self.presentation.invalidate();
                 self.send_resize();
                 self.refresh_client_view();
             }
@@ -869,7 +948,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     .renderer
                     .resize(state.window.inner_size(), scale_factor);
                 self.reveal_workspace_selection();
-                self.presented_revision = None;
+                self.presentation.invalidate();
                 self.send_resize();
                 self.refresh_client_view();
             }
@@ -899,7 +978,12 @@ impl ApplicationHandler<UserEvent> for Application {
                     event.state,
                     event.repeat,
                 ) {
-                    if copy_is_ready(self.input.is_selecting(), event.state, event.repeat) {
+                    if copy_is_ready(
+                        presented_revision.is_some(),
+                        self.input.is_selecting(),
+                        event.state,
+                        event.repeat,
+                    ) {
                         self.send(ClientMessage::Selection(SelectionAction::Copy));
                     }
                 } else {
@@ -927,6 +1011,9 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = position;
+                if presented_revision.is_none() {
+                    return;
+                }
                 let (x, y) = workspace
                     .as_ref()
                     .map_or((position.x, position.y), |workspace| {
@@ -936,25 +1023,22 @@ impl ApplicationHandler<UserEvent> for Application {
                         )
                     });
                 let motion = self.input.move_pointer(x, y);
-                if presented_revision.is_some() {
-                    if self.input.is_selecting() {
-                        let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
-                        let size = surface_size(screen, state.renderer.metrics());
-                        if let Some(message) =
-                            size.and_then(|size| self.input.selection_motion(size))
-                            && self.send(message.clone())
-                        {
-                            self.input.commit_selection(&message);
-                        }
-                    } else if workspace.as_ref().is_none_or(|workspace| {
-                        matches!(
-                            workspace.hit_test(position.x as f32, position.y as f32),
-                            Some(WorkspaceHit::Terminal)
-                        )
-                    }) && let Some(message) = motion
+                if self.input.is_selecting() {
+                    let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
+                    let size = surface_size(screen, state.renderer.metrics());
+                    if let Some(message) = size.and_then(|size| self.input.selection_motion(size))
+                        && self.send(message.clone())
                     {
-                        self.send(message);
+                        self.input.commit_selection(&message);
                     }
+                } else if workspace.as_ref().is_none_or(|workspace| {
+                    matches!(
+                        workspace.hit_test(position.x as f32, position.y as f32),
+                        Some(WorkspaceHit::Terminal)
+                    )
+                }) && let Some(message) = motion
+                {
+                    self.send(message);
                 }
             }
             WindowEvent::MouseInput {
@@ -967,7 +1051,10 @@ impl ApplicationHandler<UserEvent> for Application {
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
-                if button_state == ElementState::Pressed && button == MouseButton::Left {
+                if presentation_current
+                    && button_state == ElementState::Pressed
+                    && button == MouseButton::Left
+                {
                     let target = match hit {
                         Some(WorkspaceHit::Tab(id)) => {
                             self.set_workspace_focus(WorkspaceFocus::Tabs);
@@ -987,6 +1074,9 @@ impl ApplicationHandler<UserEvent> for Application {
                         self.send_workspace(WorkspaceAction::FocusId(id));
                         return;
                     }
+                }
+                if presented_revision.is_none() {
+                    return;
                 }
                 if !button_reaches_terminal(
                     workspace.is_some(),
@@ -1028,11 +1118,15 @@ impl ApplicationHandler<UserEvent> for Application {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
                 if matches!(hit, Some(WorkspaceHit::Tab(_))) {
-                    self.scroll_workspace(delta, true, metrics);
+                    if presentation_current {
+                        self.scroll_workspace(delta, true, metrics);
+                    }
                     return;
                 }
                 if matches!(hit, Some(WorkspaceHit::Pane(_))) {
-                    self.scroll_workspace(delta, false, metrics);
+                    if presentation_current {
+                        self.scroll_workspace(delta, false, metrics);
+                    }
                     return;
                 }
                 if workspace.is_some() && !matches!(hit, Some(WorkspaceHit::Terminal)) {
@@ -1229,13 +1323,6 @@ fn apply_retryable_loss(model: &mut SessionModel, detail: String, retry_suppress
     schedule_retry
 }
 
-fn current_presentation(
-    scene_revision: Option<u64>,
-    presented_revision: Option<u64>,
-) -> Option<u64> {
-    scene_revision.filter(|revision| Some(*revision) == presented_revision)
-}
-
 fn window_title<'a>(scene_title: Option<&'a str>, render_notice: Option<&'a str>) -> &'a str {
     render_notice
         .or_else(|| scene_title.filter(|title| !title.is_empty()))
@@ -1248,12 +1335,12 @@ fn report(message: impl std::fmt::Display) {
 
 fn record_render_failure<'a>(
     render_notice: &'a mut Option<String>,
-    presented_revision: &mut Option<u64>,
+    presentation: &mut PresentationState,
     error: impl std::fmt::Display,
     set_title: impl FnOnce(&str),
     report: impl FnOnce(&str),
 ) -> Option<&'a str> {
-    *presented_revision = None;
+    presentation.invalidate();
     if render_notice.is_some() {
         return None;
     }
@@ -1271,8 +1358,13 @@ fn shortcut_is_ready(state: ElementState, repeat: bool) -> bool {
     state == ElementState::Pressed && !repeat
 }
 
-fn copy_is_ready(selecting: bool, state: ElementState, repeat: bool) -> bool {
-    !selecting && shortcut_is_ready(state, repeat)
+fn copy_is_ready(
+    presentation_current: bool,
+    selecting: bool,
+    state: ElementState,
+    repeat: bool,
+) -> bool {
+    presentation_current && !selecting && shortcut_is_ready(state, repeat)
 }
 
 fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
@@ -1584,7 +1676,9 @@ mod tests {
     #[test]
     fn renderer_failure_uses_non_gpu_diagnostics_until_success() {
         let mut notice = None;
-        let mut presented_revision = Some(7);
+        let mut presentation = PresentationState::default();
+        let candidate = presentation.candidate(Some(7));
+        presentation.publish(candidate);
         let mut titles = Vec::new();
         let mut diagnostics = Vec::new();
         let mut alerts = 0;
@@ -1592,7 +1686,7 @@ mod tests {
         for error in ["the Venus glyph atlas is full", "a later renderer failure"] {
             if record_render_failure(
                 &mut notice,
-                &mut presented_revision,
+                &mut presentation,
                 error,
                 |title| titles.push(title.to_owned()),
                 |message| diagnostics.push(format!("venus: {message}")),
@@ -1604,7 +1698,7 @@ mod tests {
         }
 
         let failure = "Venus renderer failure: the Venus glyph atlas is full";
-        assert_eq!(presented_revision, None);
+        assert!(!presentation.is_current(candidate));
         assert_eq!(titles, [failure]);
         assert_eq!(diagnostics, [format!("venus: {failure}")]);
         assert_eq!(alerts, 1);
@@ -2021,11 +2115,41 @@ mod tests {
     }
 
     #[test]
-    fn pointer_input_requires_the_current_presented_revision() {
-        assert_eq!(current_presentation(None, None), None);
-        assert_eq!(current_presentation(Some(8), None), None);
-        assert_eq!(current_presentation(Some(8), Some(7)), None);
-        assert_eq!(current_presentation(Some(8), Some(8)), Some(8));
+    fn attachment_revision_collision_waits_for_the_new_generation() {
+        let mut presentation = PresentationState::default();
+        let attachment_a = presentation.candidate(Some(1));
+        presentation.publish(attachment_a);
+        assert_eq!(presentation.current_revision(attachment_a), Some(1));
+
+        presentation.invalidate();
+        let attachment_b = presentation.candidate(Some(1));
+        assert_ne!(attachment_b, attachment_a);
+        assert_eq!(presentation.current_revision(attachment_b), None);
+
+        presentation.publish(attachment_b);
+        assert_eq!(presentation.current_revision(attachment_b), Some(1));
+    }
+
+    #[test]
+    fn workspace_generation_is_not_current_until_presented() {
+        let mut presentation = PresentationState::default();
+        let workspace_a = presentation.candidate(Some(7));
+        presentation.publish(workspace_a);
+        assert!(presentation.is_current(workspace_a));
+
+        presentation.invalidate();
+        let workspace_b = presentation.candidate(Some(7));
+        assert!(!presentation.is_current(workspace_b));
+        presentation.publish(workspace_a);
+        assert!(!presentation.is_current(workspace_b));
+
+        presentation.publish(workspace_b);
+        assert!(presentation.is_current(workspace_b));
+        presentation.unpublish();
+        assert!(!presentation.is_current(workspace_b));
+
+        presentation.publish(workspace_b);
+        assert!(presentation.is_current(workspace_b));
     }
 
     #[test]
@@ -2132,13 +2256,14 @@ mod tests {
     }
 
     #[test]
-    fn copy_waits_for_selection_to_finish() {
+    fn copy_waits_for_current_presentation_and_selection_finish() {
         use winit::event::ElementState::{Pressed, Released};
 
-        assert!(!copy_is_ready(true, Pressed, false));
-        assert!(copy_is_ready(false, Pressed, false));
-        assert!(!copy_is_ready(false, Pressed, true));
-        assert!(!copy_is_ready(false, Released, false));
+        assert!(!copy_is_ready(false, false, Pressed, false));
+        assert!(!copy_is_ready(true, true, Pressed, false));
+        assert!(copy_is_ready(true, false, Pressed, false));
+        assert!(!copy_is_ready(true, false, Pressed, true));
+        assert!(!copy_is_ready(true, false, Released, false));
     }
 
     #[test]
