@@ -425,17 +425,12 @@ fn write_loop(
 ) {
     while let Ok(message) = receiver.recv() {
         if let Err(error) = write_message(&mut stream, &message) {
-            let event = if error.kind() == ErrorKind::InvalidInput {
-                TransportEvent::InvalidInput(error.to_string())
-            } else {
-                let kind = error.kind();
-                socket_loss(format!("Cannot send input to Orbit: {error}"), kind)
-            };
-            notify(event);
             if error.kind() != ErrorKind::InvalidInput {
-                let _ = stream.shutdown(Shutdown::Both);
+                // The reader owns peer completion so buffered terminal output wins.
+                let _ = stream.shutdown(Shutdown::Write);
                 return;
             }
+            notify(TransportEvent::InvalidInput(error.to_string()));
         }
     }
     let _ = stream.shutdown(Shutdown::Both);
@@ -599,6 +594,32 @@ mod tests {
         assert_eq!(
             events.drain(),
             [TransportEvent::Incompatible { version: 3 }]
+        );
+    }
+
+    #[test]
+    fn writer_failure_preserves_buffered_authoritative_completion() {
+        let (mut reader, mut orbit) = UnixStream::pair().unwrap();
+        orbit
+            .write_all(
+                &session::encode_server_message(&ServerMessage::Exited { code: 17 }).unwrap(),
+            )
+            .unwrap();
+        orbit.shutdown(Shutdown::Both).unwrap();
+
+        let writer = reader.try_clone().unwrap();
+        let (messages, receiver) = mpsc::channel();
+        messages
+            .send(ClientMessage::Focus(FocusEvent::Gained))
+            .unwrap();
+        drop(messages);
+        let events = Arc::new(EventQueue::default());
+        write_loop(writer, receiver, notifier(Arc::clone(&events), || {}));
+
+        assert!(events.drain().is_empty());
+        assert_eq!(
+            read_message(&mut reader),
+            Ok(Some(ServerMessage::Exited { code: 17 }))
         );
     }
 
