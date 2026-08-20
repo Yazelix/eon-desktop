@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose a persistent renderer failure immediately through the native window
+  title, stderr, and AccessKit without waiting for another GPU frame, then
+  restore Orbit's accepted title after the next successful presentation.
 - Exit supervised Venus when its private presentation stream closes without
   stopping Orbit, and let only an immediate supervised replacement retry the
   departing client's transient Busy response.
