@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep transport-loss state independent from retry policy: every ended Orbit
+  transport becomes explicitly non-attached, while Protocol and Terminal
+  failures still suppress retry and retain only a current constraining notice.
 - Preserve Orbit's flushed authoritative terminal completion when concurrent
   Venus input observes socket loss, while retaining prompt bounded loss when no
   complete authoritative terminal message is available.
