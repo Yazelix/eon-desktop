@@ -481,14 +481,6 @@ impl Scene {
     /// Build positioned text runs without changing grapheme strings.
     #[must_use]
     pub fn glyph_runs(&self) -> Vec<GlyphRun> {
-        self.build_glyph_runs(false)
-    }
-
-    pub(crate) fn text_glyph_runs(&self) -> Vec<GlyphRun> {
-        self.build_glyph_runs(true)
-    }
-
-    fn build_glyph_runs(&self, omit_full_blocks: bool) -> Vec<GlyphRun> {
         let mut runs = Vec::new();
         for (row_index, row) in self.content.iter().enumerate() {
             let mut column = 0_u16;
@@ -502,10 +494,6 @@ impl Scene {
                         continue;
                     }
                 };
-                if omit_full_blocks && cell.is_full_block() {
-                    column += span;
-                    continue;
-                }
                 if cell.style.foreground_visible(true) && !cell.text.trim_matches(' ').is_empty() {
                     runs.push(GlyphRun {
                         column,
@@ -807,7 +795,7 @@ mod tests {
         };
 
         let actual = scene
-            .text_glyph_runs()
+            .glyph_runs()
             .into_iter()
             .map(|run| (run.column, run.columns, run.text))
             .collect::<Vec<_>>();

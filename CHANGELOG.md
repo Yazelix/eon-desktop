@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Render supported packaged Nerd Font symbols completely through adjacent blank
+  cells without moving or covering later nonblank cells or changing geometry
+  between regular and bold terminal presentation.
 - Consume exact canonical ORBS v4 and its accepted ORB-C12 Orbit revision,
   mapping typed whole-row wheel outcomes into the existing result and frame
   owners while retaining explicit protocol-incompatibility UX and adding no

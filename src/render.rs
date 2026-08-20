@@ -1,5 +1,6 @@
 use crate::{
-    Color as SceneColor, DrawCursor, DrawStyle, Scene, SceneRect, WorkspaceFocus, WorkspaceScene,
+    Color as SceneColor, DrawCursor, DrawStyle, GlyphRun, Scene, SceneRect, WorkspaceFocus,
+    WorkspaceScene,
 };
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
@@ -23,6 +24,7 @@ const VERTEX_SIZE: u64 = 24;
 #[cfg(test)]
 const VERTICES_PER_QUAD: u32 = 6;
 const BRAILLE_FAMILY: &str = "DejaVu Sans";
+const NERD_FONT_FAMILY: &str = "Symbols Nerd Font Mono";
 const SHORT_CURSOR_ANIMATION: f32 = 0.04;
 const LONG_CURSOR_ANIMATION: f32 = 0.15;
 const MAX_CURSOR_DELTA: f32 = 0.1;
@@ -990,6 +992,7 @@ impl Renderer {
                 tab.rect.left + self.metrics.padding,
                 tab.rect.top + (tab.rect.height - self.metrics.height) / 2.0,
                 tab.rect.width - self.metrics.padding * 2.0,
+                tab.rect.width - self.metrics.padding * 2.0,
                 self.metrics.height,
                 if tab.selected {
                     SceneColor {
@@ -1048,6 +1051,7 @@ impl Renderer {
                 pane.rect.left + self.metrics.padding,
                 pane.rect.top + (pane.rect.height - self.metrics.height) / 2.0,
                 pane.rect.width - self.metrics.padding * 2.0,
+                pane.rect.width - self.metrics.padding * 2.0,
                 self.metrics.height,
                 if pane.live {
                     SceneColor {
@@ -1092,20 +1096,25 @@ impl Renderer {
         origin: SceneRect,
         clip: SceneRect,
     ) {
-        for run in scene
-            .text_glyph_runs()
-            .into_iter()
-            .filter(|run| run.style.foreground_visible(blink_visible))
-        {
+        let mut runs = scene.glyph_runs();
+        runs.retain(|run| run.style.foreground_visible(blink_visible));
+        for (index, run) in runs.iter().enumerate() {
+            if is_full_block_run(run) {
+                continue;
+            }
             let left =
                 origin.left + self.metrics.padding + f32::from(run.column) * self.metrics.width;
             let top = origin.top + self.metrics.padding + f32::from(run.row) * self.metrics.height;
             let width = f32::from(run.columns) * self.metrics.width;
+            let next = runs.get(index + 1).filter(|next| next.row == run.row);
+            let ink_width = f32::from(cell_ink_right(run, next, scene.columns) - run.column)
+                * self.metrics.width;
             self.push_text_clipped(
                 &run.text,
                 left,
                 top,
                 width,
+                ink_width,
                 self.metrics.height,
                 run.style.foreground,
                 DrawStyleKind::Cell(run.style),
@@ -1135,6 +1144,7 @@ impl Renderer {
             left,
             top,
             width,
+            width,
             self.metrics.height,
             scene.foreground,
             DrawStyleKind::Preedit,
@@ -1157,6 +1167,7 @@ impl Renderer {
         left: f32,
         top: f32,
         layout_width: f32,
+        ink_width: f32,
         layout_height: f32,
         foreground: SceneColor,
         kind: DrawStyleKind,
@@ -1165,7 +1176,7 @@ impl Renderer {
         let Some(bounds) = (SceneRect {
             left,
             top,
-            width: layout_width.max(1.0),
+            width: ink_width.max(1.0),
             height: layout_height.max(1.0),
         })
         .intersection(clip) else {
@@ -1287,13 +1298,7 @@ impl Renderer {
         style: DrawStyle,
     ) {
         let segments = cell_text_segments(text);
-        let mut attrs = self.cell_font.attrs();
-        if style.bold {
-            attrs = attrs.weight(Weight::BOLD);
-        }
-        if style.italic {
-            attrs = attrs.style(Style::Italic);
-        }
+        let attrs = cell_text_attrs(self.cell_font, text, style);
         let box_attrs = attrs
             .clone()
             .metrics(Metrics::new(self.cell_font.box_size, self.metrics.height))
@@ -1497,6 +1502,45 @@ fn cell_text_segments(text: &str) -> Vec<(&str, CellTextKind)> {
     }
     segments.push((&text[start..], kind));
     segments
+}
+
+fn is_nerd_font_symbol(text: &str) -> bool {
+    text.chars().any(|character| {
+        matches!(
+            character,
+            '\u{e000}'..='\u{f8ff}' | '\u{f0000}'..='\u{f2fff}'
+        )
+    })
+}
+
+fn is_full_block_run(run: &GlyphRun) -> bool {
+    run.columns == 1 && run.text == "█"
+}
+
+fn cell_ink_right(run: &GlyphRun, next: Option<&GlyphRun>, columns: u16) -> u16 {
+    let cell_right = run.column.saturating_add(run.columns);
+    if is_nerd_font_symbol(&run.text) {
+        next.map_or(columns, |next| next.column).max(cell_right)
+    } else {
+        cell_right
+    }
+}
+
+fn cell_text_attrs(cell_font: CellFont, text: &str, style: DrawStyle) -> Attrs<'static> {
+    if is_nerd_font_symbol(text) {
+        // The packaged symbol face is Regular-only; bold can select an ambient mono face.
+        return Attrs::new()
+            .family(Family::Name(NERD_FONT_FAMILY))
+            .letter_spacing(cell_font.letter_spacing);
+    }
+    let mut attrs = cell_font.attrs();
+    if style.bold {
+        attrs = attrs.weight(Weight::BOLD);
+    }
+    if style.italic {
+        attrs = attrs.style(Style::Italic);
+    }
+    attrs
 }
 
 fn set_cell_layer(
@@ -2133,8 +2177,9 @@ mod tests {
                 .collect(),
         };
 
-        assert!(scene.text_glyph_runs().is_empty());
-        assert_eq!(scene.glyph_runs().len(), 4);
+        let glyph_runs = scene.glyph_runs();
+        assert_eq!(glyph_runs.len(), 4);
+        assert!(glyph_runs.iter().all(is_full_block_run));
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
             let viewport = SceneRect {
@@ -2991,6 +3036,105 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn nerd_font_symbols_use_the_packaged_face_and_bounded_blank_space() {
+        assert!(is_nerd_font_symbol("\u{e000}"));
+        assert!(is_nerd_font_symbol("\u{f8ff}"));
+        assert!(is_nerd_font_symbol("\u{f0000}"));
+        assert!(is_nerd_font_symbol("\u{f2fff}"));
+        assert!(!is_nerd_font_symbol("\u{f900}"));
+        assert!(!is_nerd_font_symbol("\u{f3000}"));
+
+        let mut font_system = FontSystem::new();
+        let mut swash_cache = SwashCache::new();
+        let metrics = CellMetrics::for_scale(1.0);
+        let cell_font = fitted_cell_font(&mut font_system, metrics);
+        let mut observed_overhang = false;
+        for symbol in ["\u{e5ff}", "\u{f015}", "\u{f15b}", "\u{f489}", "\u{f0868}"] {
+            let geometry = [false, true].map(|bold| {
+                let attrs = cell_text_attrs(
+                    cell_font,
+                    symbol,
+                    DrawStyle {
+                        bold,
+                        ..plain_style()
+                    },
+                );
+                assert_eq!(attrs.weight, Weight::NORMAL);
+                let buffer =
+                    grid_buffer(&mut font_system, metrics, cell_font, symbol, false, attrs);
+                let run = buffer
+                    .layout_runs()
+                    .next()
+                    .expect("the Nerd Font symbol should shape");
+                let glyph = run
+                    .glyphs
+                    .first()
+                    .expect("the Nerd Font symbol should emit one glyph");
+                let face = font_system
+                    .db()
+                    .face(glyph.font_id)
+                    .expect("the selected symbol face should remain loaded");
+                assert!(
+                    face.families
+                        .iter()
+                        .any(|(family, _)| family == NERD_FONT_FAMILY),
+                    "{symbol:?} used {}",
+                    face.post_script_name
+                );
+                let physical = glyph.physical((0.0, 0.0), 1.0);
+                let image = swash_cache
+                    .get_image_uncached(&mut font_system, physical.cache_key)
+                    .expect("the Nerd Font symbol should rasterize");
+                let left = physical.x + image.placement.left;
+                let right = left + image.placement.width as i32;
+                observed_overhang |= right > metrics.width as i32;
+                assert!(
+                    left >= 0 && right <= (metrics.width * 2.0) as i32,
+                    "{symbol:?} occupies {left}..{right} with one blank cell available"
+                );
+                (
+                    glyph.font_id,
+                    glyph.font_size.to_bits(),
+                    glyph.w.to_bits(),
+                    left,
+                    right,
+                )
+            });
+            assert_eq!(geometry[0], geometry[1]);
+        }
+        assert!(
+            observed_overhang,
+            "the corpus must exercise the clipping defect"
+        );
+
+        let symbol = GlyphRun {
+            column: 0,
+            row: 0,
+            columns: 1,
+            text: "\u{f015}".into(),
+            style: plain_style(),
+        };
+        let label = GlyphRun {
+            column: 2,
+            text: "x".into(),
+            ..symbol.clone()
+        };
+        assert_eq!(cell_ink_right(&symbol, Some(&label), 4), 2);
+        assert_eq!(
+            cell_ink_right(
+                &symbol,
+                Some(&GlyphRun {
+                    column: 1,
+                    ..label.clone()
+                }),
+                4,
+            ),
+            1
+        );
+        assert_eq!(cell_ink_right(&label, None, 4), 3);
     }
 
     #[test]
