@@ -15,7 +15,7 @@ use std::{
     error::Error,
     ffi::OsString,
     fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     os::unix::ffi::OsStringExt,
     os::unix::fs::MetadataExt,
     path::PathBuf,
@@ -565,29 +565,26 @@ impl Application {
         let Some(state) = &mut self.window else {
             return;
         };
-        if let Some(scene) = self.model.scene() {
-            state.window.set_title(if scene.title.is_empty() {
-                "Venus"
-            } else {
-                &scene.title
+        state.window.set_title(window_title(
+            self.model.scene().map(|scene| scene.title.as_str()),
+            self.render_notice.as_deref(),
+        ));
+        if let Some(scene) = self.model.scene()
+            && let Some(cursor) = scene.cursor
+        {
+            let metrics = state.renderer.metrics();
+            let origin = workspace.as_ref().map_or((0.0, 0.0), |workspace| {
+                (workspace.terminal.left, workspace.terminal.top)
             });
-            if let Some(cursor) = scene.cursor {
-                let metrics = state.renderer.metrics();
-                let origin = workspace.as_ref().map_or((0.0, 0.0), |workspace| {
-                    (workspace.terminal.left, workspace.terminal.top)
-                });
-                let left =
-                    origin.0 + metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
-                let top = origin.1
-                    + metrics.padding
-                    + f32::from(cursor.row + state.ime_line_offset) * metrics.height;
-                state.window.set_ime_cursor_area(
-                    PhysicalPosition::new(f64::from(left), f64::from(top)),
-                    PhysicalSize::new(f64::from(metrics.width * 2.0), f64::from(metrics.height)),
-                );
-            }
-        } else {
-            state.window.set_title("Venus");
+            let left =
+                origin.0 + metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
+            let top = origin.1
+                + metrics.padding
+                + f32::from(cursor.row + state.ime_line_offset) * metrics.height;
+            state.window.set_ime_cursor_area(
+                PhysicalPosition::new(f64::from(left), f64::from(top)),
+                PhysicalSize::new(f64::from(metrics.width * 2.0), f64::from(metrics.height)),
+            );
         }
         state
             .window
@@ -753,7 +750,13 @@ impl Application {
         if !cursor_animation_allowed(self.window_focused, self.window_occluded) {
             self.reset_cursor_animation();
         }
-        let status = self.status();
+        let owned_status;
+        let status = if let Some(notice) = self.render_notice.as_deref() {
+            notice
+        } else {
+            owned_status = self.status();
+            owned_status.as_str()
+        };
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
         let mut refresh = false;
@@ -764,7 +767,7 @@ impl Application {
             self.model.scene(),
             workspace.as_ref(),
             self.workspace_focus,
-            &status,
+            status,
             self.blink_visible,
             preedit,
         ) {
@@ -781,17 +784,22 @@ impl Application {
                 state.window.request_redraw();
             }
             Err(error) => {
-                let notice = format!("Venus renderer failure: {error}");
-                self.render_notice = Some(notice.clone());
-                self.presented_revision = None;
-                state.accessibility.update(
-                    &mut state.adapter,
-                    self.model.scene(),
-                    workspace.as_ref(),
-                    self.workspace_focus,
-                    &notice,
-                    state.renderer.size(),
-                );
+                if let Some(notice) = record_render_failure(
+                    &mut self.render_notice,
+                    &mut self.presented_revision,
+                    error,
+                    |title| state.window.set_title(title),
+                    |message| report(message),
+                ) {
+                    state.accessibility.update(
+                        &mut state.adapter,
+                        self.model.scene(),
+                        workspace.as_ref(),
+                        self.workspace_focus,
+                        notice,
+                        state.renderer.size(),
+                    );
+                }
             }
         }
         if refresh {
@@ -819,7 +827,7 @@ impl ApplicationHandler<UserEvent> for Application {
         if self.window.is_none()
             && let Err(error) = self.create_window(event_loop)
         {
-            eprintln!("venus: {error}");
+            report(error);
             event_loop.exit();
         }
     }
@@ -1228,6 +1236,33 @@ fn current_presentation(
     scene_revision.filter(|revision| Some(*revision) == presented_revision)
 }
 
+fn window_title<'a>(scene_title: Option<&'a str>, render_notice: Option<&'a str>) -> &'a str {
+    render_notice
+        .or_else(|| scene_title.filter(|title| !title.is_empty()))
+        .unwrap_or("Venus")
+}
+
+fn report(message: impl std::fmt::Display) {
+    let _ = writeln!(io::stderr().lock(), "venus: {message}");
+}
+
+fn record_render_failure<'a>(
+    render_notice: &'a mut Option<String>,
+    presented_revision: &mut Option<u64>,
+    error: impl std::fmt::Display,
+    set_title: impl FnOnce(&str),
+    report: impl FnOnce(&str),
+) -> Option<&'a str> {
+    *presented_revision = None;
+    if render_notice.is_some() {
+        return None;
+    }
+    let notice = format!("Venus renderer failure: {error}");
+    set_title(&notice);
+    report(&notice);
+    Some(render_notice.insert(notice).as_str())
+}
+
 fn can_follow_implicit_resize(message: &ClientMessage) -> bool {
     matches!(message, ClientMessage::Mouse(_))
 }
@@ -1545,6 +1580,46 @@ fn default_socket_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renderer_failure_uses_non_gpu_diagnostics_until_success() {
+        let mut notice = None;
+        let mut presented_revision = Some(7);
+        let mut titles = Vec::new();
+        let mut diagnostics = Vec::new();
+        let mut alerts = 0;
+
+        for error in ["the Venus glyph atlas is full", "a later renderer failure"] {
+            if record_render_failure(
+                &mut notice,
+                &mut presented_revision,
+                error,
+                |title| titles.push(title.to_owned()),
+                |message| diagnostics.push(format!("venus: {message}")),
+            )
+            .is_some()
+            {
+                alerts += 1;
+            }
+        }
+
+        let failure = "Venus renderer failure: the Venus glyph atlas is full";
+        assert_eq!(presented_revision, None);
+        assert_eq!(titles, [failure]);
+        assert_eq!(diagnostics, [format!("venus: {failure}")]);
+        assert_eq!(alerts, 1);
+        assert_eq!(
+            window_title(Some("Orbit title"), notice.as_deref()),
+            failure
+        );
+
+        assert!(notice.take().is_some());
+        assert_eq!(
+            window_title(Some("Orbit title"), notice.as_deref()),
+            "Orbit title"
+        );
+        assert_eq!(window_title(Some(""), None), "Venus");
+    }
 
     #[test]
     fn presentation_launch_arguments_are_complete_bounded_and_default_tail() {
