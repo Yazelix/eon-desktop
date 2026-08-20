@@ -484,7 +484,7 @@ impl Application {
 
     fn handle_transport(&mut self, event: TransportEvent) {
         let retryable_event = matches!(&event, TransportEvent::RetryableLoss(_));
-        let retryable_loss = retryable_event && !self.model.is_terminal() && !self.retry_suppressed;
+        let mut schedule_retry = false;
         match event {
             TransportEvent::Server(message) => {
                 if server_failure_suppresses_retry(&message) {
@@ -528,9 +528,8 @@ impl Application {
                 );
             }
             TransportEvent::RetryableLoss(detail) => {
-                if retryable_loss {
-                    self.model.mark_lost(detail);
-                }
+                schedule_retry =
+                    apply_retryable_loss(&mut self.model, detail, self.retry_suppressed);
             }
             TransportEvent::Lost(detail) => self.model.mark_lost(detail),
         }
@@ -540,7 +539,7 @@ impl Application {
             self.reset_cursor_animation();
             self.transport = None;
             self.presented_revision = None;
-            if retryable_loss && self.retry_allowed() {
+            if schedule_retry && self.retry_allowed() {
                 self.orbit_retry.schedule(Instant::now());
             } else {
                 self.orbit_retry.reset();
@@ -1200,6 +1199,12 @@ fn server_failure_suppresses_retry(message: &ServerMessage) -> bool {
     )
 }
 
+fn apply_retryable_loss(model: &mut SessionModel, detail: String, retry_suppressed: bool) -> bool {
+    let schedule_retry = !model.is_terminal() && !retry_suppressed;
+    model.mark_lost_preserving_constraining_notice(detail);
+    schedule_retry
+}
+
 fn current_presentation(
     scene_revision: Option<u64>,
     presented_revision: Option<u64>,
@@ -1816,6 +1821,87 @@ mod tests {
                 suppressed
             );
         }
+    }
+
+    #[test]
+    fn retryable_loss_records_state_independently_of_retry_policy() {
+        use orbit_protocol::session::Failure;
+
+        let attached = || {
+            let mut model = SessionModel::new();
+            model.apply(ServerMessage::Attached).unwrap();
+            model
+        };
+        let fail = |model: &mut SessionModel, code, detail: &str| {
+            model
+                .apply(ServerMessage::Failure(Failure {
+                    code,
+                    detail: detail.into(),
+                }))
+                .unwrap();
+        };
+        let mut suppressed = attached();
+        fail(&mut suppressed, FailureCode::Terminal, "request rejected");
+        assert_eq!(
+            suppressed.notice(),
+            Some("Orbit terminal failure: request rejected")
+        );
+        suppressed.apply(ServerMessage::Accepted).unwrap();
+        assert_eq!(suppressed.notice(), None);
+        fail(
+            &mut suppressed,
+            FailureCode::InvalidInput,
+            "later rejected input",
+        );
+        assert_eq!(
+            suppressed.notice(),
+            Some("Orbit rejected input: later rejected input")
+        );
+
+        assert!(!apply_retryable_loss(
+            &mut suppressed,
+            "Orbit closed the local session".into(),
+            true,
+        ));
+        assert!(matches!(
+            suppressed.connection(),
+            ConnectionState::Lost { detail } if detail == "Orbit closed the local session"
+        ));
+        assert!(!suppressed.is_attached());
+        assert_eq!(suppressed.notice(), None);
+
+        let mut protocol_failure = attached();
+        fail(
+            &mut protocol_failure,
+            FailureCode::Protocol,
+            "invalid mouse coordinates",
+        );
+        protocol_failure.set_venus_notice(LocalNoticeSource::Input, "late local notice");
+        assert!(!apply_retryable_loss(
+            &mut protocol_failure,
+            "Orbit closed the local session".into(),
+            true,
+        ));
+        assert_eq!(
+            protocol_failure.notice(),
+            Some("Orbit protocol failure: invalid mouse coordinates")
+        );
+        assert!(matches!(
+            protocol_failure.connection(),
+            ConnectionState::Lost { .. }
+        ));
+
+        let mut eligible = attached();
+        assert!(apply_retryable_loss(
+            &mut eligible,
+            "Cannot read from Orbit: connection reset".into(),
+            false,
+        ));
+        assert!(matches!(
+            eligible.connection(),
+            ConnectionState::Lost { detail }
+                if detail == "Cannot read from Orbit: connection reset"
+        ));
     }
 
     #[test]

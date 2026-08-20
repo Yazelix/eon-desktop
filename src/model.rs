@@ -44,7 +44,7 @@ impl Error for ModelError {
 
 #[derive(Debug)]
 enum Notice {
-    Orbit(String),
+    Orbit(FailureCode, String),
     Venus(LocalNoticeSource, String),
 }
 
@@ -160,7 +160,7 @@ impl SessionModel {
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
         self.notices.last().map(|notice| match notice {
-            Notice::Orbit(detail) | Notice::Venus(_, detail) => detail.as_str(),
+            Notice::Orbit(_, detail) | Notice::Venus(_, detail) => detail.as_str(),
         })
     }
 
@@ -216,10 +216,10 @@ impl SessionModel {
                     FailureCode::Terminal => "terminal failure",
                 };
                 self.clear_orbit_notice();
-                self.notices.push(Notice::Orbit(bounded(format!(
-                    "Orbit {label}: {}",
-                    failure.detail
-                ))));
+                self.notices.push(Notice::Orbit(
+                    failure.code,
+                    bounded(format!("Orbit {label}: {}", failure.detail)),
+                ));
             }
             ServerMessage::Busy if connecting => {
                 self.connection = ConnectionState::Busy;
@@ -259,6 +259,21 @@ impl SessionModel {
         self.notices.clear();
     }
 
+    pub fn mark_lost_preserving_constraining_notice(&mut self, detail: impl Into<String>) {
+        if self.is_terminal() {
+            return;
+        }
+        self.connection = ConnectionState::Lost {
+            detail: bounded(detail.into()),
+        };
+        self.notices.retain(|notice| {
+            matches!(
+                notice,
+                Notice::Orbit(FailureCode::Protocol | FailureCode::Terminal, _)
+            )
+        });
+    }
+
     pub fn prepare_reconnect(&mut self) {
         self.reducer = FrameReducer::default();
         self.connection = ConnectionState::Connecting;
@@ -284,7 +299,7 @@ impl SessionModel {
 
     fn clear_orbit_notice(&mut self) {
         self.notices
-            .retain(|notice| !matches!(notice, Notice::Orbit(_)));
+            .retain(|notice| !matches!(notice, Notice::Orbit(_, _)));
     }
 }
 
