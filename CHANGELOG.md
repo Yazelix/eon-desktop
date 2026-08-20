@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind renderer cache reuse, workspace actions, and terminal coordinate or
+  selection input to one successfully presented composite generation across
+  attachment, workspace, scrolling, resize, recovery, and failure transitions.
 - Expose a persistent renderer failure immediately through the native window
   title, stderr, and AccessKit without waiting for another GPU frame, then
   restore Orbit's accepted title after the next successful presentation.
