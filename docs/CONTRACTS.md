@@ -65,6 +65,19 @@ dependency, module, or producer changed. Native event timing was not reinjected;
 is deterministic state-transition coverage plus the unchanged accepted native
 evidence, and macOS ordering remains unproved.
 
+Native-IME rejection proof for `VEN-C2` and `VEN-C4`: Venus
+`a5bf5fde74618532e437ddfcbde3487922a9f394`; clean locked checks pass 53
+library, 25 host, and 14 canonical integration tests with Clippy warnings
+denied. `InputState` distinguishes silent state-only or empty transitions from
+one valid semantic key and a rejected non-empty commit after composition
+cleanup. `Application` routes only that rejection through the existing bounded
+Input notice owner; a later successfully queued semantic input retains the
+existing notice-recovery path. Focused checks cover valid Unicode, the exact
+canonical bound, over-bound text, control and private-use text, empty commit,
+preedit, disable, and notice recovery. No validator, protocol, dependency,
+module, split-commit, or platform policy changed. Linux proof is deterministic;
+native macOS IME quality remains unproved.
+
 `VEN-C1` Nerd Font materialization proof: Venus
 `a19f53578668b2234391fffbb29e7a3e1b61cc3d`; clean locked checks pass 48
 library, 19 host, and 14 canonical integration tests. A distribution-equivalent

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Report a rejected non-empty native input-method commit through the existing
+  bounded Input notice instead of silently dropping it.
 - Keep AccessKit tab and pane identities stable across Eon topology changes so
   delayed actions for removed nodes cannot select a sibling.
 - Preserve still-held native modifiers and ordinary key pairing when workspace
