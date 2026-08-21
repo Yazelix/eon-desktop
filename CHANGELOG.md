@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep AccessKit tab and pane identities stable across Eon topology changes so
+  delayed actions for removed nodes cannot select a sibling.
 - Preserve still-held native modifiers and ordinary key pairing when workspace
   modifiers change, while retiring stale key, button, shortcut, composition,
   selection, and focus state before another Orbit attachment receives input.
