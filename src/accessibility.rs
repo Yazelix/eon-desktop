@@ -1,5 +1,5 @@
 use crate::{
-    Scene, WorkspaceFocus, WorkspaceScene,
+    CellMetrics, Scene, SceneRect, WorkspaceFocus, WorkspaceScene,
     scene::{AccessiblePosition, AccessibleRow, AccessibleSelection, AccessibleText},
 };
 use accesskit::{
@@ -27,7 +27,8 @@ struct Snapshot {
     content: AccessibleText,
     status: String,
     size: PhysicalSize<u32>,
-    terminal: bool,
+    metrics: CellMetrics,
+    columns: Option<u16>,
     workspace: Option<WorkspaceScene>,
     workspace_focus: WorkspaceFocus,
     tab_ids: HashMap<String, NodeId>,
@@ -42,7 +43,8 @@ impl Snapshot {
             content: AccessibleText::default(),
             status: "Connecting to Orbit".into(),
             size,
-            terminal: false,
+            metrics: CellMetrics::for_scale(1.0),
+            columns: None,
             workspace: None,
             workspace_focus: WorkspaceFocus::Terminal,
             tab_ids: HashMap::new(),
@@ -73,10 +75,11 @@ impl Snapshot {
     }
 
     fn tree(&self) -> TreeUpdate {
+        let terminal = self.columns.is_some();
         let mut root = Node::new(Role::Window);
         root.set_label(self.title.as_str());
         root.set_bounds(bounds(self.size));
-        let status_alert = self.terminal && !self.status.is_empty();
+        let status_alert = terminal && !self.status.is_empty();
         root.set_children(if self.workspace.is_some() {
             let mut children = vec![TAB_LIST, PANE_PANEL];
             if status_alert {
@@ -89,17 +92,17 @@ impl Snapshot {
             vec![CONTENT]
         });
 
-        let mut content = Node::new(if self.terminal {
+        let mut content = Node::new(if terminal {
             Role::Terminal
         } else {
             Role::Alert
         });
-        content.set_label(if self.terminal {
+        content.set_label(if terminal {
             self.title.as_str()
         } else {
             "Venus status"
         });
-        if self.terminal {
+        if terminal {
             content.set_read_only();
             content.set_children(
                 (0..self.content.rows.len())
@@ -112,17 +115,25 @@ impl Snapshot {
         } else {
             content.set_value(self.status.as_str());
         }
-        let terminal_layout_bounds = self
+        let terminal_layout = self.workspace.as_ref().map_or(
+            SceneRect {
+                left: 0.0,
+                top: 0.0,
+                width: self.size.width as f32,
+                height: self.size.height as f32,
+            },
+            |workspace| workspace.terminal,
+        );
+        let visible_terminal = self
             .workspace
             .as_ref()
-            .map_or_else(|| bounds(self.size), |workspace| rect(workspace.terminal));
-        let terminal_bounds = self
-            .workspace
-            .as_ref()
-            .map_or(terminal_layout_bounds, |workspace| {
-                rect(workspace.visible_terminal().unwrap_or(workspace.terminal))
-            });
-        content.set_bounds(terminal_bounds);
+            .map_or(Some(terminal_layout), WorkspaceScene::visible_terminal);
+        if terminal {
+            content.set_clips_children();
+        }
+        if let Some(bounds) = visible_terminal {
+            content.set_bounds(rect(bounds));
+        }
 
         let mut nodes = vec![(WINDOW, root), (CONTENT, content)];
         if let Some(workspace) = &self.workspace {
@@ -130,6 +141,7 @@ impl Snapshot {
             tab_list.set_label("Eon workspace tabs");
             tab_list.set_orientation(Orientation::Horizontal);
             tab_list.set_bounds(rect(workspace.tab_viewport));
+            tab_list.set_clips_children();
             tab_list.set_children(
                 workspace
                     .tabs
@@ -142,7 +154,9 @@ impl Snapshot {
                 let mut node = Node::new(Role::Tab);
                 node.set_label(tab.id.as_str());
                 node.set_selected(tab.selected);
-                node.set_bounds(rect(tab.rect));
+                if let Some(bounds) = tab.rect.intersection(workspace.tab_viewport) {
+                    node.set_bounds(rect(bounds));
+                }
                 node.add_action(Action::Click);
                 node.add_action(Action::Focus);
                 nodes.push((self.tab_ids[tab.id.as_str()], node));
@@ -152,6 +166,7 @@ impl Snapshot {
             panel.set_label("Active tab panes");
             panel.set_orientation(Orientation::Vertical);
             panel.set_bounds(rect(workspace.pane_viewport));
+            panel.set_clips_children();
             let mut children = Vec::with_capacity(workspace.panes.len() + 1);
             for pane in &workspace.panes {
                 children.push(self.pane_ids[pane.id.as_str()]);
@@ -166,21 +181,34 @@ impl Snapshot {
                 node.set_label(pane.label());
                 node.set_selected(pane.selected);
                 node.set_expanded(pane.selected);
-                node.set_bounds(rect(pane.rect));
+                if let Some(bounds) = pane.rect.intersection(workspace.pane_viewport) {
+                    node.set_bounds(rect(bounds));
+                }
                 node.add_action(Action::Click);
                 node.add_action(Action::Focus);
                 nodes.push((self.pane_ids[pane.id.as_str()], node));
             }
         }
-        if self.terminal {
+        if let Some(columns) = self.columns {
             for (index, row) in self.content.rows.iter().enumerate() {
+                let row_bounds = SceneRect {
+                    left: terminal_layout.left + self.metrics.padding,
+                    top: terminal_layout.top
+                        + self.metrics.padding
+                        + index as f32 * self.metrics.height,
+                    width: f32::from(columns) * self.metrics.width,
+                    height: self.metrics.height,
+                };
                 nodes.push((
                     text_run_id(index),
-                    text_run(row, terminal_layout_bounds, index, self.content.rows.len()),
+                    text_run(
+                        row,
+                        visible_terminal.and_then(|visible| row_bounds.intersection(visible)),
+                    ),
                 ));
             }
         }
-        if self.terminal && !self.status.is_empty() {
+        if status_alert {
             let mut status = Node::new(Role::Alert);
             status.set_label("Venus status");
             status.set_value(self.status.as_str());
@@ -257,6 +285,7 @@ impl Accessibility {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &self,
         adapter: &mut Adapter,
@@ -265,10 +294,12 @@ impl Accessibility {
         workspace_focus: WorkspaceFocus,
         status: &str,
         size: PhysicalSize<u32>,
+        metrics: CellMetrics,
     ) {
         {
             let mut snapshot = lock(&self.snapshot);
             snapshot.size = size;
+            snapshot.metrics = metrics;
             snapshot.status = status.to_owned();
             snapshot.set_workspace(workspace);
             snapshot.workspace_focus = workspace_focus;
@@ -279,11 +310,11 @@ impl Accessibility {
                     scene.title.clone()
                 };
                 snapshot.content = scene.accessible_content();
-                snapshot.terminal = true;
+                snapshot.columns = Some(scene.columns);
             } else {
                 snapshot.title = "Venus".into();
                 snapshot.content = AccessibleText::default();
-                snapshot.terminal = false;
+                snapshot.columns = None;
             }
         }
         adapter.update_if_active(|| lock(&self.snapshot).tree());
@@ -312,7 +343,7 @@ fn bounds(size: PhysicalSize<u32>) -> Rect {
     }
 }
 
-fn rect(rect: crate::SceneRect) -> Rect {
+fn rect(rect: SceneRect) -> Rect {
     Rect {
         x0: f64::from(rect.left),
         y0: f64::from(rect.top),
@@ -350,18 +381,14 @@ fn text_selection(selection: AccessibleSelection) -> TextSelection {
     }
 }
 
-fn text_run(row: &AccessibleRow, bounds: Rect, index: usize, count: usize) -> Node {
+fn text_run(row: &AccessibleRow, bounds: Option<SceneRect>) -> Node {
     let mut node = Node::new(Role::TextRun);
     node.set_value(row.value.as_str());
     node.set_character_lengths(row.character_lengths.clone());
     node.set_text_direction(TextDirection::LeftToRight);
-    let height = (bounds.y1 - bounds.y0) / count.max(1) as f64;
-    node.set_bounds(Rect {
-        x0: bounds.x0,
-        y0: bounds.y0 + height * index as f64,
-        x1: bounds.x1,
-        y1: bounds.y0 + height * (index + 1) as f64,
-    });
+    if let Some(bounds) = bounds {
+        node.set_bounds(rect(bounds));
+    }
     node
 }
 
@@ -374,7 +401,6 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CellMetrics;
     use eon_workspace_protocol::{Pane, Snapshot as WorkspaceSnapshot, Tab};
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
@@ -425,6 +451,15 @@ mod tests {
             .unwrap()
     }
 
+    fn node(update: &TreeUpdate, id: NodeId) -> &Node {
+        &update
+            .nodes
+            .iter()
+            .find(|(node_id, _)| *node_id == id)
+            .unwrap()
+            .1
+    }
+
     #[test]
     fn scene_notice_preserves_terminal_content_and_adds_an_alert() {
         let update = Snapshot {
@@ -440,24 +475,18 @@ mod tests {
                 selection: None,
             },
             status: "renderer failure".into(),
-            terminal: true,
+            columns: Some(16),
             ..Snapshot::new(PhysicalSize::new(800, 600))
         }
         .tree();
-        let node = |id| {
-            &update
-                .nodes
-                .iter()
-                .find(|(node_id, _)| *node_id == id)
-                .unwrap()
-                .1
-        };
-
-        assert_eq!(node(CONTENT).role(), Role::Terminal);
-        assert_eq!(node(text_run_id(0)).value(), Some("terminal content"));
-        assert_eq!(node(STATUS).role(), Role::Alert);
-        assert_eq!(node(STATUS).value(), Some("renderer failure"));
-        assert_eq!(node(WINDOW).children(), &[CONTENT, STATUS]);
+        assert_eq!(node(&update, CONTENT).role(), Role::Terminal);
+        assert_eq!(
+            node(&update, text_run_id(0)).value(),
+            Some("terminal content")
+        );
+        assert_eq!(node(&update, STATUS).role(), Role::Alert);
+        assert_eq!(node(&update, STATUS).value(), Some("renderer failure"));
+        assert_eq!(node(&update, WINDOW).children(), &[CONTENT, STATUS]);
     }
 
     #[test]
@@ -487,24 +516,18 @@ mod tests {
                 }),
             },
             status: String::new(),
-            terminal: true,
+            columns: Some(4),
             ..Snapshot::new(PhysicalSize::new(800, 600))
         }
         .tree();
-        let node = |id| {
-            &update
-                .nodes
-                .iter()
-                .find(|(node_id, _)| *node_id == id)
-                .unwrap()
-                .1
-        };
-
-        assert_eq!(node(CONTENT).children(), &[text_run_id(0), text_run_id(1)]);
-        assert_eq!(node(text_run_id(0)).role(), Role::TextRun);
-        assert_eq!(node(text_run_id(0)).value(), Some("one\n"));
         assert_eq!(
-            node(CONTENT).text_selection(),
+            node(&update, CONTENT).children(),
+            &[text_run_id(0), text_run_id(1)]
+        );
+        assert_eq!(node(&update, text_run_id(0)).role(), Role::TextRun);
+        assert_eq!(node(&update, text_run_id(0)).value(), Some("one\n"));
+        assert_eq!(
+            node(&update, CONTENT).text_selection(),
             Some(&TextSelection {
                 anchor: TextPosition {
                     node: text_run_id(0),
@@ -516,6 +539,171 @@ mod tests {
                 },
             })
         );
+    }
+
+    #[test]
+    fn text_runs_follow_the_rendered_cell_grid() {
+        let row = AccessibleRow {
+            value: String::new(),
+            character_lengths: Vec::new(),
+        };
+        let update = Snapshot {
+            content: AccessibleText {
+                rows: vec![row.clone(); 32],
+                selection: None,
+            },
+            status: String::new(),
+            columns: Some(93),
+            ..Snapshot::new(PhysicalSize::new(960, 600))
+        }
+        .tree();
+        assert!(node(&update, CONTENT).clips_children());
+        assert_eq!(
+            node(&update, text_run_id(0)).bounds(),
+            Some(Rect {
+                x0: 12.0,
+                y0: 12.0,
+                x1: 942.0,
+                y1: 30.0,
+            })
+        );
+        assert_eq!(
+            node(&update, text_run_id(31)).bounds(),
+            Some(Rect {
+                x0: 12.0,
+                y0: 570.0,
+                x1: 942.0,
+                y1: 588.0,
+            })
+        );
+
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let update = Snapshot {
+                content: AccessibleText {
+                    rows: vec![row.clone(); 2],
+                    selection: None,
+                },
+                status: String::new(),
+                metrics,
+                columns: Some(3),
+                ..Snapshot::new(PhysicalSize::new(400, 300))
+            }
+            .tree();
+            let second_row = node(&update, text_run_id(1)).bounds();
+
+            assert_eq!(
+                second_row,
+                Some(rect(SceneRect {
+                    left: metrics.padding,
+                    top: metrics.padding + metrics.height,
+                    width: metrics.width * 3.0,
+                    height: metrics.height,
+                })),
+                "scale {scale}"
+            );
+        }
+    }
+
+    #[test]
+    fn workspace_accessibility_uses_visible_intersections() {
+        let columns = 4;
+        let workspace_snapshot = WorkspaceSnapshot {
+            active_tab: "tab-1".into(),
+            tabs: vec![
+                workspace_tab(
+                    "tab-1",
+                    &["pane-1", "pane-2", "pane-3", "pane-4", "pane-5", "pane-6"],
+                    "pane-1",
+                ),
+                workspace_tab("tab-2", &["pane-7"], "pane-7"),
+            ],
+        };
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let size = PhysicalSize::new(100, (140.0 * scale) as u32);
+            let workspace =
+                WorkspaceScene::from_snapshot(&workspace_snapshot, size, metrics, 20.0, 20.0);
+            let mut snapshot = Snapshot {
+                content: AccessibleText {
+                    rows: vec![
+                        AccessibleRow {
+                            value: "one\n".into(),
+                            character_lengths: vec![1; 4],
+                        },
+                        AccessibleRow {
+                            value: "two".into(),
+                            character_lengths: vec![1; 3],
+                        },
+                    ],
+                    selection: None,
+                },
+                status: String::new(),
+                metrics,
+                columns: Some(columns),
+                workspace_focus: WorkspaceFocus::Panes,
+                ..Snapshot::new(size)
+            };
+            snapshot.set_workspace(Some(&workspace));
+            let tab = snapshot.tab_ids["tab-1"];
+            let pane = snapshot.pane_ids["pane-1"];
+            let update = snapshot.tree();
+            assert!(node(&update, TAB_LIST).clips_children());
+            assert!(node(&update, PANE_PANEL).clips_children());
+            assert!(node(&update, CONTENT).clips_children());
+            assert_eq!(
+                node(&update, tab).bounds(),
+                workspace.tabs[0]
+                    .rect
+                    .intersection(workspace.tab_viewport)
+                    .map(rect)
+            );
+            assert_eq!(
+                node(&update, pane).bounds(),
+                workspace.panes[0]
+                    .rect
+                    .intersection(workspace.pane_viewport)
+                    .map(rect)
+            );
+            assert_eq!(
+                node(&update, CONTENT).bounds(),
+                workspace.visible_terminal().map(rect)
+            );
+            let second_row = SceneRect {
+                left: workspace.terminal.left + metrics.padding,
+                top: workspace.terminal.top + metrics.padding + metrics.height,
+                width: f32::from(columns) * metrics.width,
+                height: metrics.height,
+            }
+            .intersection(workspace.visible_terminal().unwrap())
+            .unwrap();
+            assert_eq!(
+                node(&update, text_run_id(1)).bounds(),
+                Some(rect(second_row))
+            );
+
+            let fully_clipped = WorkspaceScene::from_snapshot(
+                &workspace_snapshot,
+                size,
+                metrics,
+                workspace.tab_scroll_limit(),
+                workspace.pane_scroll_limit(),
+            );
+            assert_eq!(fully_clipped.visible_terminal(), None);
+            snapshot.set_workspace(Some(&fully_clipped));
+            let update = snapshot.tree();
+            assert_eq!(node(&update, tab).bounds(), None);
+            assert_eq!(node(&update, pane).bounds(), None);
+            assert_eq!(node(&update, CONTENT).bounds(), None);
+            assert_eq!(node(&update, text_run_id(0)).bounds(), None);
+            assert!(node(&update, tab).supports_action(Action::Click));
+            assert!(node(&update, tab).supports_action(Action::Focus));
+            assert!(node(&update, pane).supports_action(Action::Click));
+            assert!(node(&update, pane).supports_action(Action::Focus));
+            assert_eq!(node(&update, text_run_id(0)).value(), Some("one\n"));
+            assert_eq!(node(&update, PANE_PANEL).children().first(), Some(&pane));
+            assert_eq!(update.focus, pane);
+        }
     }
 
     #[test]
@@ -559,7 +747,6 @@ mod tests {
             0.0,
             0.0,
         );
-        let terminal_layout_bounds = rect(workspace.terminal);
         let terminal_bounds = rect(workspace.visible_terminal().unwrap());
         let mut snapshot = Snapshot {
             title: "shell".into(),
@@ -571,7 +758,7 @@ mod tests {
                 selection: None,
             },
             status: String::new(),
-            terminal: true,
+            columns: Some(8),
             workspace_focus: WorkspaceFocus::Panes,
             ..Snapshot::new(PhysicalSize::new(800, 600))
         };
@@ -581,25 +768,18 @@ mod tests {
         let pane_1 = snapshot.pane_ids["pane-1"];
         let pane_2 = snapshot.pane_ids["pane-2"];
         let update = snapshot.tree();
-        let node = |id| {
-            &update
-                .nodes
-                .iter()
-                .find(|(node_id, _)| *node_id == id)
-                .unwrap()
-                .1
-        };
-
-        assert_eq!(node(WINDOW).children(), &[TAB_LIST, PANE_PANEL]);
-        assert_eq!(node(TAB_LIST).children(), &[tab_1, tab_2]);
-        assert_eq!(node(PANE_PANEL).children(), &[pane_1, pane_2, CONTENT]);
-        assert_eq!(node(tab_1).role(), Role::Tab);
-        assert_eq!(node(pane_1).label(), Some("pane-1 offline"));
-        assert_eq!(node(pane_2).label(), Some("pane-2"));
-        assert_eq!(node(pane_2).role(), Role::Button);
-        assert_eq!(node(pane_2).is_expanded(), Some(true));
-        assert_eq!(node(CONTENT).bounds(), Some(terminal_bounds));
-        assert_eq!(node(text_run_id(0)).bounds(), Some(terminal_layout_bounds));
+        assert_eq!(node(&update, WINDOW).children(), &[TAB_LIST, PANE_PANEL]);
+        assert_eq!(node(&update, TAB_LIST).children(), &[tab_1, tab_2]);
+        assert_eq!(
+            node(&update, PANE_PANEL).children(),
+            &[pane_1, pane_2, CONTENT]
+        );
+        assert_eq!(node(&update, tab_1).role(), Role::Tab);
+        assert_eq!(node(&update, pane_1).label(), Some("pane-1 offline"));
+        assert_eq!(node(&update, pane_2).label(), Some("pane-2"));
+        assert_eq!(node(&update, pane_2).role(), Role::Button);
+        assert_eq!(node(&update, pane_2).is_expanded(), Some(true));
+        assert_eq!(node(&update, CONTENT).bounds(), Some(terminal_bounds));
         assert_eq!(update.focus, pane_2);
     }
 

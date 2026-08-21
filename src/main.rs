@@ -726,6 +726,7 @@ impl Application {
             self.workspace_focus,
             &status,
             state.renderer.size(),
+            state.renderer.metrics(),
         );
         state.window.request_redraw();
     }
@@ -927,6 +928,7 @@ impl Application {
                         self.workspace_focus,
                         notice,
                         state.renderer.size(),
+                        state.renderer.metrics(),
                     );
                 }
             }
