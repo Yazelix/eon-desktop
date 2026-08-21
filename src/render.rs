@@ -2030,7 +2030,7 @@ mod tests {
     use orbit_protocol::{CellWidth, Screen};
 
     #[test]
-    fn content_cache_separates_equal_revisions_from_different_generations() {
+    fn content_cache_separates_generations() {
         let key = |generation| ContentKey {
             generation,
             workspace_focus: WorkspaceFocus::Terminal,
