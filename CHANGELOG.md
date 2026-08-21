@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep visible, nonblank Orbit cells atomic in accessibility text and selection,
+  and expose an otherwise unrepresentable greater-than-255-byte cell as one
+  replacement unit without changing its visual text or Orbit's protocol.
 - Bound retained decoded Orbit server events by their validated framed byte
   lengths, preserving ordered effects and frame replacement while failing once
   through the existing explicit loss path when the byte ceiling is exceeded.
