@@ -498,21 +498,27 @@ impl Application {
         }
     }
 
-    fn send_workspace(&mut self, action: WorkspaceAction) {
+    fn send_workspace(&mut self, action: WorkspaceAction) -> bool {
         let workspace = self.workspace_scene();
         let candidate = self.presentation_candidate(workspace.as_ref());
-        if !self.presentation.is_current(candidate) {
-            return;
-        }
+        self.presentation.is_current(candidate) && self.queue_workspace(action)
+    }
+
+    fn queue_workspace(&mut self, action: WorkspaceAction) -> bool {
         let Some(transport) = &self.workspace_transport else {
-            return;
+            return false;
         };
-        if let Err(error) = transport.send(action)
-            && self
-                .workspace_model
-                .mark_unavailable(format!("Cannot queue Eon workspace action: {error}"))
-        {
-            self.refresh_client_view();
+        match transport.send(action) {
+            Ok(()) => true,
+            Err(error) => {
+                if self
+                    .workspace_model
+                    .mark_unavailable(format!("Cannot queue Eon workspace action: {error}"))
+                {
+                    self.refresh_client_view();
+                }
+                false
+            }
         }
     }
 
@@ -1109,13 +1115,9 @@ impl ApplicationHandler<UserEvent> for Application {
                     && button == MouseButton::Left
                 {
                     let target = match hit {
-                        Some(WorkspaceHit::Tab(id)) => {
-                            self.set_workspace_focus(WorkspaceFocus::Tabs);
-                            Some(id.to_owned())
-                        }
+                        Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
                         Some(WorkspaceHit::Pane(id)) => {
-                            self.set_workspace_focus(WorkspaceFocus::Panes);
-                            Some(id.to_owned())
+                            Some((WorkspaceFocus::Panes, id.to_owned()))
                         }
                         Some(WorkspaceHit::Terminal) => {
                             self.set_workspace_focus(WorkspaceFocus::Terminal);
@@ -1123,8 +1125,10 @@ impl ApplicationHandler<UserEvent> for Application {
                         }
                         None => None,
                     };
-                    if let Some(id) = target {
-                        self.send_workspace(WorkspaceAction::FocusId(id));
+                    if let Some((focus, id)) = target {
+                        if self.send_workspace(WorkspaceAction::FocusId(id)) {
+                            self.set_workspace_focus(focus);
+                        }
                         return;
                     }
                 }
@@ -1240,19 +1244,13 @@ impl ApplicationHandler<UserEvent> for Application {
                             AccessibilityAction::Click | AccessibilityAction::Focus
                         ) =>
                     {
-                        match state.accessibility.workspace_target(request.target_node) {
-                            Some(AccessibilityTarget::Terminal) => {
-                                self.set_workspace_focus(WorkspaceFocus::Terminal);
-                            }
-                            Some(AccessibilityTarget::Tab(id)) => {
-                                self.set_workspace_focus(WorkspaceFocus::Tabs);
-                                self.send_workspace(WorkspaceAction::FocusId(id));
-                            }
-                            Some(AccessibilityTarget::Pane(id)) => {
-                                self.set_workspace_focus(WorkspaceFocus::Panes);
-                                self.send_workspace(WorkspaceAction::FocusId(id));
-                            }
-                            None => {}
+                        let target = state.accessibility.workspace_target(request.target_node);
+                        if let Some(focus) = target.and_then(|target| {
+                            accessibility_workspace_focus(target, |action| {
+                                self.queue_workspace(action)
+                            })
+                        }) {
+                            self.set_workspace_focus(focus);
                         }
                     }
                     AccessKitWindowEvent::ActionRequested(_)
@@ -1481,6 +1479,18 @@ fn native_ime_message(
 
 fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bool {
     window_focused && workspace_focus == WorkspaceFocus::Terminal
+}
+
+fn accessibility_workspace_focus(
+    target: AccessibilityTarget,
+    queue: impl FnOnce(WorkspaceAction) -> bool,
+) -> Option<WorkspaceFocus> {
+    let (focus, id) = match target {
+        AccessibilityTarget::Terminal => return Some(WorkspaceFocus::Terminal),
+        AccessibilityTarget::Tab(id) => (WorkspaceFocus::Tabs, id),
+        AccessibilityTarget::Pane(id) => (WorkspaceFocus::Panes, id),
+    };
+    queue(WorkspaceAction::FocusId(id)).then_some(focus)
 }
 
 fn workspace_shortcut(
@@ -2282,6 +2292,35 @@ mod tests {
 
         presentation.publish(workspace_b);
         assert!(presentation.is_current(workspace_b));
+    }
+
+    #[test]
+    fn published_accessibility_focus_waits_for_eon_queue_admission() {
+        for (target, admitted, expected_focus, expected_action) in [
+            (
+                AccessibilityTarget::Tab("tab-2".into()),
+                true,
+                Some(WorkspaceFocus::Tabs),
+                WorkspaceAction::FocusId("tab-2".into()),
+            ),
+            (
+                AccessibilityTarget::Pane("pane-3".into()),
+                false,
+                None,
+                WorkspaceAction::FocusId("pane-3".into()),
+            ),
+        ] {
+            let mut queued = None;
+            let focus = accessibility_workspace_focus(target, |action| {
+                queued = Some(action);
+                admitted
+            });
+            assert_eq!((focus, queued), (expected_focus, Some(expected_action)));
+        }
+        assert_eq!(
+            accessibility_workspace_focus(AccessibilityTarget::Terminal, |_| unreachable!()),
+            Some(WorkspaceFocus::Terminal)
+        );
     }
 
     #[test]

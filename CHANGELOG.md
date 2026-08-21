@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit AccessKit tab and pane actions against the latest published workspace
+  tree during GPU occlusion or recovery, and change local focus only after Eon
+  queue admission while retaining presented-composite input gating.
 - Keep visible, nonblank Orbit cells atomic in accessibility text and selection,
   and expose an otherwise unrepresentable greater-than-255-byte cell as one
   replacement unit without changing its visual text or Orbit's protocol.
