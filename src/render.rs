@@ -7,16 +7,24 @@ use glyphon::{
     Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
 use orbit_protocol::{CellWidth, CursorShape, Underline};
-use std::{error::Error, fmt, sync::Arc, time::Instant};
+use std::{
+    error::Error,
+    fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
 use wgpu::{
     BlendState, BufferDescriptor, BufferUsages, ColorTargetState, ColorWrites,
     CommandEncoderDescriptor, CompositeAlphaMode, CurrentSurfaceTexture, DeviceDescriptor,
-    FragmentState, Instance, InstanceDescriptor, LoadOp, MultisampleState, Operations,
-    PipelineCompilationOptions, PipelineLayoutDescriptor, PresentMode, PrimitiveState,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp, Surface,
-    SurfaceConfiguration, TextureViewDescriptor, VertexAttribute, VertexBufferLayout, VertexFormat,
-    VertexState, VertexStepMode,
+    DeviceLostReason, Error as WgpuError, FragmentState, Instance, InstanceDescriptor, LoadOp,
+    MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor,
+    PresentMode, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
+    RenderPipelineDescriptor, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp,
+    Surface, SurfaceConfiguration, TextureViewDescriptor, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexState, VertexStepMode,
 };
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::Window};
 
@@ -29,6 +37,7 @@ const SHORT_CURSOR_ANIMATION: f32 = 0.04;
 const LONG_CURSOR_ANIMATION: f32 = 0.15;
 const MAX_CURSOR_DELTA: f32 = 0.1;
 const CURSOR_SETTLED: f32 = 0.01;
+const DEVICE_LOST: &str = "the Venus GPU device was lost";
 const DEFAULT_BACKGROUND: SceneColor = SceneColor {
     r: 10,
     g: 13,
@@ -370,6 +379,7 @@ fn rect_changed(left: SceneRect, right: SceneRect) -> bool {
 pub struct Renderer {
     instance: Instance,
     device: wgpu::Device,
+    device_lost: Arc<AtomicBool>,
     queue: wgpu::Queue,
     surface: Surface<'static>,
     config: SurfaceConfiguration,
@@ -423,6 +433,18 @@ impl Renderer {
             .request_device(&DeviceDescriptor::default())
             .await
             .map_err(display_error("cannot create the Venus GPU device"))?;
+        let device_lost = Arc::new(AtomicBool::new(false));
+        let loss_state = Arc::clone(&device_lost);
+        let redraw_window = Arc::clone(&window);
+        device.set_device_lost_callback(move |reason, _| {
+            if record_device_loss(&loss_state, reason) {
+                redraw_window.request_redraw();
+            }
+        });
+        let loss_state = Arc::clone(&device_lost);
+        device.on_uncaptured_error(Arc::new(move |error| {
+            handle_uncaptured_gpu_error(&loss_state, error);
+        }));
         let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
             .ok_or_else(|| RenderError("the GPU surface has no supported format".into()))?;
@@ -438,7 +460,9 @@ impl Renderer {
         let srgb_target = config.format.is_srgb();
         config.present_mode = PresentMode::Fifo;
         config.alpha_mode = surface_alpha_mode(background_opacity, &capabilities.alpha_modes)?;
+        ensure_device_available(&device_lost)?;
         surface.configure(&device, &config);
+        ensure_device_available(&device_lost)?;
 
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("venus rectangles"),
@@ -522,9 +546,11 @@ impl Renderer {
             TextAtlas::with_color_mode(&device, &queue, &cache, config.format, color_mode);
         let text_renderer =
             TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
+        ensure_device_available(&device_lost)?;
         Ok(Self {
             instance,
             device,
+            device_lost,
             queue,
             surface,
             config,
@@ -600,6 +626,7 @@ impl Renderer {
         preedit: &str,
         generation: u64,
     ) -> Result<PresentOutcome, RenderError> {
+        ensure_device_available(&self.device_lost)?;
         let content_changed = self.rebuild_if_needed(
             scene,
             workspace,
@@ -646,7 +673,9 @@ impl Renderer {
             }
         }
 
-        let frame = match self.surface.get_current_texture() {
+        let current_texture = self.surface.get_current_texture();
+        ensure_device_available(&self.device_lost)?;
+        let frame = match current_texture {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Timeout => {
                 self.window.request_redraw();
@@ -658,21 +687,25 @@ impl Renderer {
             }
             CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
+                ensure_device_available(&self.device_lost)?;
                 self.reset_cursor_animation();
                 return Ok(PresentOutcome::Recovered);
             }
             CurrentSurfaceTexture::Suboptimal(frame) => {
                 drop(frame);
                 self.surface.configure(&self.device, &self.config);
+                ensure_device_available(&self.device_lost)?;
                 self.reset_cursor_animation();
                 return Ok(PresentOutcome::Recovered);
             }
             CurrentSurfaceTexture::Lost => {
+                ensure_device_available(&self.device_lost)?;
                 self.surface = self
                     .instance
                     .create_surface(Arc::clone(&self.window))
                     .map_err(display_error("cannot recover the Venus GPU surface"))?;
                 self.surface.configure(&self.device, &self.config);
+                ensure_device_available(&self.device_lost)?;
                 self.reset_cursor_animation();
                 return Ok(PresentOutcome::Recovered);
             }
@@ -728,7 +761,9 @@ impl Renderer {
                 .map_err(display_error("cannot render the Venus glyph atlas"))?;
         }
         self.queue.submit(Some(encoder.finish()));
+        ensure_device_available(&self.device_lost)?;
         self.queue.present(frame);
+        ensure_device_available(&self.device_lost)?;
         self.atlas.trim();
         Ok(PresentOutcome::Presented)
     }
@@ -2023,11 +2058,61 @@ where
     move |error| RenderError(format!("{context}: {error}"))
 }
 
+fn record_device_loss(device_lost: &AtomicBool, reason: DeviceLostReason) -> bool {
+    if reason == DeviceLostReason::Destroyed {
+        return false;
+    }
+    device_lost.store(true, Ordering::Release);
+    true
+}
+
+fn ensure_device_available(device_lost: &AtomicBool) -> Result<(), RenderError> {
+    if device_lost.load(Ordering::Acquire) {
+        Err(RenderError(DEVICE_LOST.into()))
+    } else {
+        Ok(())
+    }
+}
+
+fn handle_uncaptured_gpu_error(device_lost: &AtomicBool, error: WgpuError) {
+    assert!(device_lost.load(Ordering::Acquire), "wgpu error: {error}\n");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{DrawCell, DrawCursor, DrawRow};
     use orbit_protocol::{CellWidth, Screen};
+
+    #[test]
+    fn device_loss_blocks_surface_recovery_but_destroy_does_not() {
+        let lost = AtomicBool::new(false);
+
+        assert!(!record_device_loss(&lost, DeviceLostReason::Destroyed));
+        assert_eq!(ensure_device_available(&lost), Ok(()));
+
+        assert!(record_device_loss(&lost, DeviceLostReason::Unknown));
+        assert_eq!(
+            ensure_device_available(&lost),
+            Err(RenderError(DEVICE_LOST.into()))
+        );
+    }
+
+    #[test]
+    fn uncaptured_errors_remain_fatal_until_device_loss() {
+        let lost = AtomicBool::new(false);
+        let out_of_memory = || wgpu::Error::OutOfMemory {
+            source: Box::new(std::io::Error::other("test GPU allocation failure")),
+        };
+
+        assert!(
+            std::panic::catch_unwind(|| handle_uncaptured_gpu_error(&lost, out_of_memory()))
+                .is_err()
+        );
+
+        assert!(record_device_loss(&lost, DeviceLostReason::Unknown));
+        handle_uncaptured_gpu_error(&lost, out_of_memory());
+    }
 
     #[test]
     fn content_cache_separates_generations() {
