@@ -156,6 +156,33 @@ enum NativeAttentionEvent {
     Focused(bool),
 }
 
+struct NativeResize {
+    scale_factor: f64,
+    stale_size: Option<PhysicalSize<u32>>,
+}
+
+impl NativeResize {
+    fn new(scale_factor: f64) -> Self {
+        Self {
+            scale_factor,
+            stale_size: None,
+        }
+    }
+
+    fn scale_factor_changed(&mut self, scale_factor: f64, stale_size: Option<PhysicalSize<u32>>) {
+        self.scale_factor = scale_factor;
+        self.stale_size = stale_size;
+    }
+
+    fn settled_scale_factor(&mut self, size: PhysicalSize<u32>) -> Option<f64> {
+        if self.stale_size == Some(size) {
+            return None;
+        }
+        self.stale_size = None;
+        Some(self.scale_factor)
+    }
+}
+
 fn apply_native_attention(
     event: NativeAttentionEvent,
     request: impl FnOnce(Option<UserAttentionType>),
@@ -177,9 +204,10 @@ impl From<AccessKitEvent> for UserEvent {
 
 struct WindowState {
     renderer: Renderer,
+    resize: NativeResize,
     adapter: accesskit_winit::Adapter,
     accessibility: Accessibility,
-    ime_line_offset: u16,
+    x11: bool,
     window: Arc<Window>,
 }
 
@@ -276,10 +304,10 @@ impl Application {
         };
         let window = Arc::new(event_loop.create_window(attributes)?);
         // X11 ignores the exclusion size, so use the cursor's bottom edge as its spot.
-        let ime_line_offset = u16::from(matches!(
+        let x11 = matches!(
             window.window_handle()?.as_raw(),
             RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)
-        ));
+        );
         let accessibility = Accessibility::new(window.inner_size());
         let adapter = accesskit_winit::Adapter::with_mixed_handlers(
             event_loop,
@@ -293,13 +321,15 @@ impl Application {
             self.background_opacity,
             self.cursor_tail,
         ))?;
+        let resize = NativeResize::new(window.scale_factor());
         window.set_visible(true);
 
         self.window = Some(WindowState {
             renderer,
+            resize,
             adapter,
             accessibility,
-            ime_line_offset,
+            x11,
             window,
         });
         if let Some(socket) = self.workspace_socket.clone() {
@@ -682,7 +712,7 @@ impl Application {
                 origin.0 + metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
             let top = origin.1
                 + metrics.padding
-                + f32::from(cursor.row + state.ime_line_offset) * metrics.height;
+                + f32::from(cursor.row + u16::from(state.x11)) * metrics.height;
             state.window.set_ime_cursor_area(
                 PhysicalPosition::new(f64::from(left), f64::from(top)),
                 PhysicalSize::new(f64::from(metrics.width * 2.0), f64::from(metrics.height)),
@@ -952,24 +982,20 @@ impl ApplicationHandler<UserEvent> for Application {
         match event {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(size) => {
+                let Some(scale_factor) = state.resize.settled_scale_factor(size) else {
+                    return;
+                };
                 self.next_animation = None;
                 self.input.reset_scroll();
-                state.renderer.resize(size, state.window.scale_factor());
+                state.renderer.resize(size, scale_factor);
                 self.reveal_workspace_selection();
                 self.presentation.invalidate();
                 self.send_resize();
                 self.refresh_client_view();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.next_animation = None;
-                self.input.reset_scroll();
-                state
-                    .renderer
-                    .resize(state.window.inner_size(), scale_factor);
-                self.reveal_workspace_selection();
-                self.presentation.invalidate();
-                self.send_resize();
-                self.refresh_client_view();
+                let stale_size = state.x11.then(|| state.window.inner_size());
+                state.resize.scale_factor_changed(scale_factor, stale_size);
             }
             WindowEvent::Occluded(occluded) => {
                 self.window_occluded = occluded;
@@ -2000,6 +2026,34 @@ mod tests {
         assert!(surface_size(PhysicalSize::new(25, 600), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(960, 25), metrics).is_none());
         assert!(surface_size(PhysicalSize::new(u32::from(u16::MAX) + 1, 600), metrics).is_none());
+    }
+
+    #[test]
+    fn scale_change_applies_only_to_settled_physical_resizes() {
+        let mut resize = NativeResize::new(1.0);
+        resize.scale_factor_changed(2.0, Some(PhysicalSize::new(960, 600)));
+        let sizes = [
+            PhysicalSize::new(960, 600),
+            PhysicalSize::new(1920, 1200),
+            PhysicalSize::new(1600, 1000),
+        ]
+        .into_iter()
+        .filter_map(|physical| {
+            resize
+                .settled_scale_factor(physical)
+                .and_then(|scale| surface_size(physical, CellMetrics::for_scale(scale)))
+        })
+        .map(|size| (size.cols, size.rows))
+        .collect::<Vec<_>>();
+
+        assert_eq!(sizes, [(93, 32), (77, 26)]);
+
+        let mut direct_resize = NativeResize::new(1.0);
+        direct_resize.scale_factor_changed(2.0, None);
+        assert_eq!(
+            direct_resize.settled_scale_factor(PhysicalSize::new(960, 600)),
+            Some(2.0)
+        );
     }
 
     #[test]

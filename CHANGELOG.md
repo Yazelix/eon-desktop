@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Wait for the authoritative physical resize after an X11 scale-factor change
+  before resizing Orbit, avoiding a transient mismatched terminal grid.
 - Clear Venus-owned X11 presentation urgency after native focus without
   requesting urgency for an already-focused window.
 - Report a rejected non-empty native input-method commit through the existing
