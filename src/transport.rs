@@ -222,9 +222,10 @@ impl Transport {
                 move || run(socket, receiver, notify)
             })
         {
-            notify(TransportEvent::Lost(format!(
-                "Cannot start the Orbit transport worker: {error}"
-            )));
+            notify(
+                TransportEvent::Lost(format!("Cannot start the Orbit transport worker: {error}")),
+                0,
+            );
         }
         Self { messages, events }
     }
@@ -250,25 +251,46 @@ struct EventQueue(Mutex<QueuedEvents>);
 
 #[derive(Default)]
 struct QueuedEvents {
-    events: VecDeque<TransportEvent>,
+    events: VecDeque<QueuedEvent>,
+    retained_bytes: usize,
     delivered_frame_high_water: Option<u64>,
     stopped: bool,
 }
 
+struct QueuedEvent {
+    event: TransportEvent,
+    framed_bytes: usize,
+}
+
 const EVENT_QUEUE_CAPACITY: usize = 256;
 const FRAME_QUEUE_CAPACITY: usize = 2;
+const EVENT_QUEUE_BYTE_CAPACITY: usize = 3 * (session::MAX_PAYLOAD_BYTES + session::HEADER_BYTES);
 
 impl EventQueue {
+    #[cfg(test)]
     fn push(&self, event: TransportEvent) -> bool {
+        self.push_framed(event, 0)
+    }
+
+    fn push_framed(&self, event: TransportEvent, framed_bytes: usize) -> bool {
+        self.push_with_byte_capacity(event, framed_bytes, EVENT_QUEUE_BYTE_CAPACITY)
+    }
+
+    fn push_with_byte_capacity(
+        &self,
+        event: TransportEvent,
+        framed_bytes: usize,
+        byte_capacity: usize,
+    ) -> bool {
         let mut state = self.0.lock().expect("transport event queue lock poisoned");
         if state.stopped {
             return false;
         }
         let incoming_revision = frame_revision(&event);
+        let mut replaced = None;
         if let Some(revision) = incoming_revision {
-            let mut replaced = None;
             for (index, queued) in state.events.iter().enumerate().rev() {
-                match queued {
+                match &queued.event {
                     TransportEvent::Server(
                         ServerMessage::Accepted
                         | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted),
@@ -281,7 +303,7 @@ impl EventQueue {
                             .events
                             .iter()
                             .take(index)
-                            .filter_map(frame_revision)
+                            .filter_map(|queued| frame_revision(&queued.event))
                             .chain(state.delivered_frame_high_water)
                             .max();
                         if revision > queued_revision
@@ -293,23 +315,34 @@ impl EventQueue {
                     }
                 }
             }
-            if let Some(index) = replaced {
-                state.events.remove(index);
-                state.events.push_back(event);
-                return false;
-            }
         }
         let wake = state.events.is_empty();
-        if state.events.len() == EVENT_QUEUE_CAPACITY
-            || (incoming_revision.is_some()
-                && state.events.iter().filter_map(frame_revision).count() == FRAME_QUEUE_CAPACITY)
+        let replaced_bytes = replaced.map_or(0, |index| state.events[index].framed_bytes);
+        let retained_bytes = (state.retained_bytes - replaced_bytes).saturating_add(framed_bytes);
+        if retained_bytes > byte_capacity
+            || (replaced.is_none()
+                && (state.events.len() == EVENT_QUEUE_CAPACITY
+                    || (incoming_revision.is_some()
+                        && state
+                            .events
+                            .iter()
+                            .filter_map(|queued| frame_revision(&queued.event))
+                            .count()
+                            == FRAME_QUEUE_CAPACITY)))
         {
             state.events.clear();
-            state.events.push_back(TransportEvent::Lost(
-                "Orbit event queue exceeded its bounded capacity".into(),
-            ));
+            state.retained_bytes = 0;
+            state.events.push_back(QueuedEvent {
+                event: TransportEvent::Lost(
+                    "Orbit event queue exceeded its bounded capacity".into(),
+                ),
+                framed_bytes: 0,
+            });
             state.stopped = true;
             return wake;
+        }
+        if let Some(index) = replaced {
+            state.events.remove(index);
         }
         state.stopped = matches!(
             &event,
@@ -318,7 +351,11 @@ impl EventQueue {
                 | TransportEvent::Incompatible { .. }
                 | TransportEvent::Server(ServerMessage::Busy | ServerMessage::Exited { .. })
         );
-        state.events.push_back(event);
+        state.retained_bytes = retained_bytes;
+        state.events.push_back(QueuedEvent {
+            event,
+            framed_bytes,
+        });
         wake
     }
 
@@ -327,10 +364,11 @@ impl EventQueue {
         state.delivered_frame_high_water = state
             .events
             .iter()
-            .filter_map(frame_revision)
+            .filter_map(|queued| frame_revision(&queued.event))
             .chain(state.delivered_frame_high_water)
             .max();
-        state.events.drain(..).collect()
+        state.retained_bytes = 0;
+        state.events.drain(..).map(|queued| queued.event).collect()
     }
 }
 
@@ -347,9 +385,9 @@ fn frame_revision(event: &TransportEvent) -> Option<u64> {
 fn notifier(
     events: Arc<EventQueue>,
     wake: impl Fn() + Send + Sync + 'static,
-) -> Arc<dyn Fn(TransportEvent) + Send + Sync> {
-    Arc::new(move |event| {
-        if events.push(event) {
+) -> Arc<dyn Fn(TransportEvent, usize) + Send + Sync> {
+    Arc::new(move |event, framed_bytes| {
+        if events.push_framed(event, framed_bytes) {
             wake();
         }
     })
@@ -358,34 +396,38 @@ fn notifier(
 fn run(
     socket: PathBuf,
     receiver: mpsc::Receiver<ClientMessage>,
-    notify: Arc<dyn Fn(TransportEvent) + Send + Sync>,
+    notify: Arc<dyn Fn(TransportEvent, usize) + Send + Sync>,
 ) {
     let mut stream = match UnixStream::connect(&socket) {
         Ok(stream) => stream,
         Err(error) => {
             let kind = error.kind();
-            notify(socket_loss(
-                format!("Cannot connect to Orbit at {}: {error}", socket.display()),
-                kind,
-            ));
+            notify(
+                socket_loss(
+                    format!("Cannot connect to Orbit at {}: {error}", socket.display()),
+                    kind,
+                ),
+                0,
+            );
             return;
         }
     };
     let writer = match stream.try_clone() {
         Ok(writer) => writer,
         Err(error) => {
-            notify(TransportEvent::Lost(format!(
-                "Cannot open the Orbit input channel: {error}"
-            )));
+            notify(
+                TransportEvent::Lost(format!("Cannot open the Orbit input channel: {error}")),
+                0,
+            );
             return;
         }
     };
     if let Err(error) = write_message(&mut stream, &ClientMessage::Hello) {
         let kind = error.kind();
-        notify(socket_loss(
-            format!("Cannot start the Orbit attachment: {error}"),
-            kind,
-        ));
+        notify(
+            socket_loss(format!("Cannot start the Orbit attachment: {error}"), kind),
+            0,
+        );
         return;
     }
 
@@ -395,23 +437,27 @@ fn run(
         .spawn(move || write_loop(writer, receiver, writer_notify))
     {
         let _ = stream.shutdown(Shutdown::Both);
-        notify(TransportEvent::Lost(format!(
-            "Cannot start the Orbit input worker: {error}"
-        )));
+        notify(
+            TransportEvent::Lost(format!("Cannot start the Orbit input worker: {error}")),
+            0,
+        );
         return;
     }
 
     loop {
         match read_message(&mut stream) {
-            Ok(Some(message)) => notify(TransportEvent::Server(message)),
+            Ok(Some((message, framed_bytes))) => {
+                notify(TransportEvent::Server(message), framed_bytes)
+            }
             Ok(None) => {
-                notify(TransportEvent::RetryableLoss(
-                    "Orbit closed the local session".into(),
-                ));
+                notify(
+                    TransportEvent::RetryableLoss("Orbit closed the local session".into()),
+                    0,
+                );
                 return;
             }
             Err(event) => {
-                notify(event);
+                notify(event, 0);
                 return;
             }
         }
@@ -421,7 +467,7 @@ fn run(
 fn write_loop(
     mut stream: UnixStream,
     receiver: mpsc::Receiver<ClientMessage>,
-    notify: Arc<dyn Fn(TransportEvent) + Send + Sync>,
+    notify: Arc<dyn Fn(TransportEvent, usize) + Send + Sync>,
 ) {
     while let Ok(message) = receiver.recv() {
         if let Err(error) = write_message(&mut stream, &message) {
@@ -430,7 +476,7 @@ fn write_loop(
                 let _ = stream.shutdown(Shutdown::Write);
                 return;
             }
-            notify(TransportEvent::InvalidInput(error.to_string()));
+            notify(TransportEvent::InvalidInput(error.to_string()), 0);
         }
     }
     let _ = stream.shutdown(Shutdown::Both);
@@ -442,7 +488,7 @@ fn write_message(stream: &mut UnixStream, message: &ClientMessage) -> io::Result
     stream.write_all(&encoded)
 }
 
-fn read_message(stream: &mut impl Read) -> Result<Option<ServerMessage>, TransportEvent> {
+fn read_message(stream: &mut impl Read) -> Result<Option<(ServerMessage, usize)>, TransportEvent> {
     let mut header = [0; session::HEADER_BYTES];
     match stream.read_exact(&mut header[..1]) {
         Ok(()) => {}
@@ -460,7 +506,7 @@ fn read_message(stream: &mut impl Read) -> Result<Option<ServerMessage>, Transpo
         .read_exact(&mut bytes[session::HEADER_BYTES..])
         .map_err(io_loss)?;
     session::decode_server_message(&bytes)
-        .map(Some)
+        .map(|message| Some((message, length)))
         .map_err(protocol_loss)
 }
 
@@ -558,7 +604,10 @@ mod tests {
 
         let encoded = session::encode_server_message(&ServerMessage::Accepted).unwrap();
         let mut reader = InterruptedOnce(encoded.as_slice(), false);
-        assert_eq!(read_message(&mut reader), Ok(Some(ServerMessage::Accepted)));
+        assert_eq!(
+            read_message(&mut reader),
+            Ok(Some((ServerMessage::Accepted, encoded.len())))
+        );
     }
 
     #[test]
@@ -568,10 +617,10 @@ mod tests {
         let (wakes, receiver) = mpsc::channel();
         let notify = notifier(queued, move || wakes.send(()).unwrap());
 
-        notify(TransportEvent::Lost("writer failed".into()));
-        notify(TransportEvent::Lost("socket closed".into()));
-        notify(TransportEvent::InvalidInput("late input error".into()));
-        notify(TransportEvent::Server(ServerMessage::Accepted));
+        notify(TransportEvent::Lost("writer failed".into()), 0);
+        notify(TransportEvent::Lost("socket closed".into()), 0);
+        notify(TransportEvent::InvalidInput("late input error".into()), 0);
+        notify(TransportEvent::Server(ServerMessage::Accepted), 0);
 
         receiver.recv().unwrap();
         assert!(receiver.try_recv().is_err());
@@ -581,12 +630,20 @@ mod tests {
         );
 
         let events = EventQueue::default();
-        assert!(events.push(TransportEvent::Server(ServerMessage::Busy)));
+        assert!(events.push_framed(
+            TransportEvent::Server(ServerMessage::Busy),
+            session::HEADER_BYTES,
+        ));
         assert!(!events.push(TransportEvent::RetryableLoss("socket closed".into())));
+        assert_eq!(
+            events.0.lock().unwrap().retained_bytes,
+            session::HEADER_BYTES
+        );
         assert_eq!(
             events.drain(),
             [TransportEvent::Server(ServerMessage::Busy)]
         );
+        assert_eq!(events.0.lock().unwrap().retained_bytes, 0);
 
         let events = EventQueue::default();
         assert!(events.push(TransportEvent::Incompatible { version: 3 }));
@@ -619,7 +676,10 @@ mod tests {
         assert!(events.drain().is_empty());
         assert_eq!(
             read_message(&mut reader),
-            Ok(Some(ServerMessage::Exited { code: 17 }))
+            Ok(Some((
+                ServerMessage::Exited { code: 17 },
+                session::HEADER_BYTES + 4,
+            )))
         );
     }
 
@@ -682,6 +742,51 @@ mod tests {
                 "Orbit event queue exceeded its bounded capacity".into()
             )]
         );
+    }
+
+    #[test]
+    fn event_queue_bytes_are_bounded_replaced_and_reset() {
+        const BYTE_CAPACITY: usize = 10;
+        let events = EventQueue::default();
+        assert!(events.push_with_byte_capacity(server_frame(1), 6, BYTE_CAPACITY));
+        assert!(!events.push_with_byte_capacity(
+            TransportEvent::Server(ServerMessage::Accepted),
+            1,
+            BYTE_CAPACITY,
+        ));
+        assert!(!events.push_with_byte_capacity(server_frame(2), 9, BYTE_CAPACITY));
+        assert_eq!(events.0.lock().unwrap().retained_bytes, BYTE_CAPACITY);
+        assert_eq!(
+            events.drain(),
+            [
+                TransportEvent::Server(ServerMessage::Accepted),
+                server_frame(2),
+            ]
+        );
+        assert_eq!(events.0.lock().unwrap().retained_bytes, 0);
+
+        assert!(events.push_with_byte_capacity(
+            TransportEvent::Server(ServerMessage::Accepted),
+            BYTE_CAPACITY,
+            BYTE_CAPACITY,
+        ));
+        assert!(!events.push_with_byte_capacity(
+            TransportEvent::Server(ServerMessage::Accepted),
+            1,
+            BYTE_CAPACITY,
+        ));
+        assert_eq!(
+            events.drain(),
+            [TransportEvent::Lost(
+                "Orbit event queue exceeded its bounded capacity".into()
+            )]
+        );
+        assert_eq!(events.0.lock().unwrap().retained_bytes, 0);
+        assert!(!events.push_with_byte_capacity(
+            TransportEvent::Server(ServerMessage::Accepted),
+            1,
+            BYTE_CAPACITY,
+        ));
     }
 
     #[test]
