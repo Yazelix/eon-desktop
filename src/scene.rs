@@ -541,7 +541,7 @@ impl Scene {
         let mut anchor = None;
         let mut focus = None;
         for (row_index, row) in self.content.iter().enumerate() {
-            let mut characters = Vec::with_capacity(row.cells.len());
+            let mut units = Vec::with_capacity(row.cells.len());
             let mut column = 0_usize;
             while column < row.cells.len() {
                 let cell = &row.cells[column];
@@ -549,32 +549,31 @@ impl Scene {
                 match cell.width {
                     CellWidth::Narrow | CellWidth::Wide => {
                         if cell.style.invisible || cell.text.is_empty() {
-                            characters.extend(
-                                (0..if wide { 2 } else { 1 }).map(|_| (' ', cell.style.selected)),
+                            units.extend(
+                                (0..if wide { 2 } else { 1 })
+                                    .map(|_| (" ", 1, cell.style.selected)),
                             );
                         } else {
-                            characters.extend(
-                                cell.text
-                                    .chars()
-                                    .map(|character| (character, cell.style.selected)),
-                            );
+                            let (text, length) = u8::try_from(cell.text.len())
+                                .map_or(("\u{fffd}", 3), |length| (cell.text.as_str(), length));
+                            units.push((text, length, cell.style.selected));
                         }
                     }
-                    CellWidth::SpacerHead => characters.push((' ', cell.style.selected)),
+                    CellWidth::SpacerHead => units.push((" ", 1, cell.style.selected)),
                     CellWidth::SpacerTail => {}
                 }
                 column += usize::from(wide) + 1;
             }
-            while characters
+            while units
                 .last()
-                .is_some_and(|(character, selected)| *character == ' ' && !selected)
+                .is_some_and(|(text, _, selected)| *text == " " && !selected)
             {
-                characters.pop();
+                units.pop();
             }
 
             let mut value = String::new();
-            let mut character_lengths = Vec::with_capacity(characters.len() + 1);
-            for (character_index, (character, selected)) in characters.into_iter().enumerate() {
+            let mut character_lengths = Vec::with_capacity(units.len() + 1);
+            for (character_index, (text, length, selected)) in units.into_iter().enumerate() {
                 if selected {
                     anchor.get_or_insert(AccessiblePosition {
                         row: row_index,
@@ -585,8 +584,8 @@ impl Scene {
                         character_index: character_index + 1,
                     });
                 }
-                value.push(character);
-                character_lengths.push(character.len_utf8() as u8);
+                value.push_str(text);
+                character_lengths.push(length);
             }
             if row_index + 1 < self.content.len() {
                 value.push('\n');
@@ -726,6 +725,15 @@ mod tests {
         }
     }
 
+    fn draw_cell(text: &str, width: CellWidth, selected: bool) -> DrawCell {
+        DrawCell {
+            width,
+            text: text.into(),
+            hyperlink: String::new(),
+            style: draw_style(selected),
+        }
+    }
+
     #[test]
     fn background_opacity_provenance_distinguishes_default_explicit_selection_and_inverse() {
         let mut style = CellStyle {
@@ -758,13 +766,6 @@ mod tests {
 
     #[test]
     fn glyph_runs_preserve_authoritative_cell_starts() {
-        let style = draw_style(false);
-        let cell = |text: &str, width| DrawCell {
-            width,
-            text: text.into(),
-            hyperlink: String::new(),
-            style,
-        };
         let scene = Scene {
             revision: 1,
             columns: 10,
@@ -780,16 +781,16 @@ mod tests {
                 wrap_continuation: false,
                 kitty_virtual_placeholder: false,
                 cells: vec![
-                    cell("A", CellWidth::Narrow),
-                    cell("e\u{301}", CellWidth::Narrow),
-                    cell("क्ष", CellWidth::Narrow),
-                    cell("界", CellWidth::Wide),
-                    cell("", CellWidth::SpacerTail),
-                    cell("👩‍💻", CellWidth::Wide),
-                    cell("", CellWidth::SpacerTail),
-                    cell("א", CellWidth::Narrow),
-                    cell("𐐀", CellWidth::Narrow),
-                    cell("│", CellWidth::Narrow),
+                    draw_cell("A", CellWidth::Narrow, false),
+                    draw_cell("e\u{301}", CellWidth::Narrow, false),
+                    draw_cell("क्ष", CellWidth::Narrow, false),
+                    draw_cell("界", CellWidth::Wide, false),
+                    draw_cell("", CellWidth::SpacerTail, false),
+                    draw_cell("👩‍💻", CellWidth::Wide, false),
+                    draw_cell("", CellWidth::SpacerTail, false),
+                    draw_cell("א", CellWidth::Narrow, false),
+                    draw_cell("𐐀", CellWidth::Narrow, false),
+                    draw_cell("│", CellWidth::Narrow, false),
                 ],
             }],
         };
@@ -817,12 +818,6 @@ mod tests {
 
     #[test]
     fn accessibility_projection_keeps_authoritative_selected_cells() {
-        let cell = |text: &str, width, selected| DrawCell {
-            width,
-            text: text.into(),
-            hyperlink: String::new(),
-            style: draw_style(selected),
-        };
         let scene = Scene {
             revision: 3,
             columns: 4,
@@ -839,10 +834,10 @@ mod tests {
                     wrap_continuation: false,
                     kitty_virtual_placeholder: false,
                     cells: vec![
-                        cell("a", CellWidth::Narrow, false),
-                        cell("e\u{301}", CellWidth::Narrow, true),
-                        cell("", CellWidth::Narrow, true),
-                        cell("", CellWidth::Narrow, false),
+                        draw_cell("a", CellWidth::Narrow, false),
+                        draw_cell("e\u{301}", CellWidth::Narrow, true),
+                        draw_cell("", CellWidth::Narrow, true),
+                        draw_cell("", CellWidth::Narrow, false),
                     ],
                 },
                 DrawRow {
@@ -850,10 +845,10 @@ mod tests {
                     wrap_continuation: false,
                     kitty_virtual_placeholder: false,
                     cells: vec![
-                        cell("界", CellWidth::Wide, true),
-                        cell("", CellWidth::SpacerTail, true),
-                        cell("", CellWidth::Narrow, false),
-                        cell("", CellWidth::Narrow, false),
+                        draw_cell("界", CellWidth::Wide, true),
+                        draw_cell("", CellWidth::SpacerTail, true),
+                        draw_cell("", CellWidth::Narrow, false),
+                        draw_cell("", CellWidth::Narrow, false),
                     ],
                 },
             ],
@@ -874,6 +869,60 @@ mod tests {
                 },
             })
         );
-        assert_eq!(content.rows[0].character_lengths, [1, 1, 2, 1, 1]);
+        assert_eq!(content.rows[0].character_lengths, [1, 3, 1, 1]);
+    }
+
+    #[test]
+    fn accessibility_projection_keeps_cells_atomic_and_marks_oversized_text() {
+        let scene = |cells: Vec<DrawCell>| Scene {
+            revision: 4,
+            columns: u16::try_from(cells.len()).unwrap(),
+            rows: 1,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: Color::default(),
+            foreground: Color::default(),
+            cursor: None,
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells,
+            }],
+        };
+        let selected_first_cell = Some(AccessibleSelection {
+            anchor: AccessiblePosition {
+                row: 0,
+                character_index: 0,
+            },
+            focus: AccessiblePosition {
+                row: 0,
+                character_index: 1,
+            },
+        });
+
+        let content = scene(vec![
+            draw_cell("e\u{301}", CellWidth::Narrow, true),
+            draw_cell("👩‍💻", CellWidth::Wide, false),
+            draw_cell("", CellWidth::SpacerTail, false),
+        ])
+        .accessible_content();
+        assert_eq!(content.rows[0].character_lengths, [3, 11]);
+        assert_eq!(content.selection, selected_first_cell);
+
+        let representable = format!("e{}", "\u{301}".repeat(127));
+        let content =
+            scene(vec![draw_cell(&representable, CellWidth::Narrow, true)]).accessible_content();
+        assert_eq!(content.plain_text(), representable);
+        assert_eq!(content.rows[0].character_lengths, [255]);
+
+        let oversized = format!("e{}", "\u{301}".repeat(128));
+        let scene = scene(vec![draw_cell(&oversized, CellWidth::Narrow, true)]);
+        assert_eq!(scene.glyph_runs()[0].text, oversized);
+        let content = scene.accessible_content();
+        assert_eq!(content.plain_text(), "\u{fffd}");
+        assert_eq!(content.rows[0].character_lengths, [3]);
+        assert_eq!(content.selection, selected_first_cell);
     }
 }
