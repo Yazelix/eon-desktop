@@ -16,6 +16,8 @@ use winit::{
 pub struct InputState {
     modifiers: Modifiers,
     focus_event: Option<FocusEvent>,
+    pressed_keys: Vec<WinitPhysicalKey>,
+    retired_keys: Vec<WinitPhysicalKey>,
     composing: bool,
     preedit: String,
     cursor: (f32, f32),
@@ -53,24 +55,79 @@ impl InputState {
         self.modifiers
     }
 
-    pub fn focus(&mut self, focused: bool) -> ClientMessage {
-        let event = if focused {
+    pub fn native_focus(&mut self, native_focused: bool, terminal_focused: bool) -> ClientMessage {
+        let event = if terminal_focused {
             FocusEvent::Gained
         } else {
             FocusEvent::Lost
         };
-        if !focused {
+        if !native_focused {
+            self.retire_orbit_generation();
             self.modifiers = Modifiers::empty();
-            self.pressed_buttons.clear();
-            self.reset_scroll();
-            self.cancel_selection();
-            self.copy_pressed = false;
-            self.paste_shortcuts.clear();
-            self.workspace_shortcuts.clear();
-            self.clear_composition();
+            self.retired_keys.clear();
         }
         self.focus_event = Some(event);
         ClientMessage::Focus(event)
+    }
+
+    pub fn terminal_focus(&mut self, focused: bool) -> ClientMessage {
+        let event = if focused {
+            FocusEvent::Gained
+        } else {
+            self.retire_orbit_generation();
+            FocusEvent::Lost
+        };
+        self.focus_event = Some(event);
+        ClientMessage::Focus(event)
+    }
+
+    /// Retire state that can only be paired within one Orbit attachment.
+    /// The returned loss retires an attached endpoint without changing the focus replay state.
+    pub fn retire_orbit_generation(&mut self) -> Option<ClientMessage> {
+        let mut retired = std::mem::take(&mut self.pressed_keys);
+        retired.append(&mut self.paste_shortcuts);
+        if std::mem::take(&mut self.copy_pressed) {
+            retired.push(WinitPhysicalKey::Code(KeyCode::KeyC));
+        }
+        retired.extend(
+            std::mem::take(&mut self.workspace_shortcuts)
+                .into_iter()
+                .map(WinitPhysicalKey::Code),
+        );
+        self.retired_keys.extend(retired);
+        self.pressed_buttons.clear();
+        self.reset_scroll();
+        self.cancel_selection();
+        self.clear_composition();
+        (self.focus_event == Some(FocusEvent::Gained))
+            .then_some(ClientMessage::Focus(FocusEvent::Lost))
+    }
+
+    /// Consume the remainder of a key sequence retired with an old attachment.
+    pub fn suppresses_retired_key(
+        &mut self,
+        key: WinitPhysicalKey,
+        state: ElementState,
+        repeat: bool,
+    ) -> bool {
+        let Some(index) = self
+            .retired_keys
+            .iter()
+            .position(|candidate| *candidate == key)
+        else {
+            return false;
+        };
+        match state {
+            ElementState::Released => {
+                self.retired_keys.swap_remove(index);
+                true
+            }
+            ElementState::Pressed if repeat => true,
+            ElementState::Pressed => {
+                self.retired_keys.swap_remove(index);
+                false
+            }
+        }
     }
 
     #[must_use]
@@ -79,7 +136,10 @@ impl InputState {
     }
 
     #[must_use]
-    pub fn key(&self, event: &WinitKeyEvent) -> ClientMessage {
+    pub fn key(&self, event: &WinitKeyEvent) -> Option<ClientMessage> {
+        if !self.key_is_current(event.physical_key, event.state, event.repeat) {
+            return None;
+        }
         let code = match event.physical_key {
             WinitPhysicalKey::Code(code) => Some(code),
             WinitPhysicalKey::Unidentified(_) => None,
@@ -90,7 +150,7 @@ impl InputState {
             text.as_deref(),
             event.key_without_modifiers(),
         );
-        ClientMessage::Key(KeyEvent {
+        Some(ClientMessage::Key(KeyEvent {
             action: match (event.state, event.repeat) {
                 (ElementState::Released, _) => KeyAction::Release,
                 (ElementState::Pressed, true) => KeyAction::Repeat,
@@ -102,7 +162,19 @@ impl InputState {
             composing: self.composing,
             text,
             unshifted_codepoint,
-        })
+        }))
+    }
+
+    fn key_is_current(&self, key: WinitPhysicalKey, state: ElementState, repeat: bool) -> bool {
+        self.pressed_keys.contains(&key) || (state == ElementState::Pressed && !repeat)
+    }
+
+    /// Record an admitted pressed state or forget an observed release.
+    pub fn commit_key(&mut self, key: WinitPhysicalKey, state: ElementState) {
+        self.pressed_keys.retain(|pressed| *pressed != key);
+        if state == ElementState::Pressed {
+            self.pressed_keys.push(key);
+        }
     }
 
     /// Track native IME state and return a semantic commit when text is finalized.
@@ -182,7 +254,7 @@ impl InputState {
         }))
     }
 
-    /// Commit a native button transition after its semantic message is queued.
+    /// Record an admitted pressed state or forget an observed release.
     pub fn commit_mouse_button(&mut self, state: ElementState, button: WinitMouseButton) {
         self.pressed_buttons.retain(|pressed| *pressed != button);
         if state == ElementState::Pressed {
@@ -361,8 +433,10 @@ impl InputState {
         &mut self,
         key: KeyCode,
         state: ElementState,
+        repeat: bool,
         recognized: bool,
     ) -> bool {
+        let recognized = !repeat && recognized;
         capture_shortcut(&mut self.workspace_shortcuts, key, state, recognized)
     }
 }
@@ -703,14 +777,16 @@ mod tests {
         let mut input = InputState::default();
         assert_eq!(input.latest_focus(), None);
         let gained = ClientMessage::Focus(FocusEvent::Gained);
-        assert_eq!(input.focus(true), gained);
+        assert_eq!(input.native_focus(true, true), gained);
         assert_eq!(input.latest_focus(), Some(gained));
         input.set_modifiers(ModifiersState::CONTROL);
         input.ime(Ime::Preedit("compose".into(), None));
+        let key = WinitPhysicalKey::Code(KeyCode::KeyA);
+        input.commit_key(key, ElementState::Pressed);
         input.commit_mouse_button(ElementState::Pressed, WinitMouseButton::Left);
 
         let lost = ClientMessage::Focus(FocusEvent::Lost);
-        assert_eq!(input.focus(false), lost);
+        assert_eq!(input.native_focus(false, false), lost);
         assert_eq!(input.latest_focus(), Some(lost));
         assert!(input.preedit().is_empty());
         assert!(!input.composing);
@@ -719,6 +795,95 @@ mod tests {
         };
         assert_eq!(event.button, None);
         assert_eq!(event.modifiers, Modifiers::empty());
+        assert!(!input.suppresses_retired_key(key, ElementState::Released, false));
+    }
+
+    #[test]
+    fn terminal_focus_preserves_native_modifiers_but_retires_terminal_state() {
+        use ElementState::{Pressed, Released};
+
+        let mut input = InputState::default();
+        let control = WinitPhysicalKey::Code(KeyCode::ControlLeft);
+        let paste = WinitPhysicalKey::Code(KeyCode::Paste);
+        input.native_focus(true, true);
+        input.set_modifiers(ModifiersState::CONTROL);
+        input.commit_key(control, Pressed);
+        input.commit_mouse_button(Pressed, WinitMouseButton::Left);
+        input.ime(Ime::Preedit("compose".into(), None));
+        input.commit_selection(&ClientMessage::Selection(SelectionAction::Begin {
+            frame_revision: 1,
+            cell: ViewportCell { x: 0, y: 0 },
+        }));
+        assert!(input.consumes_paste_shortcut(
+            &Key::Named(winit::keyboard::NamedKey::Paste),
+            paste,
+            Pressed,
+            false
+        ));
+        assert!(input.consumes_workspace_shortcut(KeyCode::KeyH, Pressed, false, true));
+
+        assert_eq!(
+            input.terminal_focus(false),
+            ClientMessage::Focus(FocusEvent::Lost)
+        );
+        assert_eq!(input.modifiers(), Modifiers::CTRL);
+        assert!(input.preedit().is_empty());
+        assert!(!input.is_selecting());
+        assert!(
+            input
+                .mouse_button(Released, WinitMouseButton::Left, true)
+                .is_none()
+        );
+        assert!(input.suppresses_retired_key(control, Pressed, true));
+        assert!(input.suppresses_retired_key(control, Released, false));
+        assert!(input.suppresses_retired_key(paste, Released, false));
+        assert!(input.suppresses_retired_key(
+            WinitPhysicalKey::Code(KeyCode::KeyH),
+            Released,
+            false
+        ));
+
+        assert_eq!(
+            input.terminal_focus(true),
+            ClientMessage::Focus(FocusEvent::Gained)
+        );
+        assert_eq!(input.modifiers(), Modifiers::CTRL);
+    }
+
+    #[test]
+    fn retiring_an_attachment_keeps_only_current_native_truth() {
+        use ElementState::{Pressed, Released};
+
+        let mut input = InputState::default();
+        let key = WinitPhysicalKey::Code(KeyCode::KeyA);
+        input.native_focus(true, true);
+        input.set_modifiers(ModifiersState::ALT);
+        assert!(!input.key_is_current(key, Released, false));
+        assert!(!input.key_is_current(key, Pressed, true));
+        assert!(input.key_is_current(key, Pressed, false));
+        input.commit_key(key, Pressed);
+        assert!(input.key_is_current(key, Pressed, true));
+        assert!(input.key_is_current(key, Released, false));
+        input.commit_mouse_button(Pressed, WinitMouseButton::Right);
+        input.ime(Ime::Preedit("stale".into(), None));
+
+        assert_eq!(
+            input.retire_orbit_generation(),
+            Some(ClientMessage::Focus(FocusEvent::Lost))
+        );
+        assert_eq!(
+            input.latest_focus(),
+            Some(ClientMessage::Focus(FocusEvent::Gained))
+        );
+        assert_eq!(input.modifiers(), Modifiers::ALT);
+        assert!(input.preedit().is_empty());
+        assert!(
+            input
+                .mouse_button(Released, WinitMouseButton::Right, true)
+                .is_none()
+        );
+        assert!(input.suppresses_retired_key(key, Released, false));
+        assert!(!input.suppresses_retired_key(key, Released, false));
     }
 
     #[test]
@@ -968,7 +1133,7 @@ mod tests {
         let paste = Key::Named(NamedKey::Paste);
         let paste_physical = WinitPhysicalKey::Code(KeyCode::Paste);
         assert!(input.consumes_paste_shortcut(&paste, paste_physical, Pressed, false));
-        input.focus(false);
+        input.native_focus(false, false);
         assert!(!input.consumes_paste_shortcut(&paste, paste_physical, Released, false));
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
@@ -987,10 +1152,20 @@ mod tests {
     }
 
     #[test]
-    fn workspace_shortcut_release_stays_out_of_orbit_after_modifier_release() {
+    fn workspace_shortcut_capture_starts_once_and_retains_release() {
+        use ElementState::{Pressed, Released};
+        use KeyCode::{Escape, KeyH, KeyJ};
+
         let mut input = InputState::default();
-        assert!(input.consumes_workspace_shortcut(KeyCode::KeyH, ElementState::Pressed, true));
-        assert!(input.consumes_workspace_shortcut(KeyCode::KeyH, ElementState::Released, false));
-        assert!(!input.consumes_workspace_shortcut(KeyCode::KeyJ, ElementState::Released, false));
+        let mut shortcut = |key, state, repeat, recognized| {
+            input.consumes_workspace_shortcut(key, state, repeat, recognized)
+        };
+        assert!(!shortcut(KeyH, Pressed, true, true));
+        assert!(shortcut(KeyH, Pressed, false, true));
+        assert!(shortcut(KeyH, Pressed, true, true));
+        assert!(shortcut(KeyH, Released, false, false));
+        assert!(shortcut(Escape, Pressed, false, true));
+        assert!(shortcut(Escape, Released, false, false));
+        assert!(!shortcut(KeyJ, Released, false, false));
     }
 }

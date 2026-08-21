@@ -275,7 +275,6 @@ impl Application {
             self.background_opacity,
             self.cursor_tail,
         ))?;
-        window.set_ime_allowed(true);
         window.set_visible(true);
 
         self.window = Some(WindowState {
@@ -372,13 +371,16 @@ impl Application {
         self.workspace_focus = focus;
         let is_focused = terminal_focused(self.window_focused, self.workspace_focus);
         if was_focused != is_focused {
-            let message = self.input.focus(is_focused);
+            let message = self.input.terminal_focus(is_focused);
             self.send(message);
         }
         self.refresh_client_view();
     }
 
     fn set_orbit_attachment(&mut self, endpoint: Vec<u8>, live: bool) {
+        if let Some(message) = self.input.retire_orbit_generation() {
+            self.send(message);
+        }
         self.reset_cursor_animation();
         let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
         self.active_endpoint = Some(endpoint.clone());
@@ -394,8 +396,6 @@ impl Application {
         if !live {
             self.model.mark_lost("The selected Eon pane is offline");
         }
-        self.input.reset_scroll();
-        self.input.cancel_selection();
         self.last_resize = None;
         self.presentation.invalidate();
         if live {
@@ -490,11 +490,17 @@ impl Application {
             return true;
         }
         let shortcut = workspace_shortcut(code, self.input.modifiers());
-        if self
-            .input
-            .consumes_workspace_shortcut(code, event.state, shortcut.is_some())
-        {
-            if let Some(action) = shortcut
+        let returns_to_terminal =
+            self.workspace_focus != WorkspaceFocus::Terminal && code == KeyCode::Escape;
+        if self.input.consumes_workspace_shortcut(
+            code,
+            event.state,
+            event.repeat,
+            shortcut.is_some() || returns_to_terminal,
+        ) {
+            if returns_to_terminal && event.state == ElementState::Pressed {
+                self.set_workspace_focus(WorkspaceFocus::Terminal);
+            } else if let Some(action) = shortcut
                 .filter(|action| sends_workspace_shortcut(action, event.state, event.repeat))
             {
                 self.send_workspace(action);
@@ -503,12 +509,6 @@ impl Application {
         }
         if self.workspace_focus == WorkspaceFocus::Terminal {
             return false;
-        }
-        if code == KeyCode::Escape {
-            if event.state == ElementState::Pressed {
-                self.set_workspace_focus(WorkspaceFocus::Terminal);
-            }
-            return true;
         }
         if event.state == ElementState::Pressed {
             let direction = match (self.workspace_focus, code) {
@@ -604,8 +604,7 @@ impl Application {
                 if !was_attached && self.model.is_attached() {
                     self.reset_cursor_animation();
                     self.orbit_retry.reset();
-                    self.input.reset_scroll();
-                    self.input.cancel_selection();
+                    self.input.retire_orbit_generation();
                     self.send_resize();
                     if let Some(message) = self.input.latest_focus() {
                         self.send(message);
@@ -626,8 +625,7 @@ impl Application {
             TransportEvent::Lost(detail) => self.model.mark_lost(detail),
         }
         if retryable_event || self.model.is_terminal() {
-            self.input.reset_scroll();
-            self.input.cancel_selection();
+            self.input.retire_orbit_generation();
             self.reset_cursor_animation();
             self.transport = None;
             self.presentation.invalidate();
@@ -643,6 +641,11 @@ impl Application {
     fn refresh_client_view(&mut self) {
         let status = self.status();
         let workspace = self.workspace_scene();
+        let ime_allowed = ime_allowed(
+            self.window_focused,
+            self.workspace_focus,
+            self.model.is_attached(),
+        );
         let Some(state) = &mut self.window else {
             return;
         };
@@ -667,9 +670,7 @@ impl Application {
                 PhysicalSize::new(f64::from(metrics.width * 2.0), f64::from(metrics.height)),
             );
         }
-        state
-            .window
-            .set_ime_allowed(self.workspace_focus == WorkspaceFocus::Terminal);
+        state.window.set_ime_allowed(ime_allowed);
         state.accessibility.update(
             &mut state.adapter,
             self.model.scene(),
@@ -963,7 +964,11 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::RedrawRequested => self.render(),
             WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
             WindowEvent::KeyboardInput { event, .. } => {
-                if self.handle_workspace_key(&event) {
+                if self
+                    .input
+                    .suppresses_retired_key(event.physical_key, event.state, event.repeat)
+                    || self.handle_workspace_key(&event)
+                {
                 } else if self.input.consumes_paste_shortcut(
                     &event.key_without_modifiers(),
                     event.physical_key,
@@ -986,12 +991,19 @@ impl ApplicationHandler<UserEvent> for Application {
                     ) {
                         self.send(ClientMessage::Selection(SelectionAction::Copy));
                     }
-                } else {
-                    self.send(self.input.key(&event));
+                } else if let Some(message) = self.input.key(&event)
+                    && (self.send(message) || event.state == ElementState::Released)
+                {
+                    self.input.commit_key(event.physical_key, event.state);
                 }
             }
             WindowEvent::Ime(event) => {
-                if ime_reaches_terminal(self.workspace_focus, &event) {
+                let allowed = ime_allowed(
+                    self.window_focused,
+                    self.workspace_focus,
+                    self.model.is_attached(),
+                );
+                if ime_reaches_terminal(allowed, &event) {
                     let message = self.input.ime(event);
                     if let Some(message) = message {
                         self.send(message);
@@ -1005,7 +1017,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 state.renderer.reset_cursor_animation();
                 let message = self
                     .input
-                    .focus(terminal_focused(focused, self.workspace_focus));
+                    .native_focus(focused, terminal_focused(focused, self.workspace_focus));
                 self.send(message);
                 self.refresh_client_view();
             }
@@ -1089,7 +1101,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 } else if let Some(message) =
                     self.input
                         .mouse_button(button_state, button, presented_revision.is_some())
-                    && self.send(message)
+                    && (self.send(message) || button_state == ElementState::Released)
                 {
                     self.input.commit_mouse_button(button_state, button);
                 }
@@ -1386,8 +1398,16 @@ fn button_reaches_terminal(
     state == ElementState::Released || presentation_current && (!workspace || terminal_hit)
 }
 
-fn ime_reaches_terminal(focus: WorkspaceFocus, event: &Ime) -> bool {
-    focus == WorkspaceFocus::Terminal || matches!(event, Ime::Disabled)
+fn ime_allowed(
+    window_focused: bool,
+    workspace_focus: WorkspaceFocus,
+    orbit_attached: bool,
+) -> bool {
+    orbit_attached && terminal_focused(window_focused, workspace_focus)
+}
+
+fn ime_reaches_terminal(allowed: bool, event: &Ime) -> bool {
+    allowed || matches!(event, Ime::Disabled)
 }
 
 fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bool {
@@ -2226,16 +2246,14 @@ mod tests {
     }
 
     #[test]
-    fn ime_disable_cleanup_reaches_input_outside_terminal() {
-        assert!(ime_reaches_terminal(WorkspaceFocus::Tabs, &Ime::Disabled));
-        assert!(!ime_reaches_terminal(
-            WorkspaceFocus::Panes,
-            &Ime::Commit("ignored".into())
-        ));
-        assert!(ime_reaches_terminal(
-            WorkspaceFocus::Terminal,
-            &Ime::Commit("accepted".into())
-        ));
+    fn ime_requires_current_attached_terminal_but_always_cleans_up() {
+        assert!(!ime_allowed(false, WorkspaceFocus::Terminal, true));
+        assert!(!ime_allowed(true, WorkspaceFocus::Panes, true));
+        assert!(!ime_allowed(true, WorkspaceFocus::Terminal, false));
+        assert!(ime_allowed(true, WorkspaceFocus::Terminal, true));
+        assert!(ime_reaches_terminal(false, &Ime::Disabled));
+        assert!(!ime_reaches_terminal(false, &Ime::Commit("ignored".into())));
+        assert!(ime_reaches_terminal(true, &Ime::Commit("accepted".into())));
     }
 
     #[test]
