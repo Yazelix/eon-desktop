@@ -151,6 +151,24 @@ enum UserEvent {
     Workspace,
 }
 
+enum NativeAttentionEvent {
+    Present { focused: bool },
+    Focused(bool),
+}
+
+fn apply_native_attention(
+    event: NativeAttentionEvent,
+    request: impl FnOnce(Option<UserAttentionType>),
+) {
+    match event {
+        NativeAttentionEvent::Present { focused: false } => {
+            request(Some(UserAttentionType::Informational));
+        }
+        NativeAttentionEvent::Focused(true) => request(None),
+        NativeAttentionEvent::Present { focused: true } | NativeAttentionEvent::Focused(false) => {}
+    }
+}
+
 impl From<AccessKitEvent> for UserEvent {
     fn from(value: AccessKitEvent) -> Self {
         Self::AccessKit(value)
@@ -1012,6 +1030,9 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::Focused(focused) => {
+                apply_native_attention(NativeAttentionEvent::Focused(focused), |request| {
+                    state.window.request_user_attention(request);
+                });
                 self.window_focused = focused;
                 self.next_animation = None;
                 state.renderer.reset_cursor_animation();
@@ -1150,9 +1171,12 @@ impl ApplicationHandler<UserEvent> for Application {
                 if let Some(state) = &self.window {
                     state.window.set_minimized(false);
                     state.window.focus_window();
-                    state
-                        .window
-                        .request_user_attention(Some(UserAttentionType::Informational));
+                    apply_native_attention(
+                        NativeAttentionEvent::Present {
+                            focused: self.window_focused,
+                        },
+                        |request| state.window.request_user_attention(request),
+                    );
                 }
             }
             UserEvent::Transport => {
@@ -1992,6 +2016,22 @@ mod tests {
         });
 
         assert_eq!(events, ["present", "exit"]);
+    }
+
+    #[test]
+    fn presentation_attention_clears_on_focus() {
+        let mut requests = Vec::new();
+
+        for event in [
+            NativeAttentionEvent::Present { focused: true },
+            NativeAttentionEvent::Present { focused: false },
+            NativeAttentionEvent::Focused(false),
+            NativeAttentionEvent::Focused(true),
+        ] {
+            apply_native_attention(event, |request| requests.push(request));
+        }
+
+        assert_eq!(requests, [Some(UserAttentionType::Informational), None]);
     }
 
     #[test]
