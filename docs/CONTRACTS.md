@@ -33,6 +33,25 @@ nothing, recovered presentation withdraws admission, and only a later Presented
 outcome publishes the candidate. Native timing was not reinjected; Linux proof
 is deterministic lifecycle coverage plus the unchanged accepted native evidence.
 
+Input-generation proof for `VEN-C2`, `VEN-C3`, and `VEN-C8`: Venus
+`f1bb47525973f7ddb250eeed9bc20c599dd9fbaa`; clean locked checks pass 52
+library, 24 host, and 14 canonical integration tests with Clippy warnings
+denied. One `InputState` keeps winit's current native modifier truth separate
+from keys, buttons, shortcuts, composition, selection, and semantic focus that
+belong to one Orbit attachment. Internal workspace focus retirement preserves
+still-held modifiers; endpoint replacement, attachment establishment, and
+retryable or terminal transport loss retire the old generation. Only admitted
+key and button presses can pair with Orbit releases or repeats, and only a
+non-repeat press starts shortcut capture. Stale native remainders are consumed
+after retirement. Native IME is enabled and admitted only for the current
+attached, native-focused terminal, so its `Disabled` transition clears pending
+composition while no Orbit generation accepts text. An attached replaced
+endpoint is offered `Focus(Lost)` before its bounded FIFO closes. Focus replay
+remains the current native and terminal-region truth. No protocol, manifest,
+dependency, module, or producer changed. Native event timing was not reinjected; Linux proof
+is deterministic state-transition coverage plus the unchanged accepted native
+evidence, and macOS ordering remains unproved.
+
 `VEN-C1` Nerd Font materialization proof: Venus
 `a19f53578668b2234391fffbb29e7a3e1b61cc3d`; clean locked checks pass 48
 library, 19 host, and 14 canonical integration tests. A distribution-equivalent

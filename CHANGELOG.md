@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve still-held native modifiers and ordinary key pairing when workspace
+  modifiers change, while retiring stale key, button, shortcut, composition,
+  selection, and focus state before another Orbit attachment receives input.
 - Bind renderer cache reuse, workspace actions, and terminal coordinate or
   selection input to one successfully presented composite generation across
   attachment, workspace, scrolling, resize, recovery, and failure transitions.

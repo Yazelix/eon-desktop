@@ -188,10 +188,10 @@ lock files, and other generated artifacts.
 |---|---:|
 | Agent policy | 416 |
 | README | 197 |
-| Contracts and references | 345 |
+| Contracts and references | 364 |
 | Crate decisions | 157 |
-| Changelog | 96 |
-| Rust source, including unit tests | 9,343 |
+| Changelog | 99 |
+| Rust source, including unit tests | 9,536 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **11,189** |
+| **Total** | **11,404** |
