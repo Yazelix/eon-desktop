@@ -117,15 +117,29 @@ Presented-composite proof for `VEN-C1`, `VEN-C2`, and `VEN-C8`: Venus
 library, 24 host, and 14 canonical integration tests with Clippy warnings
 denied. One Application-owned generation covers the current attachment,
 accepted ready Orbit revision, and geometry-driving workspace composite. The
-renderer keys static content with that generation; workspace actions and new
-terminal mouse, wheel, selection, and copy input require the same successfully
-presented identity. Native cursor tracking and already-admitted releases remain
-coherent while admission is withdrawn. Attachment, reconnect, accepted frames,
-workspace snapshots or header scroll, resize, scale, transport loss, and
-renderer failure invalidate publication. Deferred presentation publishes
-nothing, recovered presentation withdraws admission, and only a later Presented
-outcome publishes the candidate. Native timing was not reinjected; Linux proof
-is deterministic lifecycle coverage plus the unchanged accepted native evidence.
+renderer keys static content with that generation; visual and keyboard workspace
+actions plus terminal mouse, wheel, selection, and copy input require the same
+successfully presented identity. Native cursor tracking and already-admitted
+releases remain coherent while admission is withdrawn. Attachment, reconnect,
+accepted frames, workspace snapshots or header scroll, resize, scale, transport
+loss, and renderer failure invalidate publication. Deferred presentation
+publishes nothing, recovered presentation withdraws admission, and only a later
+Presented outcome publishes the candidate. Native timing was not reinjected;
+Linux proof is deterministic lifecycle coverage plus the unchanged accepted
+native evidence.
+
+Published-accessibility action hardening for `VEN-C8`: Venus
+`1f6af23860ce4c9f135a8eeb9e3e66cf75b4c619`; clean locked checks pass 59
+library, 28 host, and 14 canonical integration tests with Clippy warnings
+denied. AccessKit tab and pane actions resolved from the latest published tree
+queue their exact EONW v1 `FocusId` without waiting for GPU presentation, while
+visual and keyboard input retain the presented-composite gate. Local workspace
+focus follows successful bounded Eon queue admission for both AccessKit and
+pointer activation; a rejected queue changes no local focus. The focused check
+covers exact tab and pane actions, rejected admission, and terminal focus
+without an Eon action. No protocol, dependency, renderer, or platform policy
+changed. Native AT-SPI action timing during occlusion or recovery was not
+reinjected; Linux proof is deterministic and macOS remains unproved.
 
 Input-generation proof for `VEN-C2`, `VEN-C3`, and `VEN-C8`: Venus
 `f1bb47525973f7ddb250eeed9bc20c599dd9fbaa`; clean locked checks pass 52
