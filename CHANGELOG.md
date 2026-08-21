@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Report callback-observed whole-device GPU loss through the bounded renderer
+  failure path, including OOM reports that would otherwise panic, while
+  preserving ordinary surface-only recovery.
 - Wait for the authoritative physical resize after an X11 scale-factor change
   before resizing Orbit, avoiding a transient mismatched terminal grid.
 - Clear Venus-owned X11 presentation urgency after native focus without
