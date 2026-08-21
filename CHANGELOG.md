@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clear Venus-owned X11 presentation urgency after native focus without
+  requesting urgency for an already-focused window.
 - Report a rejected non-empty native input-method commit through the existing
   bounded Input notice instead of silently dropping it.
 - Keep AccessKit tab and pane identities stable across Eon topology changes so
