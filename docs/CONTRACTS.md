@@ -55,6 +55,25 @@ activated their exact Eon identities. AccessKit remains at 0.24.1 with
 accesskit_winit 0.33.2; no dependency or protocol changed. Native Wayland and
 macOS timing remain unproved.
 
+Rendered-workspace accessibility geometry proof for `VEN-C2` and `VEN-C8`:
+Venus `089ffd4dfaedd3df25f92ad47b2f0b1542b02c59`; clean locked checks pass
+57 library, 27 host, and 14 canonical integration tests with Clippy warnings
+denied. The AccessKit snapshot consumes the renderer's existing `CellMetrics`
+and accepted Scene columns, while tab, pane, terminal, and TextRun bounds reuse
+`WorkspaceScene` and `SceneRect::intersection`. Fully clipped descendants keep
+their identity, order, focus, actions, and text without publishing bounds.
+Isolated Linux Xvfb/X11 dogfood at 100×140 on private display, session, and
+AT-SPI buses used AccessKit 0.24.1, accesskit_consumer 0.38.0,
+accesskit_atspi_common 0.19.1, exact EONW v1 producer proof
+`4af395aea06c230ee6b18cf0755ae25915c0b88d`, and exact ORBS v4 proof
+`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`. After tab and pane scrolling,
+clipped descendants retained semantic paths without Component bounds;
+`Contains` rejected points outside the visible intersections, and point lookup
+resolved only the visible tab, terminal, and pane regions. No dependency,
+protocol, module, or platform policy changed. Native Wayland, macOS, optional
+per-character geometry, and screen-reader-specific touch exploration remain
+unproved.
+
 Presented-composite proof for `VEN-C1`, `VEN-C2`, and `VEN-C8`: Venus
 `20ff7bf39d629275b99853e688e7025ecc3738d7`; clean locked checks pass 50
 library, 24 host, and 14 canonical integration tests with Clippy warnings

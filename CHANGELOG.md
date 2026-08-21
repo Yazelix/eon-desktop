@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align AccessKit terminal rows and workspace descendants with the exact
+  geometry and clipping already used by rendering and native hit testing.
 - Report callback-observed whole-device GPU loss through the bounded renderer
   failure path, including OOM reports that would otherwise panic, while
   preserving ordinary surface-only recovery.
