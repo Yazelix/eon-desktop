@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound retained decoded Orbit server events by their validated framed byte
+  lengths, preserving ordered effects and frame replacement while failing once
+  through the existing explicit loss path when the byte ceiling is exceeded.
 - Align AccessKit terminal rows and workspace descendants with the exact
   geometry and clipping already used by rendering and native hit testing.
 - Report callback-observed whole-device GPU loss through the bounded renderer
