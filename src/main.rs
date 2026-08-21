@@ -1003,11 +1003,11 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.workspace_focus,
                     self.model.is_attached(),
                 );
-                if ime_reaches_terminal(allowed, &event) {
-                    let message = self.input.ime(event);
-                    if let Some(message) = message {
-                        self.send(message);
-                    }
+                if ime_reaches_terminal(allowed, &event)
+                    && let Some(message) =
+                        native_ime_message(&mut self.input, &mut self.model, event)
+                {
+                    self.send(message);
                 }
                 self.refresh_client_view();
             }
@@ -1408,6 +1408,23 @@ fn ime_allowed(
 
 fn ime_reaches_terminal(allowed: bool, event: &Ime) -> bool {
     allowed || matches!(event, Ime::Disabled)
+}
+
+fn native_ime_message(
+    input: &mut InputState,
+    model: &mut SessionModel,
+    event: Ime,
+) -> Option<ClientMessage> {
+    match input.ime(event) {
+        Ok(message) => message,
+        Err(detail) => {
+            model.set_venus_notice(
+                LocalNoticeSource::Input,
+                format!("Venus could not encode input: {detail}"),
+            );
+            None
+        }
+    }
 }
 
 fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bool {
@@ -2254,6 +2271,31 @@ mod tests {
         assert!(ime_reaches_terminal(false, &Ime::Disabled));
         assert!(!ime_reaches_terminal(false, &Ime::Commit("ignored".into())));
         assert!(ime_reaches_terminal(true, &Ime::Commit("accepted".into())));
+    }
+
+    #[test]
+    fn rejected_native_ime_commit_uses_the_input_notice_owner() {
+        let mut input = InputState::default();
+        let mut model = SessionModel::new();
+        let rejected = "x".repeat(session::MAX_KEY_TEXT_BYTES + 1);
+
+        assert_eq!(
+            native_ime_message(&mut input, &mut model, Ime::Commit(rejected)),
+            None
+        );
+        assert_eq!(
+            model.notice(),
+            Some(
+                "Venus could not encode input: native input method commit is not accepted semantic key text"
+            )
+        );
+
+        assert!(matches!(
+            native_ime_message(&mut input, &mut model, Ime::Commit("界".into())),
+            Some(ClientMessage::Key(_))
+        ));
+        assert!(model.clear_venus_notice(LocalNoticeSource::Input));
+        assert_eq!(model.notice(), None);
     }
 
     #[test]

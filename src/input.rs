@@ -11,6 +11,8 @@ use winit::{
     platform::modifier_supplement::KeyEventExtModifierSupplement,
 };
 
+const IME_REJECTED: &str = "native input method commit is not accepted semantic key text";
+
 /// Stateful translation from native events to Orbit-owned semantic values.
 #[derive(Clone, Debug, Default)]
 pub struct InputState {
@@ -177,23 +179,26 @@ impl InputState {
         }
     }
 
-    /// Track native IME state and return a semantic commit when text is finalized.
-    pub fn ime(&mut self, event: Ime) -> Option<ClientMessage> {
+    /// Track native IME state and return a semantic commit or explicit rejection.
+    pub fn ime(&mut self, event: Ime) -> Result<Option<ClientMessage>, &'static str> {
         match event {
-            Ime::Enabled => None,
+            Ime::Enabled => Ok(None),
             Ime::Disabled => {
                 self.clear_composition();
-                None
+                Ok(None)
             }
             Ime::Preedit(text, _) => {
                 self.composing = !text.is_empty();
                 self.preedit = text;
-                None
+                Ok(None)
             }
             Ime::Commit(text) => {
                 self.clear_composition();
-                let text = key_text(&text)?;
-                Some(ClientMessage::Key(KeyEvent {
+                if text.is_empty() {
+                    return Ok(None);
+                }
+                let text = key_text(&text).ok_or(IME_REJECTED)?;
+                Ok(Some(ClientMessage::Key(KeyEvent {
                     action: KeyAction::Press,
                     key: PhysicalKey::UNIDENTIFIED,
                     modifiers: self.modifiers,
@@ -201,7 +206,7 @@ impl InputState {
                     composing: false,
                     text: Some(text),
                     unshifted_codepoint: None,
-                }))
+                })))
             }
         }
     }
@@ -756,20 +761,39 @@ mod tests {
     }
 
     #[test]
-    fn ime_sends_only_committed_text() {
+    fn ime_distinguishes_committed_rejected_and_state_only_text() {
         let mut input = InputState::default();
-        assert!(input.ime(Ime::Preedit("a".into(), Some((1, 1)))).is_none());
+        assert_eq!(input.ime(Ime::Enabled), Ok(None));
+        assert_eq!(input.ime(Ime::Preedit("a".into(), Some((1, 1)))), Ok(None));
         assert_eq!(input.preedit(), "a");
-        let Some(ClientMessage::Key(event)) = input.ime(Ime::Commit("啊".into())) else {
+        let Ok(Some(ClientMessage::Key(event))) = input.ime(Ime::Commit("啊".into())) else {
             panic!("expected a semantic key commit");
         };
         assert_eq!(event.key, PhysicalKey::UNIDENTIFIED);
         assert_eq!(event.text.as_deref(), Some("啊"));
         assert!(!event.composing);
         assert!(input.preedit().is_empty());
-        input.ime(Ime::Preedit("stale".into(), None));
-        assert!(input.ime(Ime::Disabled).is_none());
+        assert_eq!(input.ime(Ime::Preedit("stale".into(), None)), Ok(None));
+        assert_eq!(input.ime(Ime::Disabled), Ok(None));
         assert!(input.preedit().is_empty());
+
+        assert_eq!(input.ime(Ime::Commit(String::new())), Ok(None));
+        let exact_bound = "x".repeat(orbit_protocol::session::MAX_KEY_TEXT_BYTES);
+        let Ok(Some(ClientMessage::Key(event))) = input.ime(Ime::Commit(exact_bound.clone()))
+        else {
+            panic!("expected an exact-bound semantic key commit");
+        };
+        assert_eq!(event.text, Some(exact_bound));
+
+        for rejected in [
+            "x".repeat(orbit_protocol::session::MAX_KEY_TEXT_BYTES + 1),
+            "\r".into(),
+            "\u{f700}".into(),
+        ] {
+            assert_eq!(input.ime(Ime::Preedit("discarded".into(), None)), Ok(None));
+            assert_eq!(input.ime(Ime::Commit(rejected)), Err(IME_REJECTED));
+            assert!(input.preedit().is_empty());
+        }
     }
 
     #[test]
@@ -780,7 +804,7 @@ mod tests {
         assert_eq!(input.native_focus(true, true), gained);
         assert_eq!(input.latest_focus(), Some(gained));
         input.set_modifiers(ModifiersState::CONTROL);
-        input.ime(Ime::Preedit("compose".into(), None));
+        assert_eq!(input.ime(Ime::Preedit("compose".into(), None)), Ok(None));
         let key = WinitPhysicalKey::Code(KeyCode::KeyA);
         input.commit_key(key, ElementState::Pressed);
         input.commit_mouse_button(ElementState::Pressed, WinitMouseButton::Left);
@@ -809,7 +833,7 @@ mod tests {
         input.set_modifiers(ModifiersState::CONTROL);
         input.commit_key(control, Pressed);
         input.commit_mouse_button(Pressed, WinitMouseButton::Left);
-        input.ime(Ime::Preedit("compose".into(), None));
+        assert_eq!(input.ime(Ime::Preedit("compose".into(), None)), Ok(None));
         input.commit_selection(&ClientMessage::Selection(SelectionAction::Begin {
             frame_revision: 1,
             cell: ViewportCell { x: 0, y: 0 },
@@ -865,7 +889,7 @@ mod tests {
         assert!(input.key_is_current(key, Pressed, true));
         assert!(input.key_is_current(key, Released, false));
         input.commit_mouse_button(Pressed, WinitMouseButton::Right);
-        input.ime(Ime::Preedit("stale".into(), None));
+        assert_eq!(input.ime(Ime::Preedit("stale".into(), None)), Ok(None));
 
         assert_eq!(
             input.retire_orbit_generation(),
