@@ -1011,18 +1011,10 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = position;
+                let motion = move_terminal_pointer(&mut self.input, position, workspace.as_ref());
                 if presented_revision.is_none() {
                     return;
                 }
-                let (x, y) = workspace
-                    .as_ref()
-                    .map_or((position.x, position.y), |workspace| {
-                        (
-                            position.x - f64::from(workspace.terminal.left),
-                            position.y - f64::from(workspace.terminal.top),
-                        )
-                    });
-                let motion = self.input.move_pointer(x, y);
                 if self.input.is_selecting() {
                     let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
                     let size = surface_size(screen, state.renderer.metrics());
@@ -1075,22 +1067,15 @@ impl ApplicationHandler<UserEvent> for Application {
                         return;
                     }
                 }
-                if presented_revision.is_none() {
-                    return;
-                }
                 if !button_reaches_terminal(
                     workspace.is_some(),
                     matches!(hit, Some(WorkspaceHit::Terminal)),
                     button_state,
+                    presentation_current,
                 ) {
                     return;
                 }
-                if let Some(workspace) = &workspace {
-                    let _ = self.input.move_pointer(
-                        self.cursor.x - f64::from(workspace.terminal.left),
-                        self.cursor.y - f64::from(workspace.terminal.top),
-                    );
-                }
+                let _ = move_terminal_pointer(&mut self.input, self.cursor, workspace.as_ref());
                 let screen = terminal_screen(workspace.as_ref(), renderer_size);
                 let size = surface_size(screen, metrics);
                 let selection = size.and_then(|size| {
@@ -1135,12 +1120,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 if presented_revision.is_none() {
                     return;
                 }
-                if let Some(workspace) = &workspace {
-                    let _ = self.input.move_pointer(
-                        self.cursor.x - f64::from(workspace.terminal.left),
-                        self.cursor.y - f64::from(workspace.terminal.top),
-                    );
-                }
+                let _ = move_terminal_pointer(&mut self.input, self.cursor, workspace.as_ref());
                 for message in self.input.wheel(delta, metrics.width, metrics.height) {
                     if !self.send(message) {
                         break;
@@ -1383,8 +1363,27 @@ fn terminal_screen(
     })
 }
 
-fn button_reaches_terminal(workspace: bool, terminal_hit: bool, state: ElementState) -> bool {
-    !workspace || terminal_hit || state == ElementState::Released
+fn move_terminal_pointer(
+    input: &mut InputState,
+    position: PhysicalPosition<f64>,
+    workspace: Option<&WorkspaceScene>,
+) -> Option<ClientMessage> {
+    let (x, y) = workspace.map_or((position.x, position.y), |workspace| {
+        (
+            position.x - f64::from(workspace.terminal.left),
+            position.y - f64::from(workspace.terminal.top),
+        )
+    });
+    input.move_pointer(x, y)
+}
+
+fn button_reaches_terminal(
+    workspace: bool,
+    terminal_hit: bool,
+    state: ElementState,
+    presentation_current: bool,
+) -> bool {
+    state == ElementState::Released || presentation_current && (!workspace || terminal_hit)
 }
 
 fn ime_reaches_terminal(focus: WorkspaceFocus, event: &Ime) -> bool {
@@ -2154,10 +2153,34 @@ mod tests {
 
     #[test]
     fn workspace_chrome_preserves_terminal_release_pairing() {
-        assert!(!button_reaches_terminal(true, false, ElementState::Pressed));
-        assert!(button_reaches_terminal(true, false, ElementState::Released));
-        assert!(button_reaches_terminal(true, true, ElementState::Pressed));
-        assert!(button_reaches_terminal(false, false, ElementState::Pressed));
+        use ElementState::{Pressed, Released};
+
+        for (workspace, terminal_hit, state, current, expected) in [
+            (true, false, Pressed, true, false),
+            (true, false, Released, false, true),
+            (true, true, Pressed, true, true),
+            (false, false, Pressed, true, true),
+            (false, false, Pressed, false, false),
+        ] {
+            assert_eq!(
+                button_reaches_terminal(workspace, terminal_hit, state, current),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn pointer_tracking_is_independent_from_message_admission() {
+        let mut input = InputState::default();
+
+        let _unpresented_motion =
+            move_terminal_pointer(&mut input, PhysicalPosition::new(12.0, 34.0), None);
+        let Some(ClientMessage::Mouse(event)) =
+            input.mouse_button(ElementState::Pressed, MouseButton::Left, true)
+        else {
+            panic!("expected pointer press");
+        };
+        assert_eq!((event.x, event.y), (12.0, 34.0));
     }
 
     #[test]

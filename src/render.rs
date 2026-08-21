@@ -141,11 +141,9 @@ struct PlacedText {
     color: Color,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 struct ContentKey {
     generation: u64,
-    revision: Option<u64>,
-    workspace: Option<WorkspaceScene>,
     workspace_focus: WorkspaceFocus,
     blink_visible: bool,
     preedit: String,
@@ -748,8 +746,6 @@ impl Renderer {
     ) -> bool {
         let key = ContentKey {
             generation,
-            revision: scene.map(|scene| scene.revision),
-            workspace: workspace.cloned(),
             workspace_focus,
             blink_visible,
             preedit: preedit.to_owned(),
@@ -2037,8 +2033,6 @@ mod tests {
     fn content_cache_separates_equal_revisions_from_different_generations() {
         let key = |generation| ContentKey {
             generation,
-            revision: Some(1),
-            workspace: None,
             workspace_focus: WorkspaceFocus::Terminal,
             blink_visible: true,
             preedit: String::new(),
