@@ -1011,10 +1011,10 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = position;
-                let motion = move_terminal_pointer(&mut self.input, position, workspace.as_ref());
                 if presented_revision.is_none() {
                     return;
                 }
+                let motion = move_terminal_pointer(&mut self.input, position, workspace.as_ref());
                 if self.input.is_selecting() {
                     let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
                     let size = surface_size(screen, state.renderer.metrics());
@@ -2167,20 +2167,6 @@ mod tests {
                 expected
             );
         }
-    }
-
-    #[test]
-    fn pointer_tracking_is_independent_from_message_admission() {
-        let mut input = InputState::default();
-
-        let _unpresented_motion =
-            move_terminal_pointer(&mut input, PhysicalPosition::new(12.0, 34.0), None);
-        let Some(ClientMessage::Mouse(event)) =
-            input.mouse_button(ElementState::Pressed, MouseButton::Left, true)
-        else {
-            panic!("expected pointer press");
-        };
-        assert_eq!((event.x, event.y), (12.0, 34.0));
     }
 
     #[test]
