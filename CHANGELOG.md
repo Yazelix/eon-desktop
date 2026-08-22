@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Make Venus native Linux Wayland/Vulkan-only, remove X11 and Metal features and
+  unsupported compatibility calls, and replace arboard's X11 fallback with
+  direct Wayland data-control clipboard ownership.
 - Admit AccessKit tab and pane actions against the latest published workspace
   tree during GPU occlusion or recovery, and change local focus only after Eon
   queue admission while retaining presented-composite input gating.
@@ -16,10 +19,6 @@
 - Report callback-observed whole-device GPU loss through the bounded renderer
   failure path, including OOM reports that would otherwise panic, while
   preserving ordinary surface-only recovery.
-- Wait for the authoritative physical resize after an X11 scale-factor change
-  before resizing Orbit, avoiding a transient mismatched terminal grid.
-- Clear Venus-owned X11 presentation urgency after native focus without
-  requesting urgency for an already-focused window.
 - Report a rejected non-empty native input-method commit through the existing
   bounded Input notice instead of silently dropping it.
 - Keep AccessKit tab and pane identities stable across Eon topology changes so

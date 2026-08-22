@@ -75,6 +75,25 @@ remain separate license and user-approval gates.
   COSMIC Terminal is [GPL-3.0-only](https://github.com/pop-os/cosmic-term/blob/7daf10e3b540f612cbc48973469656ecd1635dfc/LICENSE):
   inspection does not authorize copying, adaptation, incorporation, or dependency
   selection, each of which requires its own license and dependency gate.
+- [foot](https://codeberg.org/dnkl/foot/src/commit/85655c74a4ded119392ea8b632626c3920042807)
+  at `85655c74a4ded119392ea8b632626c3920042807` is MIT-licensed comparison
+  evidence for a Wayland-only terminal host and its headless Sway/Cage test
+  boundary. Venus rejects foot's PTY, terminal, configuration, renderer, and
+  test-harness ownership; the reference does not select another compositor or
+  terminal dependency.
+- [Monstar](https://github.com/rockorager/monstar/tree/71e4babde8e47e0739abd610f2afe202c8e99c00)
+  at `71e4babde8e47e0739abd610f2afe202c8e99c00` is
+  [MIT-licensed](https://github.com/rockorager/monstar/blob/71e4babde8e47e0739abd610f2afe202c8e99c00/LICENSE)
+  conditional comparison evidence for direct Wayland hosting and Ghostty
+  Zig-module integration. Its exact
+  [`build.zig.zon`](https://github.com/rockorager/monstar/blob/71e4babde8e47e0739abd610f2afe202c8e99c00/build.zig.zon#L8-L11)
+  pins Ghostty `8d6d300cdf0ea95626424f25c82341dfdfb4a802`; its
+  [`build.zig`](https://github.com/rockorager/monstar/blob/71e4babde8e47e0739abd610f2afe202c8e99c00/build.zig#L74-L119)
+  imports `ghostty-vt` and Ghostty terminfo. Route it only for a named question
+  about Wayland protocol lifecycle, native-host boundaries, or packaging those
+  modules. Venus rejects Monstar's PTY and terminal ownership, Zig toolchain,
+  CPU-oriented renderer, direct dependency selection, and central `App.zig`
+  owner; it is not thin-main authority and does not weaken the Orbit/Venus seam.
 - [Sugarloaf](https://github.com/raphamorim/rio/tree/main/sugarloaf) is
   conditional on a demonstrated need for its renderer shape.
 - [AccessKit 0.24.1](https://docs.rs/accesskit/0.24.1/accesskit/) and
@@ -93,7 +112,7 @@ remain separate license and user-approval gates.
   Parley supplies broader rich-text layout than the accepted grid needs.
 
 Compare complete ownership shapes, not isolated crates. The gate measures text
-correctness, input methods, accessibility, Linux behavior, macOS feasibility,
+correctness, input methods, accessibility, native Linux Wayland behavior,
 future browser implications, owned LOC, dependency/build cost, and maintenance.
 
 The user selected exact-revision Orbit protocol consumption with winit 0.30.13,
@@ -113,8 +132,8 @@ adapter.
 
 Exact winit 0.30.13 line and pixel wheel events support cell-normalized bounded
 native accumulation. Exact AccessKit 0.24.1 text runs and text positions support
-selection derived from the accepted scene. Exact arboard 3.6.1 supplies the
-isolated native text write selected in `docs/CRATES.md`.
+selection derived from the accepted scene. Exact wl-clipboard-rs 0.9.3 supplies
+the isolated native Wayland text effect selected in `docs/CRATES.md`.
 
 ## Required for exact ORBS v4 consumption
 
@@ -141,10 +160,10 @@ up to 1 MiB and applies normal or bracketed terminal encoding. Venus passes that
 message unchanged and keeps no terminal paste policy.
 
 Exact winit 0.30.13 supplies logical Ctrl+Shift+V and `NamedKey::Paste`. Exact
-arboard 3.6.1 reads UTF-8 from the ordinary clipboard and reports empty or
-non-text content. Mars `21109e3ebc24b63da11bae644dfb9bab28ce0e18` confirms
-the same Linux shortcuts. Venus reuses no Mars binding, clipboard, or terminal
-code.
+wl-clipboard-rs 0.9.3 returns ordinary Wayland clipboard bytes for a selected
+text MIME. Venus bounds and UTF-8-validates them; empty or non-text content stays
+visible. Mars `21109e3ebc24b63da11bae644dfb9bab28ce0e18` confirms the same Linux
+shortcuts. Venus reuses no Mars binding, clipboard, or terminal code.
 
 `ven-consume-terminal-clipboard-writes-zgh` first consumed Orbit `ORB-C11` and
 canonical ORBS v3 at proof `3ee7c80005f3d2bbe81e539799327803716f6174`.
@@ -153,12 +172,10 @@ destination. Venus accepts the effect only while attached and passes it to the
 existing native clipboard owner without a local decoder or replay state. The
 ORBS v4 gate above preserves that unchanged effect at `7f067b30`.
 
-Exact arboard 3.6.1 exposes the ordinary and primary Linux clipboards through
-its selected `wayland-data-control` build. The pinned Ghostty comparable maps
-standard to the ordinary clipboard and maps both selection and primary to the
-platform primary clipboard. Venus uses that map and rejects arboard's secondary
-clipboard for this contract. macOS has no distinct arboard primary target and
-remains outside the proved platform surface.
+Exact wl-clipboard-rs 0.9.3 exposes the ordinary and primary Linux clipboards
+through Wayland data-control. The pinned Ghostty comparable maps standard to the
+ordinary clipboard and maps both selection and primary to the platform primary
+clipboard. Venus uses that map and has no secondary or compatibility fallback.
 
 Alacritty 0.15.1 at
 `0c405d53e74ace2980fc5e6c6d5b710c144bc075` was comparison-only evidence for
@@ -266,6 +283,18 @@ incorporates none of it. Venus adds one launch boolean at its existing window
 creation boundary. It rejects direct Wayland ownership, capability caching,
 blur strength, renderer effects, live updates, Eon persistence, and another
 window or event-loop owner.
+
+## Watchlist
+
+- [MetalTerm](https://metalterm.dev/) is source-unavailable comparison evidence
+  to revisit only for a named Venus question about idle redraw, GPU measurement,
+  OSC 133 command blocks, or grapheme and cell storage. Its Metal renderer and
+  native macOS packaging are outside Venus's platform scope. Its
+  [site repository and issues](https://github.com/pioner92/metalterm-site)
+  and the creator's [X feed](https://x.com/pioner_dev) are discovery surfaces,
+  not implementation authority. No application source or license was public
+  when checked on 2026-08-21; pin a stable artifact and reproduce performance
+  claims before using them at a reference gate.
 
 ## Rejected initial routing
 

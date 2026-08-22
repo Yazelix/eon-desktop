@@ -6,7 +6,7 @@ and sends semantic interaction back to the authoritative session runtime.
 
 ## Status
 
-The Venus client implements one Linux window for an Eon workspace or one
+The Venus client implements one native Wayland window on Linux for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion, routes selection back as semantic Eon actions, and attaches only
@@ -44,6 +44,9 @@ Pass the Eon Sessions Orbit Unix socket to the Venus client:
 cargo run --locked -- /path/to/orbit.sock
 ```
 
+Venus requires a native Wayland display and fails before presentation
+attachment when one is unavailable. X11, Xwayland, and macOS are unsupported.
+
 Without an argument, Venus uses
 `$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
 `/tmp/yazelix-orbit-$UID/orbit.sock` when the runtime directory is unavailable.
@@ -80,12 +83,13 @@ terminal padding. Explicit cell backgrounds, selection, inverse video,
 workspace chrome, notices, focus borders, text, and cursors retain their
 existing presentation. Visual transparency does not change pointer or keyboard
 input. Venus rejects invalid values during launch and rejects translucent
-launches before showing the window when the native surface lacks premultiplied
-alpha support. Eon owns persistence and product defaults for composed launches.
+launches before presenting its first frame when the native surface lacks
+premultiplied alpha support. Winit does not expose Wayland window visibility
+control. Eon owns persistence and product defaults for composed launches.
 
-Pass `--background-blur` to ask the native compositor for full-surface blur
-before Venus shows the window. Blur and opacity are independent: an opaque
-default background hides the effect, while lower opacity reveals it. This
+Pass `--background-blur` to ask the native compositor for full-surface blur at
+window creation, before the first frame. Blur and opacity are independent: an
+opaque default background hides the effect, while lower opacity reveals it. This
 COSMIC Wayland example leaves terminal-default pixels fully transparent:
 
 ```sh
@@ -96,8 +100,8 @@ cargo run --locked -- \
 ```
 
 COSMIC owns the blur algorithm and strength. Unsupported or policy-disabled
-compositors may ignore the best-effort request without failing launch. Venus
-does not configure blur strength, and X11 and macOS blur remain unproved.
+Wayland compositors may ignore the best-effort request without failing launch.
+Venus does not configure blur strength.
 
 Direct Venus launches use a tail with color `#89b4fa` and duration multiplier
 `1.0` when the cursor profile is absent. Pass `--cursor-effect-v1 none` for a
@@ -169,12 +173,11 @@ cargo clippy --locked --all-targets -- -D warnings
 
 Arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
 popups, persistent Venus configuration, blur strength or live blur changes,
-background images, plugins, remote and web access, macOS implementation,
-packaging, and distribution are outside this slice.
+background images, plugins, remote and web access, packaging, and distribution
+are outside this slice.
 
-The Linux host uses winit, wgpu, glyphon, AccessKit, and an isolated arboard
-text-clipboard effect. macOS remains an architectural target, not an
-implemented or proved platform. The exact
+The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
+selects native Wayland and Vulkan only. The exact
 `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` Orbit package revision supplies
 accepted ORBS v4 and ORB-C12 and resolves from GitHub.
 
@@ -187,11 +190,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 197 |
-| Contracts and references | 485 |
-| Crate decisions | 157 |
-| Changelog | 121 |
-| Rust source, including unit tests | 10,308 |
+| README | 200 |
+| Contracts and references | 524 |
+| Crate decisions | 158 |
+| Changelog | 120 |
+| Rust source, including unit tests | 10,182 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **12,319** |
+| **Total** | **12,235** |
