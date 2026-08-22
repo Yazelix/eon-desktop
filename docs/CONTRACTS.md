@@ -215,3 +215,12 @@ teardown, derive frame capacity from the bounded event deque, and nest frame
 revisions under their server event owner. These corrections were not dogfooded
 again. `VEN-C9` remains unchanged. Venus sends no preview request and uses no
 schema mirror, adapter, dual decoder, downgrade, or interaction expansion.
+
+Launch-policy ownership proof for `VEN-C1`, `VEN-C9`, `VEN-C11`, `VEN-C14`,
+`VEN-C15`, and `VEN-C16`: Venus
+`bab89d1a31bdb7a6a5985f12443f1ace3b0d7f18`; clean locked checks pass 59
+library, 27 host, and 14 canonical integration tests. Binary-private
+`src/launch.rs` solely owns the unchanged CLI validation, defaults, socket
+fallback, and supervision selection; the application consumes one validated
+value. ORBS v4, EONW v1, dependencies, native behavior, and prior native proofs
+remain unchanged.
