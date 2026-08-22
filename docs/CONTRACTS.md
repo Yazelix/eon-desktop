@@ -224,3 +224,16 @@ library, 27 host, and 14 canonical integration tests. Binary-private
 fallback, and supervision selection; the application consumes one validated
 value. ORBS v4, EONW v1, dependencies, native behavior, and prior native proofs
 remain unchanged.
+
+Native-application ownership proof for `VEN-C1` through `VEN-C4`, `VEN-C7`
+through `VEN-C11`, and `VEN-C13` through `VEN-C16`: Venus
+`8e506a247af7ce031798e198e691ca64671b5c27`; clean locked checks pass 59
+library, 27 host, and 14 canonical integration tests with Clippy warnings
+denied. Binary-private `src/application.rs` solely owns the unchanged concrete
+winit lifecycle, retry and presentation state, application events, native host
+helpers, and stdin presentation control; `src/main.rs` only composes validated
+launch values into `application::run`. An absent display preserves the exact
+native-Wayland startup error, while an isolated native Wayland launch against a
+private nonexistent endpoint stayed live until the bounded observation ended.
+ORBS v4, EONW v1, dependencies, behavior, and existing subsystem owners remain
+unchanged.
