@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+#[cfg(not(target_os = "linux"))]
+compile_error!("Venus supports only Linux");
+
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
 use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDirection};
@@ -25,14 +28,13 @@ use std::{
 };
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 #[cfg(target_os = "linux")]
-use winit::platform::wayland::{ActiveEventLoopExtWayland, WindowAttributesExtWayland};
+use winit::platform::wayland::WindowAttributesExtWayland;
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
     event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
-    raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{UserAttentionType, Window, WindowAttributes, WindowId},
 };
 use yazelix_venus::{
@@ -151,51 +153,6 @@ enum UserEvent {
     Workspace,
 }
 
-enum NativeAttentionEvent {
-    Present { focused: bool },
-    Focused(bool),
-}
-
-struct NativeResize {
-    scale_factor: f64,
-    stale_size: Option<PhysicalSize<u32>>,
-}
-
-impl NativeResize {
-    fn new(scale_factor: f64) -> Self {
-        Self {
-            scale_factor,
-            stale_size: None,
-        }
-    }
-
-    fn scale_factor_changed(&mut self, scale_factor: f64, stale_size: Option<PhysicalSize<u32>>) {
-        self.scale_factor = scale_factor;
-        self.stale_size = stale_size;
-    }
-
-    fn settled_scale_factor(&mut self, size: PhysicalSize<u32>) -> Option<f64> {
-        if self.stale_size == Some(size) {
-            return None;
-        }
-        self.stale_size = None;
-        Some(self.scale_factor)
-    }
-}
-
-fn apply_native_attention(
-    event: NativeAttentionEvent,
-    request: impl FnOnce(Option<UserAttentionType>),
-) {
-    match event {
-        NativeAttentionEvent::Present { focused: false } => {
-            request(Some(UserAttentionType::Informational));
-        }
-        NativeAttentionEvent::Focused(true) => request(None),
-        NativeAttentionEvent::Present { focused: true } | NativeAttentionEvent::Focused(false) => {}
-    }
-}
-
 impl From<AccessKitEvent> for UserEvent {
     fn from(value: AccessKitEvent) -> Self {
         Self::AccessKit(value)
@@ -204,10 +161,9 @@ impl From<AccessKitEvent> for UserEvent {
 
 struct WindowState {
     renderer: Renderer,
-    resize: NativeResize,
+    scale_factor: f64,
     adapter: accesskit_winit::Adapter,
     accessibility: Accessibility,
-    x11: bool,
     window: Arc<Window>,
 }
 
@@ -232,7 +188,6 @@ struct Application {
     blink_visible: bool,
     next_blink: Option<Instant>,
     next_animation: Option<Instant>,
-    clipboard: Option<arboard::Clipboard>,
     active_endpoint: Option<Vec<u8>>,
     active_endpoint_live: bool,
     orbit_retry: OrbitRetry,
@@ -276,7 +231,6 @@ impl Application {
             blink_visible: true,
             next_blink: None,
             next_animation: None,
-            clipboard: None,
             active_endpoint: None,
             active_endpoint_live: false,
             orbit_retry: OrbitRetry::default(),
@@ -297,17 +251,8 @@ impl Application {
             self.background_blur,
         );
         #[cfg(target_os = "linux")]
-        let attributes = if event_loop.is_wayland() {
-            attributes.with_name("eon", "yazelix-venus")
-        } else {
-            attributes
-        };
+        let attributes = attributes.with_name("eon", "yazelix-venus");
         let window = Arc::new(event_loop.create_window(attributes)?);
-        // X11 ignores the exclusion size, so use the cursor's bottom edge as its spot.
-        let x11 = matches!(
-            window.window_handle()?.as_raw(),
-            RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)
-        );
         let accessibility = Accessibility::new(window.inner_size());
         let adapter = accesskit_winit::Adapter::with_mixed_handlers(
             event_loop,
@@ -321,15 +266,13 @@ impl Application {
             self.background_opacity,
             self.cursor_tail,
         ))?;
-        let resize = NativeResize::new(window.scale_factor());
-        window.set_visible(true);
+        let scale_factor = window.scale_factor();
 
         self.window = Some(WindowState {
             renderer,
-            resize,
+            scale_factor,
             adapter,
             accessibility,
-            x11,
             window,
         });
         if let Some(socket) = self.workspace_socket.clone() {
@@ -716,9 +659,7 @@ impl Application {
             });
             let left =
                 origin.0 + metrics.padding + f32::from(cursor.leading_column()) * metrics.width;
-            let top = origin.1
-                + metrics.padding
-                + f32::from(cursor.row + u16::from(state.x11)) * metrics.height;
+            let top = origin.1 + metrics.padding + f32::from(cursor.row) * metrics.height;
             state.window.set_ime_cursor_area(
                 PhysicalPosition::new(f64::from(left), f64::from(top)),
                 PhysicalSize::new(f64::from(metrics.width * 2.0), f64::from(metrics.height)),
@@ -790,31 +731,16 @@ impl Application {
     }
 
     fn write_clipboard(&mut self, location: ClipboardLocation, text: String) {
-        let result = self
-            .clipboard()
-            .and_then(|clipboard| write_native_clipboard(clipboard, location, text));
+        let result = write_native_clipboard(location, text);
         self.model
             .set_venus_notice(LocalNoticeSource::Clipboard, clipboard_notice(result));
-    }
-
-    fn clipboard(&mut self) -> std::result::Result<&mut arboard::Clipboard, arboard::Error> {
-        if self.clipboard.is_none() {
-            self.clipboard = Some(arboard::Clipboard::new()?);
-        }
-        Ok(self
-            .clipboard
-            .as_mut()
-            .expect("clipboard initialized above"))
     }
 
     fn paste_clipboard(&mut self) {
         if !self.model.is_attached() {
             return;
         }
-        let result = self
-            .clipboard()
-            .map_err(|error| error.to_string())
-            .and_then(|clipboard| clipboard_paste_message(clipboard.get_text()));
+        let result = read_native_clipboard().and_then(clipboard_paste_message);
         match result {
             Ok(message) => {
                 self.send(message);
@@ -956,7 +882,6 @@ fn window_attributes(
         .with_decorations(decorations)
         .with_transparent(background_opacity < 1.0)
         .with_blur(background_blur)
-        .with_visible(false)
 }
 
 impl ApplicationHandler<UserEvent> for Application {
@@ -990,20 +915,16 @@ impl ApplicationHandler<UserEvent> for Application {
         match event {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(size) => {
-                let Some(scale_factor) = state.resize.settled_scale_factor(size) else {
-                    return;
-                };
                 self.next_animation = None;
                 self.input.reset_scroll();
-                state.renderer.resize(size, scale_factor);
+                state.renderer.resize(size, state.scale_factor);
                 self.reveal_workspace_selection();
                 self.presentation.invalidate();
                 self.send_resize();
                 self.refresh_client_view();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                let stale_size = state.x11.then(|| state.window.inner_size());
-                state.resize.scale_factor_changed(scale_factor, stale_size);
+                state.scale_factor = scale_factor;
             }
             WindowEvent::Occluded(occluded) => {
                 self.window_occluded = occluded;
@@ -1064,9 +985,6 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::Focused(focused) => {
-                apply_native_attention(NativeAttentionEvent::Focused(focused), |request| {
-                    state.window.request_user_attention(request);
-                });
                 self.window_focused = focused;
                 self.next_animation = None;
                 state.renderer.reset_cursor_animation();
@@ -1200,15 +1118,12 @@ impl ApplicationHandler<UserEvent> for Application {
         match event {
             UserEvent::Exit => event_loop.exit(),
             UserEvent::Present => {
-                if let Some(state) = &self.window {
-                    state.window.set_minimized(false);
-                    state.window.focus_window();
-                    apply_native_attention(
-                        NativeAttentionEvent::Present {
-                            focused: self.window_focused,
-                        },
-                        |request| state.window.request_user_attention(request),
-                    );
+                if !self.window_focused
+                    && let Some(state) = &self.window
+                {
+                    state
+                        .window
+                        .request_user_attention(Some(UserAttentionType::Informational));
                 }
             }
             UserEvent::Transport => {
@@ -1521,10 +1436,12 @@ fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) ->
     )
 }
 
-fn clipboard_paste_message(
-    text: std::result::Result<String, arboard::Error>,
-) -> std::result::Result<ClientMessage, String> {
-    let text = text.map_err(|error| error.to_string())?;
+fn clipboard_paste_message(input: impl Read) -> std::result::Result<ClientMessage, String> {
+    let mut text = Vec::new();
+    input
+        .take(session::MAX_PASTE_BYTES as u64 + 1)
+        .read_to_end(&mut text)
+        .map_err(|error| error.to_string())?;
     if text.is_empty() {
         return Err("The native clipboard contains no text".into());
     }
@@ -1534,7 +1451,8 @@ fn clipboard_paste_message(
             session::MAX_PASTE_BYTES
         ));
     }
-    Ok(ClientMessage::Paste(text.into_bytes()))
+    std::str::from_utf8(&text).map_err(|_| "stream did not contain valid UTF-8".to_string())?;
+    Ok(ClientMessage::Paste(text))
 }
 
 fn clipboard_paste_notice(error: impl std::fmt::Display) -> String {
@@ -1542,33 +1460,30 @@ fn clipboard_paste_notice(error: impl std::fmt::Display) -> String {
 }
 
 fn write_native_clipboard(
-    clipboard: &mut arboard::Clipboard,
     location: ClipboardLocation,
     text: String,
-) -> std::result::Result<(), arboard::Error> {
-    #[cfg(target_os = "linux")]
-    {
-        use arboard::SetExtLinux;
+) -> std::result::Result<(), wl_clipboard_rs::copy::Error> {
+    use wl_clipboard_rs::copy::{MimeType, Options, Source};
 
-        clipboard
-            .set()
-            .clipboard(linux_clipboard_kind(location))
-            .text(text)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = location;
-        clipboard.set_text(text)
-    }
+    let mut options = Options::new();
+    options.clipboard(wayland_clipboard_type(location));
+    options.copy(Source::Bytes(text.into_bytes().into()), MimeType::Text)
 }
 
-#[cfg(target_os = "linux")]
-fn linux_clipboard_kind(location: ClipboardLocation) -> arboard::LinuxClipboardKind {
+fn read_native_clipboard() -> std::result::Result<impl Read, String> {
+    use wl_clipboard_rs::paste::{self, ClipboardType, MimeType, Seat};
+
+    let (pipe, _) = paste::get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Text)
+        .map_err(|error| error.to_string())?;
+    Ok(pipe)
+}
+
+fn wayland_clipboard_type(location: ClipboardLocation) -> wl_clipboard_rs::copy::ClipboardType {
+    use wl_clipboard_rs::copy::ClipboardType;
+
     match location {
-        ClipboardLocation::Standard => arboard::LinuxClipboardKind::Clipboard,
-        ClipboardLocation::Selection | ClipboardLocation::Primary => {
-            arboard::LinuxClipboardKind::Primary
-        }
+        ClipboardLocation::Standard => ClipboardType::Regular,
+        ClipboardLocation::Selection | ClipboardLocation::Primary => ClipboardType::Primary,
     }
 }
 
@@ -1610,7 +1525,9 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 
 fn main() -> Result {
     let arguments = launch_arguments(env::args_os().skip(1))?;
-    let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
+    let event_loop = EventLoop::<UserEvent>::with_user_event()
+        .build()
+        .map_err(|_| io::Error::other("Venus requires a native Wayland display"))?;
     let supervised = env::var_os("EON_VENUS_PRESENTATION_CONTROL") == Some(OsString::from("stdin"));
     if supervised {
         start_presentation_control(event_loop.create_proxy())?;
@@ -2041,34 +1958,6 @@ mod tests {
     }
 
     #[test]
-    fn scale_change_applies_only_to_settled_physical_resizes() {
-        let mut resize = NativeResize::new(1.0);
-        resize.scale_factor_changed(2.0, Some(PhysicalSize::new(960, 600)));
-        let sizes = [
-            PhysicalSize::new(960, 600),
-            PhysicalSize::new(1920, 1200),
-            PhysicalSize::new(1600, 1000),
-        ]
-        .into_iter()
-        .filter_map(|physical| {
-            resize
-                .settled_scale_factor(physical)
-                .and_then(|scale| surface_size(physical, CellMetrics::for_scale(scale)))
-        })
-        .map(|size| (size.cols, size.rows))
-        .collect::<Vec<_>>();
-
-        assert_eq!(sizes, [(93, 32), (77, 26)]);
-
-        let mut direct_resize = NativeResize::new(1.0);
-        direct_resize.scale_factor_changed(2.0, None);
-        assert_eq!(
-            direct_resize.settled_scale_factor(PhysicalSize::new(960, 600)),
-            Some(2.0)
-        );
-    }
-
-    #[test]
     fn presentation_control_emits_complete_commands_then_exit() {
         let mut events = Vec::new();
 
@@ -2082,22 +1971,6 @@ mod tests {
         });
 
         assert_eq!(events, ["present", "exit"]);
-    }
-
-    #[test]
-    fn presentation_attention_clears_on_focus() {
-        let mut requests = Vec::new();
-
-        for event in [
-            NativeAttentionEvent::Present { focused: true },
-            NativeAttentionEvent::Present { focused: false },
-            NativeAttentionEvent::Focused(false),
-            NativeAttentionEvent::Focused(true),
-        ] {
-            apply_native_attention(event, |request| requests.push(request));
-        }
-
-        assert_eq!(requests, [Some(UserAttentionType::Informational), None]);
     }
 
     #[test]
@@ -2492,23 +2365,25 @@ mod tests {
     fn native_clipboard_text_becomes_one_bounded_semantic_paste() {
         let text = "first\n界\0second";
         assert_eq!(
-            clipboard_paste_message(Ok(text.into())),
+            clipboard_paste_message(text.as_bytes()),
             Ok(ClientMessage::Paste(text.as_bytes().to_vec()))
         );
         assert_eq!(
-            clipboard_paste_message(Ok(String::new())).unwrap_err(),
+            clipboard_paste_message(&b""[..]).unwrap_err(),
             "The native clipboard contains no text"
         );
+        let mut oversized = io::Cursor::new(vec![b'x'; session::MAX_PASTE_BYTES + 2]);
         assert_eq!(
-            clipboard_paste_message(Ok("x".repeat(session::MAX_PASTE_BYTES + 1))).unwrap_err(),
+            clipboard_paste_message(&mut oversized).unwrap_err(),
             format!(
                 "Native clipboard text exceeds the {} byte paste limit",
                 session::MAX_PASTE_BYTES
             )
         );
+        assert_eq!(oversized.position(), session::MAX_PASTE_BYTES as u64 + 1);
         assert_eq!(
-            clipboard_paste_message(Err(arboard::Error::ContentNotAvailable)).unwrap_err(),
-            arboard::Error::ContentNotAvailable.to_string()
+            clipboard_paste_message(&[0xff][..]).unwrap_err(),
+            "stream did not contain valid UTF-8"
         );
         assert_eq!(
             clipboard_paste_notice("display unavailable"),
@@ -2516,21 +2391,20 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
-    fn terminal_clipboard_locations_use_the_existing_linux_targets() {
-        use arboard::LinuxClipboardKind::{Clipboard, Primary};
+    fn terminal_clipboard_locations_use_wayland_targets() {
+        use wl_clipboard_rs::copy::ClipboardType::{Primary, Regular};
 
         assert!(matches!(
-            linux_clipboard_kind(ClipboardLocation::Standard),
-            Clipboard
+            wayland_clipboard_type(ClipboardLocation::Standard),
+            Regular
         ));
         assert!(matches!(
-            linux_clipboard_kind(ClipboardLocation::Selection),
+            wayland_clipboard_type(ClipboardLocation::Selection),
             Primary
         ));
         assert!(matches!(
-            linux_clipboard_kind(ClipboardLocation::Primary),
+            wayland_clipboard_type(ClipboardLocation::Primary),
             Primary
         ));
     }
