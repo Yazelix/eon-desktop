@@ -3,9 +3,12 @@
 #[cfg(not(target_os = "linux"))]
 compile_error!("Venus supports only Linux");
 
+mod launch;
+
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
 use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDirection};
+use launch::LaunchArguments;
 use orbit_protocol::{
     MAX_CELLS,
     session::{
@@ -17,10 +20,8 @@ use std::{
     env,
     error::Error,
     ffi::OsString,
-    fs,
     io::{self, Read, Write},
     os::unix::ffi::OsStringExt,
-    os::unix::fs::MetadataExt,
     path::PathBuf,
     sync::Arc,
     thread,
@@ -49,15 +50,6 @@ const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
-const DEFAULT_CURSOR_TAIL: (Color, f32) = (
-    Color {
-        r: 0x89,
-        g: 0xb4,
-        b: 0xfa,
-    },
-    1.0,
-);
-const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 struct OrbitRetry {
     deadline: Option<Instant>,
@@ -201,10 +193,11 @@ struct Application {
 }
 
 impl Application {
-    fn new(arguments: LaunchArguments, supervised: bool, proxy: EventLoopProxy<UserEvent>) -> Self {
+    fn new(arguments: LaunchArguments, proxy: EventLoopProxy<UserEvent>) -> Self {
         let LaunchArguments {
             orbit_socket,
             workspace_socket,
+            supervised,
             decorations,
             background_opacity,
             background_blur,
@@ -1524,132 +1517,19 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 }
 
 fn main() -> Result {
-    let arguments = launch_arguments(env::args_os().skip(1))?;
+    let arguments = launch::launch_arguments(
+        env::args_os().skip(1),
+        env::var_os("EON_VENUS_PRESENTATION_CONTROL"),
+    )?;
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()
         .map_err(|_| io::Error::other("Venus requires a native Wayland display"))?;
-    let supervised = env::var_os("EON_VENUS_PRESENTATION_CONTROL") == Some(OsString::from("stdin"));
-    if supervised {
+    if arguments.supervised {
         start_presentation_control(event_loop.create_proxy())?;
     }
-    let mut application = Application::new(arguments, supervised, event_loop.create_proxy());
+    let mut application = Application::new(arguments, event_loop.create_proxy());
     event_loop.run_app(&mut application)?;
     Ok(())
-}
-
-#[derive(Debug)]
-struct LaunchArguments {
-    orbit_socket: PathBuf,
-    workspace_socket: Option<PathBuf>,
-    decorations: bool,
-    background_opacity: f32,
-    background_blur: bool,
-    cursor_tail: Option<(Color, f32)>,
-}
-
-fn launch_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<LaunchArguments> {
-    let mut arguments = arguments.into_iter();
-    let mut orbit_socket = None;
-    let mut workspace_socket = None;
-    let mut decorations = true;
-    let mut background_opacity = None;
-    let mut background_blur = false;
-    let mut cursor_effect = None;
-    let mut cursor_trail_color = None;
-    let mut cursor_trail_duration = None;
-
-    while let Some(argument) = arguments.next() {
-        if argument == "--no-decorations" {
-            decorations = false;
-        } else if argument == "--background-opacity" {
-            if background_opacity.is_some() {
-                return Err(USAGE.into());
-            }
-            let Some(value) = arguments
-                .next()
-                .and_then(|value| value.into_string().ok())
-                .and_then(|value| value.parse::<f32>().ok())
-                .filter(|value| value.is_finite() && (0.0..=1.0).contains(value))
-            else {
-                return Err(USAGE.into());
-            };
-            background_opacity = Some(value);
-        } else if argument == "--background-blur" {
-            if background_blur {
-                return Err(USAGE.into());
-            }
-            background_blur = true;
-        } else if argument == "--cursor-effect-v1" {
-            if cursor_effect.is_some() {
-                return Err(USAGE.into());
-            }
-            cursor_effect = match arguments.next().as_deref() {
-                Some(value) if value == "none" => Some(false),
-                Some(value) if value == "tail" => Some(true),
-                _ => return Err(USAGE.into()),
-            };
-        } else if argument == "--cursor-trail-color-v1" {
-            if cursor_trail_color.is_some() {
-                return Err(USAGE.into());
-            }
-            cursor_trail_color = arguments
-                .next()
-                .and_then(|value| value.into_string().ok())
-                .and_then(|value| parse_cursor_color(&value));
-            if cursor_trail_color.is_none() {
-                return Err(USAGE.into());
-            }
-        } else if argument == "--cursor-trail-duration-v1" {
-            if cursor_trail_duration.is_some() {
-                return Err(USAGE.into());
-            }
-            cursor_trail_duration = arguments
-                .next()
-                .and_then(|value| value.into_string().ok())
-                .and_then(|value| value.parse::<f32>().ok())
-                .filter(|value| value.is_finite() && (0.25..=4.0).contains(value));
-            if cursor_trail_duration.is_none() {
-                return Err(USAGE.into());
-            }
-        } else if argument.as_encoded_bytes().starts_with(b"-") {
-            return Err(USAGE.into());
-        } else if orbit_socket.is_none() {
-            orbit_socket = Some(PathBuf::from(argument));
-        } else if workspace_socket.is_none() {
-            workspace_socket = Some(PathBuf::from(argument));
-        } else {
-            return Err(USAGE.into());
-        }
-    }
-
-    let cursor_tail = match (cursor_effect, cursor_trail_color, cursor_trail_duration) {
-        (None, None, None) => Some(DEFAULT_CURSOR_TAIL),
-        (Some(false), None, None) => None,
-        (Some(true), Some(color), Some(duration)) => Some((color, duration)),
-        _ => return Err(USAGE.into()),
-    };
-
-    Ok(LaunchArguments {
-        orbit_socket: orbit_socket.map_or_else(default_socket_path, Ok)?,
-        workspace_socket,
-        decorations,
-        background_opacity: background_opacity.unwrap_or(1.0),
-        background_blur,
-        cursor_tail,
-    })
-}
-
-fn parse_cursor_color(value: &str) -> Option<Color> {
-    let hex = value.strip_prefix('#')?;
-    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
-    let rgb = u32::from_str_radix(hex, 16).ok()?;
-    Some(Color {
-        r: (rgb >> 16) as u8,
-        g: (rgb >> 8) as u8,
-        b: rgb as u8,
-    })
 }
 
 fn start_presentation_control(proxy: EventLoopProxy<UserEvent>) -> Result {
@@ -1669,19 +1549,6 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
         }
     }
     let _ = send(UserEvent::Exit);
-}
-
-fn default_socket_path() -> Result<PathBuf> {
-    if let Some(root) = env::var_os("XDG_RUNTIME_DIR") {
-        return Ok(PathBuf::from(root).join("yazelix-orbit/orbit.sock"));
-    }
-    #[cfg(target_os = "linux")]
-    let uid = fs::metadata("/proc/self")?.uid();
-    #[cfg(not(target_os = "linux"))]
-    let uid: u32 = env::var("UID")?.parse()?;
-    Ok(PathBuf::from(format!(
-        "/tmp/yazelix-orbit-{uid}/orbit.sock"
-    )))
 }
 
 #[cfg(test)]
@@ -1731,24 +1598,12 @@ mod tests {
     }
 
     #[test]
-    fn presentation_launch_arguments_are_complete_bounded_and_default_tail() {
-        let parse = |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from));
+    fn launch_values_project_to_native_window_attributes() {
+        let parse = |arguments: &[&str]| {
+            launch::launch_arguments(arguments.iter().map(OsString::from), None).unwrap()
+        };
 
-        let default = parse(&[]).unwrap();
-        assert!(default.decorations && default.workspace_socket.is_none());
-        assert_eq!(default.background_opacity, 1.0);
-        assert!(!default.background_blur);
-        assert_eq!(
-            default.cursor_tail,
-            Some((
-                yazelix_venus::Color {
-                    r: 0x89,
-                    g: 0xb4,
-                    b: 0xfa,
-                },
-                1.0,
-            ))
-        );
+        let default = parse(&[]);
         let attributes = window_attributes(
             default.decorations,
             default.background_opacity,
@@ -1764,13 +1619,7 @@ mod tests {
                 "--background-blur",
                 "orbit.sock",
                 "eon.sock",
-            ])
-            .unwrap();
-            assert!(!parsed.decorations);
-            assert_eq!(parsed.background_opacity, value.parse::<f32>().unwrap());
-            assert!(parsed.background_blur);
-            assert_eq!(parsed.orbit_socket, PathBuf::from("orbit.sock"));
-            assert_eq!(parsed.workspace_socket, Some(PathBuf::from("eon.sock")));
+            ]);
             let attributes = window_attributes(
                 parsed.decorations,
                 parsed.background_opacity,
@@ -1778,123 +1627,6 @@ mod tests {
             );
             assert!(attributes.blur);
             assert_eq!(attributes.transparent, value != "1");
-        }
-
-        let tail = parse(&[
-            "--cursor-effect-v1",
-            "tail",
-            "--cursor-trail-color-v1",
-            "#12aBcF",
-            "--cursor-trail-duration-v1",
-            "2.5",
-            "orbit.sock",
-        ])
-        .unwrap();
-        assert_eq!(
-            tail.cursor_tail,
-            Some((
-                yazelix_venus::Color {
-                    r: 0x12,
-                    g: 0xab,
-                    b: 0xcf,
-                },
-                2.5,
-            ))
-        );
-        assert_eq!(
-            parse(&["--cursor-effect-v1", "none"]).unwrap().cursor_tail,
-            None
-        );
-
-        for invalid in [
-            &["--unknown"][..],
-            &["one", "two", "three"][..],
-            &["--background-opacity"][..],
-            &["--background-opacity", "bad"][..],
-            &["--background-opacity", "NaN"][..],
-            &["--background-opacity", "inf"][..],
-            &["--background-opacity", "-0.01"][..],
-            &["--background-opacity", "1.01"][..],
-            &["--background-opacity", "0.5", "--background-opacity", "0.6"][..],
-            &["--background-blur", "--background-blur"][..],
-            &["--cursor-effect-v1"][..],
-            &["--cursor-effect-v1", "warp"][..],
-            &["--cursor-effect-v1", "tail"][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-            ][..],
-            &[
-                "--cursor-effect-v1",
-                "none",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-duration-v1",
-                "1",
-            ][..],
-            &["--cursor-trail-color-v1", "#123456"][..],
-            &["--cursor-trail-color-v1", "#aéabc"][..],
-            &["--cursor-trail-color-v1", "123456"][..],
-            &["--cursor-trail-color-v1", "#12345g"][..],
-            &["--cursor-trail-duration-v1", "1"][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-duration-v1",
-                "0.24",
-            ][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-duration-v1",
-                "4.01",
-            ][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-duration-v1",
-                "NaN",
-            ][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-duration-v1",
-                "1",
-            ][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-color-v1",
-                "#abcdef",
-                "--cursor-trail-duration-v1",
-                "1",
-            ][..],
-            &[
-                "--cursor-effect-v1",
-                "tail",
-                "--cursor-trail-color-v1",
-                "#123456",
-                "--cursor-trail-duration-v1",
-                "1",
-                "--cursor-trail-duration-v1",
-                "2",
-            ][..],
-        ] {
-            assert_eq!(parse(invalid).unwrap_err().to_string(), USAGE);
         }
     }
 
