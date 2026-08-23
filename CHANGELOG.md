@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- Coalesce a standalone one-space Wayland input-method commit with its
-  immediately matching physical Space press while preserving genuine IME-only
-  commits and physical press, repeat, and release identity.
+- Coalesce a standalone one-space Wayland input-method commit with a matching
+  physical Space press across nearby native event-loop boundaries, preserving
+  genuine IME-only commits and physical press, repeat, and release identity.
 - Make Venus native Linux Wayland/Vulkan-only, remove X11 and Metal features and
   unsupported compatibility calls, and replace arboard's X11 fallback with
   direct Wayland data-control clipboard ownership.

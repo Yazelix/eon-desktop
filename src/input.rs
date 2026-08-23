@@ -2,6 +2,7 @@ use orbit_protocol::session::{
     ClientMessage, FocusEvent, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton,
     MouseEvent, PhysicalKey, SelectionAction, SurfaceSize, ViewportCell,
 };
+use std::time::{Duration, Instant};
 use winit::{
     event::{
         ElementState, Ime, KeyEvent as WinitKeyEvent, MouseButton as WinitMouseButton,
@@ -12,6 +13,7 @@ use winit::{
 };
 
 const IME_REJECTED: &str = "native input method commit is not accepted semantic key text";
+const IME_SPACE_COALESCE_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Stateful translation from native events to Orbit-owned semantic values.
 #[derive(Clone, Debug, Default)]
@@ -29,7 +31,7 @@ pub struct InputState {
     copy_pressed: bool,
     paste_shortcuts: Vec<WinitPhysicalKey>,
     workspace_shortcuts: Vec<KeyCode>,
-    pending_ime_space: Option<ClientMessage>,
+    pending_ime_space: Option<(ClientMessage, Instant)>,
 }
 
 impl InputState {
@@ -101,7 +103,7 @@ impl InputState {
         self.pressed_buttons.clear();
         self.reset_scroll();
         self.cancel_selection();
-        self.clear_composition();
+        self.clear_native_input();
         (self.focus_event == Some(FocusEvent::Gained))
             .then_some(ClientMessage::Focus(FocusEvent::Lost))
     }
@@ -182,37 +184,56 @@ impl InputState {
 
     pub fn resolve_pending_ime_space(
         &mut self,
-        next_key: Option<(WinitPhysicalKey, ElementState, Option<&str>)>,
+        key: WinitPhysicalKey,
+        state: ElementState,
+        text: Option<&str>,
+        now: Instant,
     ) -> Option<ClientMessage> {
-        let pending = self.pending_ime_space.take()?;
-        let duplicate = next_key.is_some_and(|(key, state, text)| {
-            key == WinitPhysicalKey::Code(KeyCode::Space)
-                && state == ElementState::Pressed
-                && text == Some(" ")
-        });
+        let (pending, deadline) = self.pending_ime_space.take()?;
+        let duplicate = now < deadline
+            && key == WinitPhysicalKey::Code(KeyCode::Space)
+            && state == ElementState::Pressed
+            && text == Some(" ");
         (!duplicate).then_some(pending)
     }
 
-    /// Track native IME state and return a semantic commit or explicit rejection.
-    pub fn ime(&mut self, event: Ime) -> Result<Option<ClientMessage>, &'static str> {
+    #[must_use]
+    pub fn pending_ime_space_deadline(&self) -> Option<Instant> {
+        self.pending_ime_space
+            .as_ref()
+            .map(|(_, deadline)| *deadline)
+    }
+
+    pub fn flush_expired_ime_space(&mut self, now: Instant) -> Option<ClientMessage> {
+        self.pending_ime_space
+            .take_if(|(_, deadline)| now >= *deadline)
+            .map(|(message, _)| message)
+    }
+
+    /// Track native IME state and return ordered semantic commits or an explicit rejection.
+    pub fn ime(&mut self, event: Ime) -> Result<[Option<ClientMessage>; 2], &'static str> {
         match event {
-            Ime::Enabled => Ok(None),
+            Ime::Enabled => Ok([None, None]),
             Ime::Disabled => {
-                self.clear_composition();
-                Ok(None)
+                self.clear_native_input();
+                Ok([None, None])
             }
             Ime::Preedit(text, _) => {
                 self.composing = !text.is_empty();
                 self.preedit = text;
-                Ok(None)
+                Ok([None, None])
             }
             Ime::Commit(text) => {
-                self.clear_composition();
+                self.clear_preedit();
                 if text.is_empty() {
-                    return Ok(None);
+                    return Ok([
+                        self.pending_ime_space.take().map(|(message, _)| message),
+                        None,
+                    ]);
                 }
                 let text = key_text(&text).ok_or(IME_REJECTED)?;
                 let ime_space = text == " ";
+                let pending = self.pending_ime_space.take().map(|(message, _)| message);
                 let message = ClientMessage::Key(KeyEvent {
                     action: KeyAction::Press,
                     key: PhysicalKey::UNIDENTIFIED,
@@ -223,18 +244,23 @@ impl InputState {
                     unshifted_codepoint: None,
                 });
                 if ime_space {
-                    self.pending_ime_space = Some(message);
-                    Ok(None)
+                    self.pending_ime_space =
+                        Some((message, Instant::now() + IME_SPACE_COALESCE_INTERVAL));
+                    Ok([pending, None])
                 } else {
-                    Ok(Some(message))
+                    Ok([pending, Some(message)])
                 }
             }
         }
     }
 
-    fn clear_composition(&mut self) {
+    fn clear_preedit(&mut self) {
         self.composing = false;
         self.preedit.clear();
+    }
+
+    fn clear_native_input(&mut self) {
+        self.clear_preedit();
         self.pending_ime_space = None;
     }
 
@@ -785,23 +811,31 @@ mod tests {
     #[test]
     fn ime_distinguishes_committed_rejected_and_state_only_text() {
         let mut input = InputState::default();
-        assert_eq!(input.ime(Ime::Enabled), Ok(None));
-        assert_eq!(input.ime(Ime::Preedit("a".into(), Some((1, 1)))), Ok(None));
+        assert_eq!(input.ime(Ime::Enabled), Ok([None, None]));
+        assert_eq!(
+            input.ime(Ime::Preedit("a".into(), Some((1, 1)))),
+            Ok([None, None])
+        );
         assert_eq!(input.preedit(), "a");
-        let Ok(Some(ClientMessage::Key(event))) = input.ime(Ime::Commit("啊".into())) else {
+        let Ok([None, Some(ClientMessage::Key(event))]) = input.ime(Ime::Commit("啊".into()))
+        else {
             panic!("expected a semantic key commit");
         };
         assert_eq!(event.key, PhysicalKey::UNIDENTIFIED);
         assert_eq!(event.text.as_deref(), Some("啊"));
         assert!(!event.composing);
         assert!(input.preedit().is_empty());
-        assert_eq!(input.ime(Ime::Preedit("stale".into(), None)), Ok(None));
-        assert_eq!(input.ime(Ime::Disabled), Ok(None));
+        assert_eq!(
+            input.ime(Ime::Preedit("stale".into(), None)),
+            Ok([None, None])
+        );
+        assert_eq!(input.ime(Ime::Disabled), Ok([None, None]));
         assert!(input.preedit().is_empty());
 
-        assert_eq!(input.ime(Ime::Commit(String::new())), Ok(None));
+        assert_eq!(input.ime(Ime::Commit(String::new())), Ok([None, None]));
         let exact_bound = "x".repeat(orbit_protocol::session::MAX_KEY_TEXT_BYTES);
-        let Ok(Some(ClientMessage::Key(event))) = input.ime(Ime::Commit(exact_bound.clone()))
+        let Ok([None, Some(ClientMessage::Key(event))]) =
+            input.ime(Ime::Commit(exact_bound.clone()))
         else {
             panic!("expected an exact-bound semantic key commit");
         };
@@ -812,21 +846,38 @@ mod tests {
             "\r".into(),
             "\u{f700}".into(),
         ] {
-            assert_eq!(input.ime(Ime::Preedit("discarded".into(), None)), Ok(None));
+            assert_eq!(
+                input.ime(Ime::Preedit("discarded".into(), None)),
+                Ok([None, None])
+            );
             assert_eq!(input.ime(Ime::Commit(rejected)), Err(IME_REJECTED));
             assert!(input.preedit().is_empty());
         }
     }
 
     #[test]
-    fn coalesces_only_an_immediately_matching_physical_space() {
+    fn coalesces_matching_physical_space_until_the_deadline() {
         use ElementState::{Pressed, Released};
 
         let mut input = InputState::default();
         let space = WinitPhysicalKey::Code(KeyCode::Space);
-        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok(None));
+        let is_committed_space = |message| {
+            matches!(
+                message,
+                Some(ClientMessage::Key(KeyEvent { text: Some(text), .. })) if text == " "
+            )
+        };
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
+        let deadline = input
+            .pending_ime_space_deadline()
+            .expect("expected an IME space deadline");
         assert_eq!(
-            input.resolve_pending_ime_space(Some((space, Pressed, Some(" ")))),
+            input.resolve_pending_ime_space(
+                space,
+                Pressed,
+                Some(" "),
+                deadline - Duration::from_nanos(1),
+            ),
             None
         );
         assert!(input.key_is_current(space, Pressed, false));
@@ -835,20 +886,41 @@ mod tests {
         assert!(input.key_is_current(space, Released, false));
         input.commit_key(space, Released);
 
-        for next_key in [
-            Some((WinitPhysicalKey::Code(KeyCode::KeyA), Pressed, Some("a"))),
-            None,
-        ] {
-            assert_eq!(input.ime(Ime::Commit(" ".into())), Ok(None));
-            let Some(ClientMessage::Key(commit)) = input.resolve_pending_ime_space(next_key) else {
-                panic!("expected the standalone IME commit");
-            };
-            assert_eq!(commit.text.as_deref(), Some(" "));
-        }
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
+        let deadline = input
+            .pending_ime_space_deadline()
+            .expect("expected an IME space deadline");
+        assert_eq!(
+            input.flush_expired_ime_space(deadline - Duration::from_nanos(1)),
+            None
+        );
+        assert!(is_committed_space(input.flush_expired_ime_space(deadline)));
 
-        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok(None));
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
+        let deadline = input
+            .pending_ime_space_deadline()
+            .expect("expected an IME space deadline");
+        assert!(is_committed_space(input.resolve_pending_ime_space(
+            space,
+            Pressed,
+            Some(" "),
+            deadline,
+        )));
+
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
+        assert!(is_committed_space(input.resolve_pending_ime_space(
+            WinitPhysicalKey::Code(KeyCode::KeyA),
+            Pressed,
+            Some("a"),
+            Instant::now(),
+        )));
+
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
         input.retire_orbit_generation();
-        assert_eq!(input.resolve_pending_ime_space(None), None);
+        assert_eq!(
+            input.resolve_pending_ime_space(space, Pressed, Some(" "), Instant::now()),
+            None
+        );
     }
 
     #[test]
@@ -859,7 +931,10 @@ mod tests {
         assert_eq!(input.native_focus(true, true), gained);
         assert_eq!(input.latest_focus(), Some(gained));
         input.set_modifiers(ModifiersState::CONTROL);
-        assert_eq!(input.ime(Ime::Preedit("compose".into(), None)), Ok(None));
+        assert_eq!(
+            input.ime(Ime::Preedit("compose".into(), None)),
+            Ok([None, None])
+        );
         let key = WinitPhysicalKey::Code(KeyCode::KeyA);
         input.commit_key(key, ElementState::Pressed);
         input.commit_mouse_button(ElementState::Pressed, WinitMouseButton::Left);
@@ -888,7 +963,10 @@ mod tests {
         input.set_modifiers(ModifiersState::CONTROL);
         input.commit_key(control, Pressed);
         input.commit_mouse_button(Pressed, WinitMouseButton::Left);
-        assert_eq!(input.ime(Ime::Preedit("compose".into(), None)), Ok(None));
+        assert_eq!(
+            input.ime(Ime::Preedit("compose".into(), None)),
+            Ok([None, None])
+        );
         input.commit_selection(&ClientMessage::Selection(SelectionAction::Begin {
             frame_revision: 1,
             cell: ViewportCell { x: 0, y: 0 },
@@ -944,7 +1022,10 @@ mod tests {
         assert!(input.key_is_current(key, Pressed, true));
         assert!(input.key_is_current(key, Released, false));
         input.commit_mouse_button(Pressed, WinitMouseButton::Right);
-        assert_eq!(input.ime(Ime::Preedit("stale".into(), None)), Ok(None));
+        assert_eq!(
+            input.ime(Ime::Preedit("stale".into(), None)),
+            Ok([None, None])
+        );
 
         assert_eq!(
             input.retire_orbit_generation(),

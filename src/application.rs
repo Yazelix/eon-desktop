@@ -24,7 +24,7 @@ use winit::platform::wayland::WindowAttributesExtWayland;
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
-    event::{DeviceEvent, DeviceId, ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
+    event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     window::{UserAttentionType, Window, WindowAttributes, WindowId},
@@ -889,13 +889,14 @@ impl ApplicationHandler<UserEvent> for Application {
         if window.window.id() != window_id {
             return;
         }
-        let next_key = match &event {
-            WindowEvent::KeyboardInput { event, .. } => {
-                Some((event.physical_key, event.state, event.text.as_deref()))
-            }
-            _ => None,
-        };
-        if let Some(message) = self.input.resolve_pending_ime_space(next_key) {
+        if let WindowEvent::KeyboardInput { event, .. } = &event
+            && let Some(message) = self.input.resolve_pending_ime_space(
+                event.physical_key,
+                event.state,
+                event.text.as_deref(),
+                Instant::now(),
+            )
+        {
             self.send(message);
         }
         let workspace = self.workspace_scene();
@@ -971,11 +972,13 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.workspace_focus,
                     self.model.is_attached(),
                 );
-                if ime_reaches_terminal(allowed, &event)
-                    && let Some(message) =
-                        native_ime_message(&mut self.input, &mut self.model, event)
-                {
-                    self.send(message);
+                if ime_reaches_terminal(allowed, &event) {
+                    for message in native_ime_messages(&mut self.input, &mut self.model, event)
+                        .into_iter()
+                        .flatten()
+                    {
+                        self.send(message);
+                    }
                 }
                 self.refresh_client_view();
             }
@@ -1170,17 +1173,11 @@ impl ApplicationHandler<UserEvent> for Application {
         }
     }
 
-    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, _: DeviceEvent) {
-        if let Some(message) = self.input.resolve_pending_ime_space(None) {
-            self.send(message);
-        }
-    }
-
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some(message) = self.input.resolve_pending_ime_space(None) {
+        let now = Instant::now();
+        if let Some(message) = self.input.flush_expired_ime_space(now) {
             self.send(message);
         }
-        let now = Instant::now();
         self.retry_orbit(now);
         let blinking = self
             .model
@@ -1209,6 +1206,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.next_blink,
                 self.next_animation,
                 self.orbit_retry.deadline,
+                self.input.pending_ime_space_deadline(),
             ]
             .into_iter()
             .flatten()
@@ -1379,19 +1377,19 @@ fn ime_reaches_terminal(allowed: bool, event: &Ime) -> bool {
     allowed || matches!(event, Ime::Disabled)
 }
 
-fn native_ime_message(
+fn native_ime_messages(
     input: &mut InputState,
     model: &mut SessionModel,
     event: Ime,
-) -> Option<ClientMessage> {
+) -> [Option<ClientMessage>; 2] {
     match input.ime(event) {
-        Ok(message) => message,
+        Ok(messages) => messages,
         Err(detail) => {
             model.set_venus_notice(
                 LocalNoticeSource::Input,
                 format!("Venus could not encode input: {detail}"),
             );
-            None
+            [None, None]
         }
     }
 }
@@ -2028,8 +2026,8 @@ mod tests {
         let rejected = "x".repeat(session::MAX_KEY_TEXT_BYTES + 1);
 
         assert_eq!(
-            native_ime_message(&mut input, &mut model, Ime::Commit(rejected)),
-            None
+            native_ime_messages(&mut input, &mut model, Ime::Commit(rejected)),
+            [None, None]
         );
         assert_eq!(
             model.notice(),
@@ -2039,11 +2037,31 @@ mod tests {
         );
 
         assert!(matches!(
-            native_ime_message(&mut input, &mut model, Ime::Commit("界".into())),
-            Some(ClientMessage::Key(_))
+            native_ime_messages(&mut input, &mut model, Ime::Commit("界".into())),
+            [None, Some(ClientMessage::Key(_))]
         ));
         assert!(model.clear_venus_notice(LocalNoticeSource::Input));
         assert_eq!(model.notice(), None);
+    }
+
+    #[test]
+    fn consecutive_ime_commits_preserve_a_buffered_space_in_order() {
+        let mut input = InputState::default();
+        let mut model = SessionModel::new();
+
+        assert_eq!(
+            native_ime_messages(&mut input, &mut model, Ime::Commit(" ".into())),
+            [None, None]
+        );
+        let [
+            Some(ClientMessage::Key(space)),
+            Some(ClientMessage::Key(letter)),
+        ] = native_ime_messages(&mut input, &mut model, Ime::Commit("a".into()))
+        else {
+            panic!("expected the buffered and current IME commits");
+        };
+        assert_eq!(space.text.as_deref(), Some(" "));
+        assert_eq!(letter.text.as_deref(), Some("a"));
     }
 
     #[test]
