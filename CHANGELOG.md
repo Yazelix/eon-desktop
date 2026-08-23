@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show each visible live Orbit pane's current title and local-path working
+  directory in its existing clipped workspace header and accessibility name,
+  with honest bounded fallbacks and prompt observer retirement when hidden.
 - Make Venus native Linux Wayland/Vulkan-only, remove X11 and Metal features and
   unsupported compatibility calls, and replace arboard's X11 fallback with
   direct Wayland data-control clipboard ownership.

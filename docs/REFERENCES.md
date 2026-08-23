@@ -152,6 +152,33 @@ frame queue. An unsupported header version retains explicit incompatibility UX
 without decoding another revision. No input, renderer, gesture, retry, schema,
 adapter, or compatibility path is added.
 
+## Required for read-only pane metadata
+
+`ven-render-live-pane-title-cwd-8c7` consumes canonical ORBS v5 from exact
+[Eon Sessions](https://github.com/Yazelix/eon-sessions/tree/69c402737799f03e615473956954a043647a4713)
+source `69c402737799f03e615473956954a043647a4713`. Orbit owns bounded title and
+working-directory values plus the read-only `ObserveMetadata` role; Venus sends
+that one request, rejects every other role or message order, and retains only
+the latest accepted update for each visible live endpoint.
+The projection removes only `file://localhost` and empty-authority `file://`
+decoration from an absolute local path. Remote authorities, percent encoding,
+and every other value remain literal rather than introducing URI policy.
+
+Exact EONW producer proof `4af395aea06c230ee6b18cf0755ae25915c0b88d`
+remains authoritative for active-tab visibility, pane liveness, endpoint
+identity, and selection. Venus therefore starts no hidden or offline observer,
+retires obsolete endpoints directly from each accepted snapshot, and defers the
+selected endpoint's observer until its presentation attachment has completed.
+That deferral preserves Orbit's single pending-negotiation slot without adding
+retry policy or another lifecycle owner.
+
+[Zellij](https://github.com/zellij-org/zellij/tree/b9637022eaddb22855dc9914a0cc06762a124b8c)
+at `b9637022eaddb22855dc9914a0cc06762a124b8c` is MIT-licensed comparison-only
+evidence for showing a pane title within the available header width. Venus
+adopts that narrow outcome through its existing header clipping and rejects
+Zellij's terminal, tab, layout, plugin, configuration, and title-policy owners.
+No dependency or copied source is added.
+
 ## Required for native paste
 
 `ven-native-clipboard-paste-uas` consumes Orbit `ORB-C5` at accepted proof

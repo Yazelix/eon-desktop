@@ -9,10 +9,11 @@ and sends semantic interaction back to the authoritative session runtime.
 The Venus client implements one native Wayland window on Linux for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
-pane accordion, routes selection back as semantic Eon actions, and attaches only
-the selected live Orbit endpoint. It automatically recovers that attachment after
-retryable local socket loss, detaches without ending any Session, and does not own
-a PTY, terminal emulator, or workspace topology.
+pane accordion. Visible live pane headers show Orbit's current title and working
+directory, while only the selected endpoint receives presentation and input. It
+automatically recovers that attachment after retryable local socket loss, detaches
+without ending any Session, and does not own a PTY, terminal emulator, or
+workspace topology.
 
 ## Ownership
 
@@ -25,16 +26,17 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
 `4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
 selection, identities, actions, and pane-to-Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v1, and ORBS v4 at exact Orbit proof
-`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v1, and ORBS v5 at exact Orbit proof
+`69c402737799f03e615473956954a043647a4713`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
 
 An Eon Workspace is composition, not another Session. Each pane references an
 independent Orbit Session. Venus keeps the EONW connection for workspace state
-and actions plus one Orbit connection to the selected pane; inactive Sessions
-remain alive without a Venus connection.
+and actions, one presentation connection to the selected pane, and one read-only
+metadata observer for each visible live pane. Hidden and offline Sessions have no
+Venus observer and remain alive independently.
 
 ## Run
 
@@ -178,8 +180,8 @@ are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
-`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` Orbit package revision supplies
-accepted ORBS v4 and ORB-C12 and resolves from GitHub.
+`69c402737799f03e615473956954a043647a4713` Orbit package revision supplies
+accepted ORBS v5, including read-only pane metadata, and resolves from GitHub.
 
 ## LOC scorecard
 
@@ -190,11 +192,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 200 |
-| Contracts and references | 546 |
-| Crate decisions | 158 |
-| Changelog | 120 |
-| Rust source, including unit tests | 10,235 |
+| README | 202 |
+| Contracts and references | 587 |
+| Crate decisions | 160 |
+| Changelog | 123 |
+| Rust source, including unit tests | 10,731 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **12,310** |
+| **Total** | **12,854** |
