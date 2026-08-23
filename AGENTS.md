@@ -221,10 +221,10 @@ authority; Eon owns product orchestration, policy, composition, and distribution
 
 This repository implements the accepted `ven-upt.2` standalone Linux slice and
 the accepted `ven-c87` Eon workspace slice. `VEN-C8` is proved through Venus
-`33a3d9af9f4c6015301ad6829fe733413c5b683d`: base workspace materialization,
-native refresh, direct workspace shortcuts, and fitting pane-header
-materialization. Native Linux Wayland is the sole platform; broader compositor
-coverage remains unproved.
+`3612a929402de00d07d582b6547d99f66afe5cad`: base workspace materialization,
+native refresh and shortcuts, fitting pane-header materialization, and
+cache-coherent live title/CWD metadata for every visible pane. Native Linux
+Wayland is the sole platform; broader compositor coverage remains unproved.
 
 ## Product boundary
 
