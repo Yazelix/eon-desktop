@@ -29,6 +29,7 @@ pub struct InputState {
     copy_pressed: bool,
     paste_shortcuts: Vec<WinitPhysicalKey>,
     workspace_shortcuts: Vec<KeyCode>,
+    pending_ime_space: Option<ClientMessage>,
 }
 
 impl InputState {
@@ -179,6 +180,19 @@ impl InputState {
         }
     }
 
+    pub fn resolve_pending_ime_space(
+        &mut self,
+        next_key: Option<(WinitPhysicalKey, ElementState, Option<&str>)>,
+    ) -> Option<ClientMessage> {
+        let pending = self.pending_ime_space.take()?;
+        let duplicate = next_key.is_some_and(|(key, state, text)| {
+            key == WinitPhysicalKey::Code(KeyCode::Space)
+                && state == ElementState::Pressed
+                && text == Some(" ")
+        });
+        (!duplicate).then_some(pending)
+    }
+
     /// Track native IME state and return a semantic commit or explicit rejection.
     pub fn ime(&mut self, event: Ime) -> Result<Option<ClientMessage>, &'static str> {
         match event {
@@ -198,7 +212,8 @@ impl InputState {
                     return Ok(None);
                 }
                 let text = key_text(&text).ok_or(IME_REJECTED)?;
-                Ok(Some(ClientMessage::Key(KeyEvent {
+                let ime_space = text == " ";
+                let message = ClientMessage::Key(KeyEvent {
                     action: KeyAction::Press,
                     key: PhysicalKey::UNIDENTIFIED,
                     modifiers: self.modifiers,
@@ -206,7 +221,13 @@ impl InputState {
                     composing: false,
                     text: Some(text),
                     unshifted_codepoint: None,
-                })))
+                });
+                if ime_space {
+                    self.pending_ime_space = Some(message);
+                    Ok(None)
+                } else {
+                    Ok(Some(message))
+                }
             }
         }
     }
@@ -214,6 +235,7 @@ impl InputState {
     fn clear_composition(&mut self) {
         self.composing = false;
         self.preedit.clear();
+        self.pending_ime_space = None;
     }
 
     pub fn move_pointer(&mut self, x: f64, y: f64) -> Option<ClientMessage> {
@@ -794,6 +816,39 @@ mod tests {
             assert_eq!(input.ime(Ime::Commit(rejected)), Err(IME_REJECTED));
             assert!(input.preedit().is_empty());
         }
+    }
+
+    #[test]
+    fn coalesces_only_an_immediately_matching_physical_space() {
+        use ElementState::{Pressed, Released};
+
+        let mut input = InputState::default();
+        let space = WinitPhysicalKey::Code(KeyCode::Space);
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok(None));
+        assert_eq!(
+            input.resolve_pending_ime_space(Some((space, Pressed, Some(" ")))),
+            None
+        );
+        assert!(input.key_is_current(space, Pressed, false));
+        input.commit_key(space, Pressed);
+        assert!(input.key_is_current(space, Pressed, true));
+        assert!(input.key_is_current(space, Released, false));
+        input.commit_key(space, Released);
+
+        for next_key in [
+            Some((WinitPhysicalKey::Code(KeyCode::KeyA), Pressed, Some("a"))),
+            None,
+        ] {
+            assert_eq!(input.ime(Ime::Commit(" ".into())), Ok(None));
+            let Some(ClientMessage::Key(commit)) = input.resolve_pending_ime_space(next_key) else {
+                panic!("expected the standalone IME commit");
+            };
+            assert_eq!(commit.text.as_deref(), Some(" "));
+        }
+
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok(None));
+        input.retire_orbit_generation();
+        assert_eq!(input.resolve_pending_ime_space(None), None);
     }
 
     #[test]

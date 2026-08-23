@@ -24,7 +24,7 @@ use winit::platform::wayland::WindowAttributesExtWayland;
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
-    event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
+    event::{DeviceEvent, DeviceId, ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     window::{UserAttentionType, Window, WindowAttributes, WindowId},
@@ -883,6 +883,21 @@ impl ApplicationHandler<UserEvent> for Application {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        let Some(window) = &self.window else {
+            return;
+        };
+        if window.window.id() != window_id {
+            return;
+        }
+        let next_key = match &event {
+            WindowEvent::KeyboardInput { event, .. } => {
+                Some((event.physical_key, event.state, event.text.as_deref()))
+            }
+            _ => None,
+        };
+        if let Some(message) = self.input.resolve_pending_ime_space(next_key) {
+            self.send(message);
+        }
         let workspace = self.workspace_scene();
         let candidate = self.presentation_candidate(workspace.as_ref());
         let presentation_current = self.presentation.is_current(candidate);
@@ -890,9 +905,6 @@ impl ApplicationHandler<UserEvent> for Application {
         let Some(state) = &mut self.window else {
             return;
         };
-        if state.window.id() != window_id {
-            return;
-        }
         state.adapter.process_event(&state.window, &event);
 
         match event {
@@ -1158,7 +1170,16 @@ impl ApplicationHandler<UserEvent> for Application {
         }
     }
 
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, _: DeviceEvent) {
+        if let Some(message) = self.input.resolve_pending_ime_space(None) {
+            self.send(message);
+        }
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(message) = self.input.resolve_pending_ime_space(None) {
+            self.send(message);
+        }
         let now = Instant::now();
         self.retry_orbit(now);
         let blinking = self
