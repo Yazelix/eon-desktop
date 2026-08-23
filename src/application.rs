@@ -428,8 +428,9 @@ impl Application {
                 (self.workspace_model.mark_unavailable(detail), false)
             }
         };
-        if unavailable {
+        if unavailable && !self.metadata_observers.is_empty() {
             self.metadata_observers.clear();
+            self.presentation.invalidate();
         }
         if snapshot_changed {
             self.reveal_workspace_selection();
@@ -460,8 +461,10 @@ impl Application {
                     self.model.is_attached(),
                 )
             });
+        let before = self.metadata_observers.len();
         self.metadata_observers
             .retain(|endpoint, _| endpoints.contains(endpoint));
+        let retained = self.metadata_observers.len();
         for endpoint in endpoints {
             let socket = PathBuf::from(OsString::from_vec(endpoint.clone()));
             let proxy = self.proxy.clone();
@@ -473,6 +476,9 @@ impl Application {
                     }),
                     metadata: PaneMetadata::Connecting,
                 });
+        }
+        if before != retained || retained != self.metadata_observers.len() {
+            self.presentation.invalidate();
         }
     }
 
@@ -495,6 +501,7 @@ impl Application {
             }
         }
         if changed {
+            self.presentation.invalidate();
             self.refresh_client_view();
         }
     }

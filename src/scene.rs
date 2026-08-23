@@ -86,16 +86,13 @@ fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
     if !live {
         return format!("{id} offline");
     }
-    let PaneMetadata::Available {
-        title,
-        working_directory,
-    } = metadata
-    else {
-        return match metadata {
-            PaneMetadata::Connecting => format!("{id} connecting"),
-            PaneMetadata::Unavailable => format!("{id} unavailable"),
-            PaneMetadata::Available { .. } => unreachable!(),
-        };
+    let (title, working_directory) = match metadata {
+        PaneMetadata::Connecting => return format!("{id} connecting"),
+        PaneMetadata::Available {
+            title,
+            working_directory,
+        } => (title, working_directory),
+        PaneMetadata::Unavailable => return format!("{id} unavailable"),
     };
     let empty = (title.trim().is_empty(), working_directory.trim().is_empty());
     let title = bounded_metadata_field(title);
