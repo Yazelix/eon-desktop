@@ -183,16 +183,6 @@ preedit, disable, and notice recovery. No validator, protocol, dependency,
 module, split-commit, or platform policy changed. Linux proof is deterministic;
 native macOS IME quality remains unproved.
 
-Native Space coalescing hardening for `VEN-C2`: Venus
-`3b8b0ede0728d330cca61fc3ac62253e5cbc3f9d`; clean locked checks pass 60
-library, 27 host, and 14 canonical integration tests with Clippy warnings
-denied. One `InputState` defers only a standalone one-space Wayland IME commit
-through the immediately following native event, discards it only for a matching
-physical Space press, and otherwise queues the genuine IME commit. The existing
-physical path retains press, repeat, release, shortcut, and Kitty identity;
-focus or attachment retirement prevents replay into another Orbit generation.
-Installed Eon dogfood against this exact Venus revision remains unproved.
-
 `VEN-C1` Nerd Font materialization proof: Venus
 `a19f53578668b2234391fffbb29e7a3e1b61cc3d`; clean locked checks pass 48
 library, 19 host, and 14 canonical integration tests. A distribution-equivalent
