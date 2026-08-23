@@ -32,6 +32,7 @@ pub struct InputState {
     paste_shortcuts: Vec<WinitPhysicalKey>,
     workspace_shortcuts: Vec<KeyCode>,
     pending_ime_space: Option<(ClientMessage, Instant)>,
+    recent_physical_space_deadline: Option<Instant>,
 }
 
 impl InputState {
@@ -176,6 +177,12 @@ impl InputState {
 
     /// Record an admitted pressed state or forget an observed release.
     pub fn commit_key(&mut self, key: WinitPhysicalKey, state: ElementState) {
+        if state == ElementState::Pressed {
+            self.recent_physical_space_deadline = (key == WinitPhysicalKey::Code(KeyCode::Space))
+                .then(|| Instant::now() + IME_SPACE_COALESCE_INTERVAL);
+        } else if key == WinitPhysicalKey::Code(KeyCode::Space) {
+            self.recent_physical_space_deadline = None;
+        }
         self.pressed_keys.retain(|pressed| *pressed != key);
         if state == ElementState::Pressed {
             self.pressed_keys.push(key);
@@ -233,7 +240,18 @@ impl InputState {
                 }
                 let text = key_text(&text).ok_or(IME_REJECTED)?;
                 let ime_space = text == " ";
+                let duplicate_physical = ime_space
+                    && self
+                        .recent_physical_space_deadline
+                        .take()
+                        .is_some_and(|deadline| Instant::now() < deadline);
+                if !ime_space {
+                    self.recent_physical_space_deadline = None;
+                }
                 let pending = self.pending_ime_space.take().map(|(message, _)| message);
+                if duplicate_physical {
+                    return Ok([pending, None]);
+                }
                 let message = ClientMessage::Key(KeyEvent {
                     action: KeyAction::Press,
                     key: PhysicalKey::UNIDENTIFIED,
@@ -262,6 +280,7 @@ impl InputState {
     fn clear_native_input(&mut self) {
         self.clear_preedit();
         self.pending_ime_space = None;
+        self.recent_physical_space_deadline = None;
     }
 
     pub fn move_pointer(&mut self, x: f64, y: f64) -> Option<ClientMessage> {
@@ -884,6 +903,11 @@ mod tests {
         input.commit_key(space, Pressed);
         assert!(input.key_is_current(space, Pressed, true));
         assert!(input.key_is_current(space, Released, false));
+        input.commit_key(space, Released);
+
+        input.commit_key(space, Pressed);
+        assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
+        assert_eq!(input.pending_ime_space_deadline(), None);
         input.commit_key(space, Released);
 
         assert_eq!(input.ime(Ime::Commit(" ".into())), Ok([None, None]));
