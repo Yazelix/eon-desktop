@@ -10,6 +10,7 @@ use orbit_protocol::{
     },
 };
 use std::{
+    collections::{HashMap, HashSet},
     ffi::OsString,
     io::{self, Read, Write},
     os::unix::ffi::OsStringExt,
@@ -31,9 +32,9 @@ use winit::{
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, Color, ConnectionState, InputState,
-    LocalNoticeSource, PresentOutcome, Renderer, SessionModel, Transport, TransportEvent,
-    WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene,
-    WorkspaceTransport,
+    LocalNoticeSource, MetadataEvent, MetadataTransport, PaneMetadata, PresentOutcome, Renderer,
+    SessionModel, Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus, WorkspaceHit,
+    WorkspaceModel, WorkspaceScene, WorkspaceTransport,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -131,6 +132,7 @@ enum UserEvent {
     AccessKit(AccessKitEvent),
     Exit,
     Present,
+    Metadata,
     Transport,
     Workspace,
 }
@@ -149,6 +151,11 @@ struct WindowState {
     window: Arc<Window>,
 }
 
+struct MetadataObserver {
+    transport: MetadataTransport,
+    metadata: PaneMetadata,
+}
+
 struct Application {
     orbit_socket: PathBuf,
     workspace_socket: Option<PathBuf>,
@@ -161,6 +168,7 @@ struct Application {
     window: Option<WindowState>,
     transport: Option<Transport>,
     workspace_transport: Option<WorkspaceTransport>,
+    metadata_observers: HashMap<Vec<u8>, MetadataObserver>,
     model: SessionModel,
     workspace_model: WorkspaceModel,
     input: InputState,
@@ -205,6 +213,7 @@ impl Application {
             window: None,
             transport: None,
             workspace_transport: None,
+            metadata_observers: HashMap::new(),
             model: SessionModel::new(),
             workspace_model: WorkspaceModel::default(),
             input: InputState::default(),
@@ -288,12 +297,17 @@ impl Application {
     fn workspace_scene(&self) -> Option<WorkspaceScene> {
         let state = self.window.as_ref()?;
         self.workspace_model.snapshot().map(|snapshot| {
-            WorkspaceScene::from_snapshot(
+            WorkspaceScene::from_snapshot_with_metadata(
                 snapshot,
                 state.renderer.size(),
                 state.renderer.metrics(),
                 self.tab_scroll,
                 self.pane_scroll,
+                |endpoint| {
+                    self.metadata_observers
+                        .get(endpoint)
+                        .map(|observer| &observer.metadata)
+                },
             )
         })
     }
@@ -403,12 +417,20 @@ impl Application {
     }
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
+        let received_snapshot = matches!(
+            &event,
+            WorkspaceEvent::Response(eon_workspace_protocol::Response::Snapshot(_))
+        );
+        let unavailable = matches!(&event, WorkspaceEvent::Unavailable(_));
         let (view_changed, snapshot_changed) = match event {
             WorkspaceEvent::Response(response) => self.workspace_model.apply(response),
             WorkspaceEvent::Unavailable(detail) => {
                 (self.workspace_model.mark_unavailable(detail), false)
             }
         };
+        if unavailable {
+            self.metadata_observers.clear();
+        }
         if snapshot_changed {
             self.reveal_workspace_selection();
             self.presentation.invalidate();
@@ -419,7 +441,60 @@ impl Application {
                 self.set_orbit_attachment(endpoint.to_vec(), live);
             }
         }
+        if received_snapshot {
+            self.reconcile_metadata_observers();
+        }
         if view_changed {
+            self.refresh_client_view();
+        }
+    }
+
+    fn reconcile_metadata_observers(&mut self) {
+        let endpoints = self
+            .workspace_model
+            .snapshot()
+            .map_or_else(HashSet::new, |snapshot| {
+                visible_metadata_endpoints(
+                    snapshot,
+                    self.active_endpoint.as_deref(),
+                    self.model.is_attached(),
+                )
+            });
+        self.metadata_observers
+            .retain(|endpoint, _| endpoints.contains(endpoint));
+        for endpoint in endpoints {
+            let socket = PathBuf::from(OsString::from_vec(endpoint.clone()));
+            let proxy = self.proxy.clone();
+            self.metadata_observers
+                .entry(endpoint)
+                .or_insert_with(|| MetadataObserver {
+                    transport: MetadataTransport::start(socket, move || {
+                        let _ = proxy.send_event(UserEvent::Metadata);
+                    }),
+                    metadata: PaneMetadata::Connecting,
+                });
+        }
+    }
+
+    fn handle_metadata(&mut self) {
+        let mut changed = false;
+        for observer in self.metadata_observers.values_mut() {
+            let Some(event) = observer.transport.drain_event() else {
+                continue;
+            };
+            let metadata = match event {
+                MetadataEvent::Metadata(metadata) => PaneMetadata::Available {
+                    title: metadata.title,
+                    working_directory: metadata.working_directory,
+                },
+                MetadataEvent::Unavailable => PaneMetadata::Unavailable,
+            };
+            if observer.metadata != metadata {
+                observer.metadata = metadata;
+                changed = true;
+            }
+        }
+        if changed {
             self.refresh_client_view();
         }
     }
@@ -589,6 +664,7 @@ impl Application {
                     if let Some(message) = self.input.latest_focus() {
                         self.send(message);
                     }
+                    self.reconcile_metadata_observers();
                 }
             }
             TransportEvent::Incompatible { version } => self.model.mark_incompatible(version),
@@ -1109,6 +1185,7 @@ impl ApplicationHandler<UserEvent> for Application {
                         .request_user_attention(Some(UserAttentionType::Informational));
                 }
             }
+            UserEvent::Metadata => self.handle_metadata(),
             UserEvent::Transport => {
                 let events = self
                     .transport
@@ -1243,6 +1320,26 @@ fn retry_is_allowed(
     active: Option<&[u8]>,
 ) -> bool {
     !workspace || selected.is_some_and(|(endpoint, live)| live && active == Some(endpoint))
+}
+
+fn visible_metadata_endpoints(
+    snapshot: &eon_workspace_protocol::Snapshot,
+    selected_endpoint: Option<&[u8]>,
+    selected_attached: bool,
+) -> HashSet<Vec<u8>> {
+    let mut endpoints = snapshot
+        .tabs
+        .iter()
+        .find(|tab| tab.id == snapshot.active_tab)
+        .into_iter()
+        .flat_map(|tab| &tab.panes)
+        .filter(|pane| pane.live)
+        .map(|pane| pane.endpoint.clone())
+        .collect::<HashSet<_>>();
+    if !selected_attached && let Some(endpoint) = selected_endpoint {
+        endpoints.remove(endpoint);
+    }
+    endpoints
 }
 
 fn server_failure_suppresses_retry(message: &ServerMessage) -> bool {
@@ -1541,6 +1638,53 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
+    use eon_workspace_protocol::{Pane, Snapshot, Tab};
+
+    #[test]
+    fn metadata_endpoints_are_only_live_panes_in_the_active_tab() {
+        let snapshot = Snapshot {
+            active_tab: "tab-1".into(),
+            tabs: vec![
+                Tab {
+                    id: "tab-1".into(),
+                    selected_pane: "pane-1".into(),
+                    panes: vec![
+                        Pane {
+                            id: "pane-1".into(),
+                            session: "session-1".into(),
+                            endpoint: b"one".to_vec(),
+                            live: true,
+                        },
+                        Pane {
+                            id: "pane-2".into(),
+                            session: "session-2".into(),
+                            endpoint: b"offline".to_vec(),
+                            live: false,
+                        },
+                    ],
+                },
+                Tab {
+                    id: "tab-2".into(),
+                    selected_pane: "pane-3".into(),
+                    panes: vec![Pane {
+                        id: "pane-3".into(),
+                        session: "session-3".into(),
+                        endpoint: b"hidden".to_vec(),
+                        live: true,
+                    }],
+                },
+            ],
+        };
+
+        assert_eq!(
+            visible_metadata_endpoints(&snapshot, Some(b"one"), false),
+            HashSet::new()
+        );
+        assert_eq!(
+            visible_metadata_endpoints(&snapshot, Some(b"one"), true),
+            [b"one".to_vec()].into()
+        );
+    }
 
     #[test]
     fn renderer_failure_uses_non_gpu_diagnostics_until_success() {

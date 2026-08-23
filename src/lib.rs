@@ -14,7 +14,10 @@ pub use input::InputState;
 pub use model::{ConnectionState, LocalNoticeSource, ModelError, SessionModel, WorkspaceModel};
 pub use render::{CellMetrics, PresentOutcome, RenderError, Renderer};
 pub use scene::{
-    Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene, SceneRect, WorkspaceFocus,
-    WorkspaceHit, WorkspacePane, WorkspaceScene, WorkspaceTab,
+    Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, PaneMetadata, Scene, SceneRect,
+    WorkspaceFocus, WorkspaceHit, WorkspacePane, WorkspaceScene, WorkspaceTab,
 };
-pub use transport::{SendError, Transport, TransportEvent, WorkspaceEvent, WorkspaceTransport};
+pub use transport::{
+    MetadataEvent, MetadataTransport, SendError, Transport, TransportEvent, WorkspaceEvent,
+    WorkspaceTransport,
+};

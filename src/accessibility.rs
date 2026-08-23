@@ -401,6 +401,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PaneMetadata;
     use eon_workspace_protocol::{Pane, Snapshot as WorkspaceSnapshot, Tab};
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
@@ -708,7 +709,11 @@ mod tests {
 
     #[test]
     fn workspace_accessibility_order_matches_tabs_then_one_expanded_pane() {
-        let workspace = WorkspaceScene::from_snapshot(
+        let metadata = PaneMetadata::Available {
+            title: "Codex ◐".into(),
+            working_directory: "file:///tmp/eon".into(),
+        };
+        let workspace = WorkspaceScene::from_snapshot_with_metadata(
             &WorkspaceSnapshot {
                 active_tab: "tab-1".into(),
                 tabs: vec![
@@ -746,6 +751,7 @@ mod tests {
             CellMetrics::for_scale(1.0),
             0.0,
             0.0,
+            |endpoint| (endpoint == b"/run/eon/two.sock").then_some(&metadata),
         );
         let terminal_bounds = rect(workspace.visible_terminal().unwrap());
         let mut snapshot = Snapshot {
@@ -776,7 +782,11 @@ mod tests {
         );
         assert_eq!(node(&update, tab_1).role(), Role::Tab);
         assert_eq!(node(&update, pane_1).label(), Some("pane-1 offline"));
-        assert_eq!(node(&update, pane_2).label(), Some("pane-2"));
+        assert_eq!(workspace.panes[1].label(), "Codex ◐ · /tmp/eon");
+        assert_eq!(
+            node(&update, pane_2).label(),
+            Some(workspace.panes[1].label())
+        );
         assert_eq!(node(&update, pane_2).role(), Role::Button);
         assert_eq!(node(&update, pane_2).is_expanded(), Some(true));
         assert_eq!(node(&update, CONTENT).bounds(), Some(terminal_bounds));
@@ -801,8 +811,8 @@ mod tests {
         let first = activation.request_initial_tree().unwrap();
         let tab_a = tree_node_id(&first, "tab-a");
         let tab_b = tree_node_id(&first, "tab-b");
-        let pane_a = tree_node_id(&first, "pane-a");
-        let pane_b = tree_node_id(&first, "pane-b");
+        let pane_a = tree_node_id(&first, "pane-a unavailable");
+        let pane_b = tree_node_id(&first, "pane-b unavailable");
         assert_ne!(tab_a, pane_a);
 
         set_workspace(
@@ -813,7 +823,7 @@ mod tests {
         let second = activation.request_initial_tree().unwrap();
 
         assert_eq!(tree_node_id(&second, "tab-b"), tab_b);
-        assert_eq!(tree_node_id(&second, "pane-b"), pane_b);
+        assert_eq!(tree_node_id(&second, "pane-b unavailable"), pane_b);
         assert_eq!(second.focus, pane_b);
         assert_eq!(
             accessibility.workspace_target(tab_b),
@@ -841,9 +851,9 @@ mod tests {
         let third = activation.request_initial_tree().unwrap();
 
         assert_eq!(tree_node_id(&third, "tab-b"), tab_b);
-        assert_eq!(tree_node_id(&third, "pane-b"), pane_b);
+        assert_eq!(tree_node_id(&third, "pane-b unavailable"), pane_b);
         assert_ne!(tree_node_id(&third, "tab-c"), tab_a);
-        assert_ne!(tree_node_id(&third, "pane-c"), pane_a);
+        assert_ne!(tree_node_id(&third, "pane-c unavailable"), pane_a);
         assert_eq!(third.focus, pane_b);
     }
 }

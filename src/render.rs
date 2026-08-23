@@ -1083,9 +1083,8 @@ impl Renderer {
                     accent,
                 );
             }
-            let label = pane.label();
             self.push_text_clipped(
-                &label,
+                pane.label(),
                 pane.rect.left + self.metrics.padding,
                 pane.rect.top + (pane.rect.height - self.metrics.height) / 2.0,
                 pane.rect.width - self.metrics.padding * 2.0,

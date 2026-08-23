@@ -174,8 +174,8 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
 }
 
 #[test]
-fn canonical_session_revision_is_orbs_v4() {
-    assert_eq!(session::VERSION, 4);
+fn canonical_session_revision_is_orbs_v5() {
+    assert_eq!(session::VERSION, 5);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn ordered_frames_reject_stale_revisions_without_replacing_state() {
 }
 
 #[test]
-fn orbs_v4_wheel_outcomes_reuse_the_existing_result_and_frame_owners() {
+fn orbs_v5_wheel_outcomes_reuse_the_existing_result_and_frame_owners() {
     let mut model = attached_model();
     model
         .apply(ServerMessage::Failure(Failure {

@@ -59,16 +59,81 @@ pub struct WorkspacePane {
     pub live: bool,
     pub selected: bool,
     pub rect: SceneRect,
+    label: String,
 }
 
 impl WorkspacePane {
-    pub(crate) fn label(&self) -> String {
-        if self.live {
-            self.id.clone()
-        } else {
-            format!("{} offline", self.id)
-        }
+    pub(crate) fn label(&self) -> &str {
+        &self.label
     }
+}
+
+/// Latest bounded read-only metadata state for one visible Eon pane endpoint.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum PaneMetadata {
+    Connecting,
+    Available {
+        title: String,
+        working_directory: String,
+    },
+    #[default]
+    Unavailable,
+}
+
+const MAX_PANE_METADATA_FIELD_CHARS: usize = 80;
+
+fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
+    if !live {
+        return format!("{id} offline");
+    }
+    let PaneMetadata::Available {
+        title,
+        working_directory,
+    } = metadata
+    else {
+        return match metadata {
+            PaneMetadata::Connecting => format!("{id} connecting"),
+            PaneMetadata::Unavailable => format!("{id} unavailable"),
+            PaneMetadata::Available { .. } => unreachable!(),
+        };
+    };
+    let empty = (title.trim().is_empty(), working_directory.trim().is_empty());
+    let title = bounded_metadata_field(title);
+    let working_directory = bounded_metadata_field(local_working_directory(working_directory));
+    match empty {
+        (false, false) => format!("{title} · {working_directory}"),
+        (false, true) => title,
+        (true, false) => working_directory,
+        (true, true) => id.to_owned(),
+    }
+}
+
+fn local_working_directory(value: &str) -> &str {
+    value
+        .strip_prefix("file://localhost")
+        .filter(|path| path.starts_with('/'))
+        .or_else(|| {
+            value
+                .strip_prefix("file://")
+                .filter(|path| path.starts_with('/'))
+        })
+        .unwrap_or(value)
+}
+
+fn bounded_metadata_field(value: &str) -> String {
+    let mut bounded = String::with_capacity(value.len().min(MAX_PANE_METADATA_FIELD_CHARS));
+    for character in value.chars().take(MAX_PANE_METADATA_FIELD_CHARS) {
+        bounded.push(if character.is_control() {
+            '\u{fffd}'
+        } else {
+            character
+        });
+    }
+    if value.chars().count() > MAX_PANE_METADATA_FIELD_CHARS {
+        bounded.pop();
+        bounded.push('…');
+    }
+    bounded
 }
 
 /// Native workspace target at one physical point.
@@ -112,6 +177,20 @@ impl WorkspaceScene {
         metrics: CellMetrics,
         tab_scroll: f32,
         pane_scroll: f32,
+    ) -> Self {
+        Self::from_snapshot_with_metadata(snapshot, size, metrics, tab_scroll, pane_scroll, |_| {
+            None
+        })
+    }
+
+    #[must_use]
+    pub fn from_snapshot_with_metadata<'a>(
+        snapshot: &Snapshot,
+        size: PhysicalSize<u32>,
+        metrics: CellMetrics,
+        tab_scroll: f32,
+        pane_scroll: f32,
+        metadata: impl Fn(&[u8]) -> Option<&'a PaneMetadata>,
     ) -> Self {
         let width = size.width as f32;
         let height = size.height as f32;
@@ -182,23 +261,30 @@ impl WorkspaceScene {
             .panes
             .iter()
             .enumerate()
-            .map(|(index, pane)| WorkspacePane {
-                id: pane.id.clone(),
-                live: pane.live,
-                selected: index == selected_pane,
-                rect: SceneRect {
-                    left: 0.0,
-                    top: tab_height
-                        + index as f32 * pane_height
-                        + if index > selected_pane {
-                            terminal_height
-                        } else {
-                            0.0
-                        }
-                        - pane_scroll,
-                    width,
-                    height: pane_height,
-                },
+            .map(|(index, pane)| {
+                let label = metadata(&pane.endpoint).map_or_else(
+                    || pane_label(&pane.id, pane.live, &PaneMetadata::Unavailable),
+                    |metadata| pane_label(&pane.id, pane.live, metadata),
+                );
+                WorkspacePane {
+                    id: pane.id.clone(),
+                    live: pane.live,
+                    selected: index == selected_pane,
+                    rect: SceneRect {
+                        left: 0.0,
+                        top: tab_height
+                            + index as f32 * pane_height
+                            + if index > selected_pane {
+                                terminal_height
+                            } else {
+                                0.0
+                            }
+                            - pane_scroll,
+                        width,
+                        height: pane_height,
+                    },
+                    label,
+                }
             })
             .collect();
         let terminal = SceneRect {
@@ -705,6 +791,62 @@ fn resolve_color(color: StyleColor, default: Rgb, palette: &[Rgb; 256]) -> Color
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pane_metadata_label_is_bounded_safe_and_has_honest_fallbacks() {
+        let metadata = PaneMetadata::Available {
+            title: format!("Codex\n{}", "界".repeat(90)),
+            working_directory: format!("file:///tmp/{}", "eon".repeat(30)),
+        };
+        let label = pane_label("pane-1", true, &metadata);
+
+        assert!(label.starts_with("Codex�界"));
+        assert!(label.contains(" · /tmp/"));
+        assert!(!label.contains("file://"));
+        assert!(label.chars().count() <= 163);
+        assert_eq!(
+            pane_label(
+                "pane-1",
+                true,
+                &PaneMetadata::Available {
+                    title: String::new(),
+                    working_directory: "file://localhost/home/lucca".into(),
+                },
+            ),
+            "/home/lucca"
+        );
+        assert_eq!(
+            pane_label(
+                "pane-1",
+                true,
+                &PaneMetadata::Available {
+                    title: String::new(),
+                    working_directory: "file://server/share".into(),
+                },
+            ),
+            "file://server/share"
+        );
+        assert_eq!(
+            pane_label("pane-1", true, &PaneMetadata::Connecting),
+            "pane-1 connecting"
+        );
+        assert_eq!(
+            pane_label("pane-1", true, &PaneMetadata::Unavailable),
+            "pane-1 unavailable"
+        );
+        assert_eq!(
+            pane_label(
+                "pane-1",
+                true,
+                &PaneMetadata::Available {
+                    title: " \t".into(),
+                    working_directory: String::new(),
+                },
+            ),
+            "pane-1"
+        );
+        assert_eq!(pane_label("pane-1", false, &metadata), "pane-1 offline");
+    }
 
     fn draw_style(selected: bool) -> DrawStyle {
         DrawStyle {
