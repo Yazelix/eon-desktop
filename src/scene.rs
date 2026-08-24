@@ -95,7 +95,7 @@ fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
         return id.to_owned();
     }
     let working_directory = bounded_metadata_field(&compact_working_directory(working_directory));
-    format!("{id} · {working_directory}")
+    format!("{id}  {working_directory}")
 }
 
 fn local_working_directory(value: &str) -> &str {
@@ -820,9 +820,9 @@ mod tests {
         };
         let label = pane_label("p1", true, &metadata);
 
-        assert_eq!(label, format!("p1 · …/{}", "eon".repeat(26)));
+        assert_eq!(label, format!("p1  …/{}", "eon".repeat(26)));
         assert!(!label.contains("file://"));
-        assert_eq!(label.chars().count(), 85);
+        assert_eq!(label.chars().count(), 84);
         let home = std::env::var("HOME").expect("HOME is required by Venus");
         assert_eq!(
             pane_label(
@@ -832,7 +832,7 @@ mod tests {
                     working_directory: format!("file://localhost{home}/pjs/yazelix-dir/eon"),
                 },
             ),
-            "p1 · ~/pjs/yazelix-dir/eon"
+            "p1  ~/pjs/yazelix-dir/eon"
         );
         let long_home_label = pane_label(
             "p1",
@@ -841,10 +841,10 @@ mod tests {
                 working_directory: format!("{home}/{}/eon-desktop", "parent/".repeat(20)),
             },
         );
-        assert!(long_home_label.starts_with("p1 · ~/…/"));
+        assert!(long_home_label.starts_with("p1  ~/…/"));
         assert!(long_home_label.ends_with("/eon-desktop"));
         assert!(!long_home_label.contains(&home));
-        assert!(long_home_label.chars().count() <= 85);
+        assert!(long_home_label.chars().count() <= 84);
         assert_eq!(
             pane_label(
                 "p1",
@@ -853,7 +853,7 @@ mod tests {
                     working_directory: "file://server/share".into(),
                 },
             ),
-            "p1 · /share"
+            "p1  /share"
         );
         assert_eq!(
             pane_label(
@@ -863,7 +863,7 @@ mod tests {
                     working_directory: "file:///".into(),
                 },
             ),
-            "p1 · /"
+            "p1  /"
         );
         assert_eq!(
             pane_label(
@@ -873,7 +873,7 @@ mod tests {
                     working_directory: format!("file://host{home}"),
                 },
             ),
-            "p1 · "
+            "p1  "
         );
         assert_eq!(
             pane_label(
@@ -883,7 +883,7 @@ mod tests {
                     working_directory: "file:///tmp/a\nb".into(),
                 },
             ),
-            "p1 · /tmp/a�b"
+            "p1  /tmp/a�b"
         );
         assert_eq!(
             pane_label("p1", true, &PaneMetadata::Connecting),

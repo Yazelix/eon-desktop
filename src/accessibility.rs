@@ -781,7 +781,7 @@ mod tests {
         );
         assert_eq!(node(&update, tab_1).role(), Role::Tab);
         assert_eq!(node(&update, pane_1).label(), Some("p1 offline"));
-        assert_eq!(workspace.panes[1].label(), "p2 · /tmp/eon");
+        assert_eq!(workspace.panes[1].label(), "p2  /tmp/eon");
         assert_eq!(
             node(&update, pane_2).label(),
             Some(workspace.panes[1].label())
