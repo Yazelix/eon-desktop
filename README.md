@@ -11,7 +11,7 @@ standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion. Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and Orbit's home-relative working directory, using a home
-marker at `HOME`, while
+marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
 only the selected endpoint receives presentation and input. It
 automatically recovers that attachment after retryable local socket loss, detaches
 without ending any Session, and does not own a PTY, terminal emulator, or
@@ -146,7 +146,8 @@ Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
 and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
 available. Pane headers show pane identity, two spaces, then the home marker at
 exact home, a `~/`-anchored path below home, or an absolute path elsewhere;
-overlong labels preserve their rightmost components. Terminal titles stay in
+unset or empty `HOME` keeps paths absolute. Overlong labels preserve their
+rightmost components. Terminal titles stay in
 the selected native window, and Session mappings remain in Eon diagnostics.
 Wheel over the tab strip or a pane header to reach clipped headers without
 scrolling the terminal. In standalone mode these keys remain Orbit input.
@@ -196,11 +197,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 206 |
-| Contracts and references | 597 |
+| README | 207 |
+| Contracts and references | 598 |
 | Crate decisions | 160 |
 | Changelog | 125 |
-| Rust source, including unit tests | 10,794 |
+| Rust source, including unit tests | 10,801 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **12,933** |
+| **Total** | **12,942** |
