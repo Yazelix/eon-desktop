@@ -94,7 +94,7 @@ fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
     if working_directory.trim().is_empty() {
         return id.to_owned();
     }
-    let working_directory = bounded_metadata_field(compact_working_directory(working_directory));
+    let working_directory = bounded_metadata_field(&compact_working_directory(working_directory));
     format!("{id} · {working_directory}")
 }
 
@@ -105,35 +105,56 @@ fn local_working_directory(value: &str) -> &str {
         .unwrap_or(value)
 }
 
-fn compact_working_directory(value: &str) -> &str {
+fn compact_working_directory(value: &str) -> String {
     let value = local_working_directory(value);
-    if std::env::var_os("HOME")
-        .as_deref()
-        .is_some_and(|home| Path::new(value) == Path::new(home))
-    {
-        HOME_MARKER
-    } else {
-        Path::new(value)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(value)
+    let path = Path::new(value);
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = Path::new(&home);
+        if path == home {
+            return HOME_MARKER.to_owned();
+        }
+        if let Ok(relative) = path.strip_prefix(home) {
+            return format!("~/{}", relative.display());
+        }
     }
+    value.to_owned()
 }
 
 fn bounded_metadata_field(value: &str) -> String {
-    let mut bounded = String::with_capacity(value.len().min(MAX_PANE_METADATA_FIELD_CHARS));
-    for character in value.chars().take(MAX_PANE_METADATA_FIELD_CHARS) {
-        bounded.push(if character.is_control() {
-            '\u{fffd}'
-        } else {
-            character
-        });
+    let value: String = value
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                '\u{fffd}'
+            } else {
+                character
+            }
+        })
+        .collect();
+    let length = value.chars().count();
+    if length <= MAX_PANE_METADATA_FIELD_CHARS {
+        return value;
     }
-    if value.chars().count() > MAX_PANE_METADATA_FIELD_CHARS {
-        bounded.pop();
-        bounded.push('…');
-    }
-    bounded
+    let (prefix, tail) = if let Some(tail) = value.strip_prefix("~/") {
+        ("~/…/", tail)
+    } else if let Some(tail) = value.strip_prefix('/') {
+        ("…/", tail)
+    } else {
+        ("…", value.as_str())
+    };
+    let tail_length = MAX_PANE_METADATA_FIELD_CHARS - prefix.chars().count();
+    let start = tail
+        .char_indices()
+        .nth(tail.chars().count().saturating_sub(tail_length))
+        .map_or(0, |(index, _)| index);
+    let truncated_component = start > 0 && !tail[..start].ends_with('/');
+    let tail = &tail[start..];
+    let tail = if truncated_component {
+        tail.split_once('/').map_or(tail, |(_, tail)| tail)
+    } else {
+        tail
+    };
+    format!("{prefix}{tail}")
 }
 
 /// Native workspace target at one physical point.
@@ -799,19 +820,31 @@ mod tests {
         };
         let label = pane_label("p1", true, &metadata);
 
-        assert_eq!(label, format!("p1 · {}e…", "eon".repeat(26)));
+        assert_eq!(label, format!("p1 · …/{}", "eon".repeat(26)));
         assert!(!label.contains("file://"));
         assert_eq!(label.chars().count(), 85);
+        let home = std::env::var("HOME").expect("HOME is required by Venus");
         assert_eq!(
             pane_label(
                 "p1",
                 true,
                 &PaneMetadata::Available {
-                    working_directory: "file://localhost/home/lucca/project".into(),
+                    working_directory: format!("file://localhost{home}/pjs/yazelix-dir/eon"),
                 },
             ),
-            "p1 · project"
+            "p1 · ~/pjs/yazelix-dir/eon"
         );
+        let long_home_label = pane_label(
+            "p1",
+            true,
+            &PaneMetadata::Available {
+                working_directory: format!("{home}/{}/eon-desktop", "parent/".repeat(20)),
+            },
+        );
+        assert!(long_home_label.starts_with("p1 · ~/…/"));
+        assert!(long_home_label.ends_with("/eon-desktop"));
+        assert!(!long_home_label.contains(&home));
+        assert!(long_home_label.chars().count() <= 85);
         assert_eq!(
             pane_label(
                 "p1",
@@ -820,7 +853,7 @@ mod tests {
                     working_directory: "file://server/share".into(),
                 },
             ),
-            "p1 · share"
+            "p1 · /share"
         );
         assert_eq!(
             pane_label(
@@ -832,7 +865,6 @@ mod tests {
             ),
             "p1 · /"
         );
-        let home = std::env::var("HOME").expect("HOME is required by Venus");
         assert_eq!(
             pane_label(
                 "p1",
@@ -842,6 +874,16 @@ mod tests {
                 },
             ),
             "p1 · "
+        );
+        assert_eq!(
+            pane_label(
+                "p1",
+                true,
+                &PaneMetadata::Available {
+                    working_directory: "file:///tmp/a\nb".into(),
+                },
+            ),
+            "p1 · /tmp/a�b"
         );
         assert_eq!(
             pane_label("p1", true, &PaneMetadata::Connecting),
