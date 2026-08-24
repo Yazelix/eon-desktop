@@ -94,7 +94,11 @@ fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
     if working_directory.trim().is_empty() {
         return id.to_owned();
     }
-    let working_directory = bounded_metadata_field(&compact_working_directory(working_directory));
+    let home = std::env::var_os("HOME");
+    let working_directory = bounded_metadata_field(&compact_working_directory(
+        working_directory,
+        home.as_deref().map(Path::new),
+    ));
     format!("{id}  {working_directory}")
 }
 
@@ -105,11 +109,10 @@ fn local_working_directory(value: &str) -> &str {
         .unwrap_or(value)
 }
 
-fn compact_working_directory(value: &str) -> String {
+fn compact_working_directory(value: &str, home: Option<&Path>) -> String {
     let value = local_working_directory(value);
     let path = Path::new(value);
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = Path::new(&home);
+    if let Some(home) = home.filter(|home| !home.as_os_str().is_empty()) {
         if path == home {
             return HOME_MARKER.to_owned();
         }
@@ -823,6 +826,10 @@ mod tests {
         assert_eq!(label, format!("p1  …/{}", "eon".repeat(26)));
         assert!(!label.contains("file://"));
         assert_eq!(label.chars().count(), 84);
+        assert_eq!(
+            compact_working_directory("file:///tmp/eon", Some(Path::new(""))),
+            "/tmp/eon"
+        );
         let home = std::env::var("HOME").expect("HOME is required by Venus");
         assert_eq!(
             pane_label(
