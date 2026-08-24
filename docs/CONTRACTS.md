@@ -1,287 +1,433 @@
 # Venus contract index
 
-Statuses are `Planned`, `Partially proved`, and `Proved`. A proved contract
-names an accepted immutable proof commit and its canonical checks.
+This is the canonical current state of Venus behavior, ownership, proof, and
+remaining limitations. Beads and Git retain execution history; `CHANGELOG.md`
+retains accepted user-visible chronology.
 
-`VEN-C16` defines the sole current platform. X11 and Xwayland references below
-are retained as historical proof environments, not supported backends. macOS is
-unsupported. `VEN-C16` supersedes earlier platform-gap wording; those statements
-record the scope of their exact historical proofs rather than future targets.
-It also replaces the current arboard boundary named by `VEN-C10` and `VEN-C13`
-with exact wl-clipboard-rs 0.9.3; earlier arboard mentions identify historical
-proof revisions only. Earlier hidden-window wording means before Venus presents
-its first Wayland buffer; winit provides no Wayland visibility control.
+## Status
 
-For `VEN-C1`, `VEN-C2`, and `VEN-C7`, the accepted immutable Scene is the sole
-owner of native accessibility text and selection. Each representable visible,
-nonblank canonical head cell is one AccessKit selectable unit whose byte length
-covers its complete UTF-8 text. An otherwise exposed cell above AccessKit's
-255-byte unit limit becomes one U+FFFD replacement unit in accessibility only
-and still counts as one selection unit; its complete visual text and Orbit's
-protocol acceptance remain unchanged.
+- **Planned:** accepted contract with no sufficient implementation evidence
+- **Candidate:** implemented and verified without an accepted proof-bearing
+  revision
+- **Partially proved:** a useful exact slice is proved but required evidence is
+  still open
+- **Proved:** the listed immutable revision and evidence cover the contract
+- **Retired:** explicitly replaced or removed; its ID is never reused
 
-| ID | Behavior and owner | Status | Consumed boundary | Canonical proof | Gap |
-|---|---|---|---|---|---|
-| `VEN-C1` | Venus deterministically validates and materializes one coherent Orbit-authored structured presentation frame and ordered revisions into native draw inputs without terminal authority. An absent Eon cursor-profile v1 uses the Venus `#89b4fa`, duration-`1.0` tail; explicit `none` keeps the canonical cursor static. A complete explicit `tail` profile supplies one validated trail color and duration multiplier. Venus animates a bounded four-corner trail toward Orbit's exact cursor destination while preserving its authoritative shape, visibility, blink state, wide-cell geometry, and color. | Proved | Orbit `ORB-C4` and `ORB-C6` at accepted proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`; canonical ORBS v4 and `orbit-protocol` at exact source proof `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; consumer side of Eon cursor-profile v1 with values owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf` | Existing static presentation proof: Venus `74ab5a0b661210f0afec94086f5358fe50b01f05`; clean locked checks pass 42 library, 18 host, and 12 canonical integration tests, including retained default-background provenance and ordered active background revisions. Native COSMIC Wayland and Xwayland dogfood on predecessor candidate `534e47908b7bb7e8286949fe39bf4b0f7cc811f9` confirms an OSC-authored background change while text, cursor, selection, inverse, explicit backgrounds, resize, input, and accessibility retain the existing scene owners. The isomorphic simplification to the current source was mechanically reverified but not dogfooded again. Typography proof `846daf8fb7846b0e8dc227e533aa8d51a691f76f` retains the shared 10×18 logical grid, nominal 16 px font, fitted sizes, glyph bounds, box and Braille alignment, wide and combining cells, preedit, canonical scenes, and accepted native visual result. Authoritative-cell-placement proof: Venus `99539163ae901413c56388ae8959c49c608dd46e`; clean locked checks pass 47 library, 19 host, and 12 canonical integration tests. Isolated Xvfb/lavapipe and native COSMIC Wayland ucs-browser 2.3.5 wide, grapheme, and ZWJ captures retain all eight machine-checked delimiter columns while each complete Orbit cell is shaped at its exact authoritative start. Previous proof `457b3da837f07d186a99ca20930f2146c3d78f36` retains exact adjacent full-block coverage, and proofs `3e27bb7e377da9d9eb7e5cbdbfcfa5add3de0cad` and `038cc2129d7cb4047350a37bb4aa6e4c3b93ccee` retain native Braille, descender, and Yazi-separator coverage. Cursor-tail proof: Venus `254beec194fe5cac208cced34d346014b0484319`; clean locked checks pass 46 library, 19 host, and 12 canonical integration tests. Broad native COSMIC Wayland dogfood on predecessor `c618cfd087da7c64adf8cd093c3f4b458e8fd5d4` used the workspace debug binary with exact Nix Orbit package `/nix/store/7xdngayqh3p12432m2g3wdb857f3xg1h-yazelix-orbit-0.1.0` on Linux 7.0.11, eDP-1 at 1920×1080, 144 Hz, and scale 1.0. It covered static disable, two colors and duration multipliers, block, underline, bar, horizontal, vertical, diagonal, rapid, wide-cell, idle settlement, and same-socket recovery; its source recheck kept text stable across cached animation frames and returned to 0% sampled idle CPU. Exact predecessor `9a1658561a130f6d4656a3049a707feb7cecaa72` native comparison in the same environment covered duration-4.0 three-cell horizontal jumps between canonical two-cell-wide CJK cursors, observing the long trail persist and settle without stale geometry. The current isomorphic state simplification removes the derived per-corner position cache and retains focused rapid-retarget continuity proof. The exact current host lifecycle mechanically proves that every disallowed render and both focus/occlusion transition edges reset and snap animation; native output while unfocused was not rerun. The same source restores the pre-tail base/cursor/overlay draw order through one cached vertex boundary; native overlay intersections were not rerun. The user accepted the overall native visual result; this correction reuses the same accepted long timing and wide geometry. Argument-free default-tail proof: Venus `5d22b09e323212693a8e54c4c63089784b660cad`; clean locked checks pass 47 library, 19 host, and 12 canonical integration tests. Isolated COSMIC Wayland dogfood confirms that an omitted profile visibly uses the `#89b4fa`, duration-`1.0` tail and explicit `none` remains static without touching existing Sessions. | Composed Eon serialization remains separately tracked. Broader Linux compositor, fractional/HiDPI, and macOS proof remain open platform surfaces. |
-| `VEN-C2` | Venus owns native interaction collection and sends only Orbit's semantic input and resize messages. | Proved | Orbit `ORB-C5` and canonical ORBS v1 at accepted proof `c905bf9610581747f1b07565814b501ca66cfaa6`; unchanged semantic values consumed through canonical ORBS v4 at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` | X11 scale-settlement hardening: Venus `c0766532c7669a2ae9dac6a26ae94d467110896b`; clean locked checks pass 53 library, 27 host, and 14 canonical integration tests with clippy warnings denied. The focused host regression models exact locked winit's forced old-extent X11 resize, the adjusted extent, and a later ordinary resize; only settled 93×32 and 77×26 grids reach the semantic resize path, while non-X11 keeps its direct follow-up resize. Disposable Xvfb X11 with Wayland disabled, Vulkan/lavapipe, Xft DPI 96→192, and exact Orbit `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` changed the window from 960×600 to 1920×1200 and then 1600×1000; the PTY observed attached 93×32, scale-transition 93×32, and ordinary 77×26 with no intermediate 45×15 or stale-scale 157×54 grid. Physical mixed-monitor hardware, broader window managers, native Wayland, and macOS remain unproved. Previous typography/geometry proof: Venus `846daf8fb7846b0e8dc227e533aa8d51a691f76f`; clean locked checks pass 39 library, 18 host, and 12 canonical integration tests. One shared scaled metric owner keeps resize, pointer mapping, selection, cursor placement, input methods, and accessibility coherent with the 10×18 logical grid; the host oracle proves a 93×32 grid on a 960×600 surface. Previous proof `a17d100d11d38acf515cf96af34df6bbfef9850b` retains deterministic layout metadata for Cyrillic and multi-scalar text and native layout-produced punctuation through Kitty mode. Proofs `f84493781956a1f5c24be3dab148bef02748cdfe`, `6df14c7e2ca8c27d587d6c138200f4d39d6b12a9`, `6f919a6e3d2f51b661f76be644a4354a003a3404`, `ba7177ca9380f2f5800bcea20da3f81e96b090cd`, and `8929c9f9d151641a343813ddeb6005cb9c771286` retain cursor-area, preedit placement, focus cleanup, geometry, semantic mapping, and native fullscreen coverage. | No initial-slice gap. Candidate-list IMEs and Wayland remain manual quality surfaces. |
-| `VEN-C3` | Venus is transient: closing or crashing the client does not own or terminate the Orbit session, reopening materializes its coherent current state, and an open client automatically retries its same selected live local endpoint after retryable connection or socket loss while retaining the last coherent scene. In supervised mode, control-stream loss exits the client without ending Orbit and a replacement may retry transient Busy while the departing attachment releases. Endpoint replacement, authoritative non-live workspace state, attachment, or exit cancels obsolete retry state. | Proved | Orbit `ORB-C1`, `ORB-C3`, `ORB-C4`, `ORB-C7`, canonical ORBS v4, and `orbit-protocol` 0.1.0 at accepted proof `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` | Supervised owner-loss proof: Venus `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`; clean locked checks pass 49 library, 22 host, and 14 canonical integration tests. Focused host regressions prove exact complete control commands, malformed/partial completion, Present-then-Exit ordering, and managed-only Busy retry. Its executable code is identical to native-proved predecessor Venus `754eb057ea71ddee57b2f543d85d08d66edc953e`; only that regression changes. The predecessor's isolated Xvfb/X11 proof against accepted Orbit source `86aa130629c09dce61d0f232150298656fa5cef4` observes control EOF exit in 109 ms while Orbit and its PTY child remain live, immediate replacement attachment after transient Busy, and ORBS availability after replacement exit. Eon composed acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a` runs this exact installed Venus against three full Eon Sessions and one EonTerm Session, observing owner-loss exit, ORBS release, replacement presentation, and unrelated-Session survival. Previous loss-state proof `8e2d22a36ae6f6cab74d3556204a2a537265bff7` retains explicit non-attached state, retry suppression, notice precedence, and native COSMIC Wayland recovery. | Exact Eon stream adoption is accepted at `0bf0b165d06b4a8162be497011070f61f6c2000a`. Native macOS and broader compositor coverage remain unproved platform surfaces. |
-| `VEN-C4` | Venus gives bounded, explicit client UX for attach rejection, protocol incompatibility, invalid frames, and Orbit loss rather than hanging or silently inventing state. Retryable same-endpoint loss retains its exact failure during bounded backoff, reports connecting during an attempt, and remains waiting until a fresh coherent frame. Busy remains terminal for standalone Venus; only supervised replacement treats it as retryable while a departing client releases ORBS. Incompatible, Exited, protocol/model, queue, invalid-input, and worker-start failures remain terminal. | Proved | Orbit `ORB-C3`, `ORB-C4`, `ORB-C7`, canonical ORBS v4, and `orbit-protocol` 0.1.0 at accepted proof `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` | Persistent-renderer-failure hardening: Venus `588996739aaff32756ca24960135371a94636801`; clean locked checks pass 49 library, 23 host, and 14 canonical integration tests with clippy warnings denied. The focused host check injects two distinct renderer errors before any successful present, observes only the first title, stderr, and alert transition, retains that first notice without formatting or projecting the later error, invalidates presented input on every failure, and restores the accepted Orbit title when the notice clears on the later Presented path. Redraw retries borrow that notice without another allocation, and the shared stderr reporter treats a closed diagnostic sink as best-effort rather than panicking. Application uses the first transition to update AccessKit once; later accepted scene/status changes and initial-tree requests retain the existing refresh owner. Predecessor Venus `4c95652b2fe1af28df5964b5686daf44676a171e` used a disposable Xvfb/X11 probe against exact locked winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, initialized no renderer, and observed `_NET_WM_NAME(UTF8_STRING) = "Venus renderer failure: native probe"` immediately after `Window::set_title`; the current corrections change only the already-active-notice path after that first transition. Compositor title-bar visibility, native Wayland, and macOS remain unproved. Current supervised loss/retry proof: Venus `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`; clean locked checks pass 49 library, 22 host, and 14 canonical integration tests. Deterministic checks preserve standalone Busy as terminal and route only supervised Busy through the existing bounded retry owner. Its executable code is identical to native-proved predecessor Venus `754eb057ea71ddee57b2f543d85d08d66edc953e`; only the ordered control regression changes. The predecessor's isolated Xvfb/X11 proof observes an immediate supervised replacement remain live across initial Busy and acquire ORBS after the departing client exits. Eon composed acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a` runs this exact installed Venus through supervisor loss and contending replacement controls without a duplicate presentation client or Session lifecycle ownership. Previous proof `8e2d22a36ae6f6cab74d3556204a2a537265bff7` retains explicit loss state, input gating, constraining notices, and all other retryable-versus-terminal classifications. | Exact Eon stream adoption is accepted at `0bf0b165d06b4a8162be497011070f61f6c2000a`. Native macOS and broader compositor coverage remain unproved platform surfaces. |
-| `VEN-C7` | Venus maps bounded native wheel movement and explicit Shift-drag selection against the last presented complete frame into canonical Orbit messages, renders and exposes only Orbit-authored selected presentation, and writes only explicit Orbit-returned copied text to the native clipboard. Orbit remains the sole owner of retained history, viewport movement, terminal input precedence, selection resolution, and copied terminal text. | Proved | Orbit `ORB-C8`, `ORB-C9`, and canonical ORBS v4 at accepted proof `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` | Venus `3230c5820c821fd2437dcf0399d2ba921cec2c94`; clean detached locked Rust checks cover successful-Resize admission cancellation for explicit and implicit recovery. Previous accepted Venus proof `04cdd6aaf5cf4f1c74984a5b129d7c61ed9d7536` covers failure-preserving gesture reconciliation, authoritative unselected-frame cancellation, failed-Finish queue preservation, pointer-exclusive selection, held-button capture gating, exact shared resize geometry, resize-stable clipboard feedback, selection-copy readiness, finite captured-pointer bounds, outward selection, and surface recovery. Native Xwayland Orbit/Venus dogfood at `1e6583ec83348617980d400e2cbdf5b1f1a6e3da` covers history, live return, forward and reverse Unicode selection, exact clipboard text, application mouse precedence, reattachment, and client loss. | Native Wayland, macOS, real trackpad hardware, resize under a non-tiling window manager, and full Neovim/Yazi dogfood remain unproved platform and quality surfaces. |
-| `VEN-C8` | Venus materializes Eon-authored ordered horizontal tabs and every fitting per-active-tab accordion pane header around exactly one expanded pane. For each visible live endpoint it observes Orbit's bounded read-only metadata and projects the exact opaque pane identity, two ASCII spaces, and a compact working-directory label through both the existing clipped header and AccessKit name. The exact home directory uses the packaged home marker, directories below home use a `~/`-anchored relative path, and directories outside home remain absolute; overlong labels elide from the left to preserve the leaf. Terminal title remains available to the selected native window but is not repeated in pane chrome. Empty, offline, unavailable, and incompatible metadata fall back honestly to pane identity without displaying mapped Session identity. Hidden tabs have no observers, and topology, endpoint, liveness, active-tab, workspace-loss, or Orbit-exit changes retire obsolete observations. Pointer, Alt+H/L tab traversal, Alt+K/J pane traversal, Alt+M pane creation, Ctrl+T tab creation, focused arrow traversal, and the selected terminal attachment remain on their existing owners. Venus re-inspects Eon every 250 ms so external accepted workspace changes appear without native input, while owning neither topology, terminal state, nor Session lifetime. | Candidate | Eon `EON-C10`, EONW v1, and `eon-workspace-protocol` 0.1.0 at exact producer proof `4af395aea06c230ee6b18cf0755ae25915c0b88d`; canonical ORBS v5 and `orbit-protocol` 0.1.0 at accepted Orbit proof `69c402737799f03e615473956954a043647a4713` | Accepted metadata-observation/redraw base `3612a929402de00d07d582b6547d99f66afe5cad`; current two-space home-relative projection candidate `ee3defea55c77f7acc4559606965d93d39bba8b5`, tracked by Eon issue `eon-compact-pane-identities-yht`. | Fractional native scale and native AT-SPI inspection were not rerun; deterministic scale geometry and exact shared AccessKit-name checks cover the changed projection. Other compositors remain outside the accepted platform. |
-| `VEN-C9` | Venus accepts `--no-decorations` at launch and requests an undecorated native window before creation; without the option, the window remains decorated. Unknown options and excess positional arguments fail with bounded usage before any window or transport is created. | Proved | Exact locked winit 0.30.13 native window attributes; no Orbit or Eon protocol boundary | Venus `90988f6ebcde68338e202a9c637c59398aafe93d`; clean locked checks prove the decorated default, both positional socket forms, deterministic invalid-input rejection, and pre-window application of the native decoration request. Native COSMIC Wayland and Xwayland comparison proves decorated and undecorated launch. | Platforms beyond Linux remain unproved. |
-| `VEN-C10` | On an attached focused terminal surface, the Linux native Paste key or logical Ctrl+Shift+V reads ordinary native clipboard text once and submits exactly one canonical semantic paste to Orbit. Venus owns explicit shortcut precedence, native read, the canonical 1 MiB admission bound, and visible client failure; Orbit alone owns normal and bracketed terminal encoding. | Partially proved | Orbit `ORB-C5` and canonical semantic paste at accepted proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`; exact winit 0.30.13 and existing arboard 3.6.1 native text owner | Venus `9c56eb17613e10ef7712a1852b049ed63cf22b18`; clean locked checks pass 38 library, 18 host, and 12 canonical integration tests, including overlapping shortcuts, layout-independent release pairing, and shared capture-transition equivalence with workspace shortcuts. Isolated native Sway 1.12 Wayland proof at source `eb67dac509d0c6033e4373caf8c63eb6e4c88868` sends exact multiline Unicode through a real clipboard and Orbit-owned PTY in normal mode, then reattaches a fresh Venus process to the same Orbit and sends the exact bracketed form. | Manual Zellij, Helix, and Yazi acceptance is assigned to the user. A hardware Paste key, native Wayland without data-control, and macOS remain unproved. |
-| `VEN-C11` | Venus accepts one finite `--background-opacity VALUE` in `0.0..=1.0` at launch and applies it only to the terminal default background, including later Orbit-authored background changes and terminal padding. Absence is equivalent to `1.0`. Explicit cell backgrounds, selection, inverse video, workspace chrome, notices, focus borders, foreground effects, input, hit testing, and accessibility retain their existing semantics. Values below `1.0` require a proved premultiplied native surface mode and otherwise fail before the hidden window becomes visible. | Proved | Exact locked winit 0.30.13 and wgpu/glyphon 30.0.0/0.12.0 native presentation boundary; unchanged canonical ORBS v4 at Orbit proof `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` and EONW v1 at Eon proof `4af395aea06c230ee6b18cf0755ae25915c0b88d` | Venus `74ab5a0b661210f0afec94086f5358fe50b01f05`; clean locked checks pass 42 library, 18 host, and 12 canonical integration tests. Native dogfood ran on predecessor candidate `534e47908b7bb7e8286949fe39bf4b0f7cc811f9`; the isomorphic simplification to the current source was mechanically reverified but not dogfooded again. On that predecessor, COSMIC on Intel RPL-S reported Wayland modes `[Opaque, PreMultiplied]` and Xwayland modes `[PreMultiplied, Inherit]`; direct launches at `1.0`, `0.88`, and `0.0` covered decorated and undecorated windows, standalone and Eon workspace composition, active OSC background changes, resize and reattachment, shell input and cursor, Shift-drag selection, inverse and explicit same-RGB backgrounds, Neovim, Helix, Yazi, tmux, opaque workspace chrome/focus, and an opaque disconnect notice. Invalid `NaN` exited before window creation. No manifest or dependency changed. Compatibility remains one-way and exact: Eon proves `EON-C13` against this Venus revision, then Nova maps its product setting to the accepted Eon field; there is no adapter, probe, dual write, or fallback. | Broader Linux compositors and macOS remain unproved. Exact wgpu Metal 30 exposes `Opaque` and `PostMultiplied`, so macOS needs a separately approved and proved output conversion rather than inheriting this Linux proof. |
-| `VEN-C13` | While attached through canonical ORBS v4, Venus delivers each Orbit-authored terminal clipboard-write effect once through its existing native clipboard owner without storing, replaying, parsing, or reconstructing terminal text. On Linux, standard targets the ordinary clipboard and selection or primary targets the primary clipboard; native failure remains bounded and visible. | Partially proved | Orbit `ORB-C11` and canonical ORBS v4 at accepted proof `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; existing arboard 3.6.1 native text owner | Venus `2d3498258920736eb1bdae2b8869b6547b9735d4`; clean locked checks pass 37 library, 17 host, and 12 canonical tests. Focused checks cover pre-attachment rejection, exact one-shot destination and text forwarding, preserved selection-copy behavior and Orbit failure attribution, unchanged scene state, and all Linux destination mappings. Downstream acceptance leaves that source proof unchanged. Eon `0e25ebc2311d7e41edf90c940f8211dd5839bb83` packaged this exact Venus source and Orbit/ORB-C11 revision. Eonova `4fda9b67b0faa33561624633229135e5e2d579ea` native x86_64 Linux Wayland dogfood observed exact terminal-emitted UTF-8 `eon-primary-proof-0e25ebc` through the primary selection. Before attachment, `wl-paste` saw no clipboard change; cleanup restored the prior selection, and live process identities did not change. Eon and Eonova provide acceptance evidence; Venus owns the behavior. | Native Wayland without data-control, native ordinary-clipboard delivery, macOS destination policy, and broader compositor coverage remain unproved. |
-| `VEN-C14` | In Eon's supervised mode, each complete private Present command preserves the live Venus process and terminal attachment and asks the native window system to present its existing window. Control-stream EOF or terminal read failure exits Venus through its native event-loop owner and releases its presentation attachments without stopping Orbit; a replacement supervised Venus retries transient Busy through the existing bounded cadence while the departing client releases ORBS, while standalone Busy remains terminal. | Proved | Eon `EON-C11` Present action and one bounded private byte stream; exact Unix stream EOF semantics; exact winit 0.30.13 cross-thread event and native exit APIs | Venus `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`; clean locked checks pass 49 library, 22 host, and 14 canonical integration tests. The focused control regression proves one Present for each complete command, no Present for malformed or partial input, and exact Present-then-Exit order on completion. Its executable code is identical to native-proved predecessor Venus `754eb057ea71ddee57b2f543d85d08d66edc953e`; only that regression changes. The predecessor's isolated Linux 7.0.11 Xvfb/X11 proof observes the first Venus exit 109 ms after control EOF without changing accepted Orbit `86aa130629c09dce61d0f232150298656fa5cef4` or PTY-child identities; a second supervised Venus survives transient Busy and owns ORBS after the first exits; after its control EOF, an exact diagnostic client receives Attached. Previous proof `50b7ef7f6c9d5b531b79ecca67c9c8fdf40f355f` retains repeated native COSMIC Wayland presentation through Eon/Eonova without process or attachment replacement. Eon composed acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a` observes this exact installed Venus exit after full Eon and EonTerm supervisor SIGKILL, release ORBS while every Orbit remains live, and resume presentation under the sole replacement supervisor. | Exact Eon stream adoption and composed same-boot recovery are accepted at `0bf0b165d06b4a8162be497011070f61f6c2000a`. Direct focus and unminimize remain unavailable through winit on Wayland; xdg activation is compositor-controlled. macOS remains unproved. |
-| `VEN-C15` | Venus accepts `--background-blur` once at launch and, before showing its one native window, asks its selected native host for full-surface compositor-owned background blur; absence makes no blur request. On the required COSMIC Wayland proof target, translucent terminal-default pixels reveal compositor blur while explicit cell backgrounds, selection, inverse video, workspace chrome, notices, focus borders, text, cursor, input, IME, and accessibility preserve their existing semantics. Venus owns only the boolean request; winit owns native protocol lifecycle; the compositor owns capability, algorithm, strength, and policy. Unsupported or policy-disabled compositors remain best effort and do not make launch fail; X11 and macOS are unproved. Unknown, duplicate, and excess arguments retain bounded pre-window failure. | Proved | Exact winit 0.30.13 patched to `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, the one-commit backport of merged upstream `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`; unchanged `VEN-C11`, canonical ORBS v4, and EONW v1 boundaries | Venus `7fc7e4ba97aaf48b586002934a580ef2d1c31694`; clean exact-revision locked checks pass 46 library, 19 host, and 12 canonical integration tests with clippy warnings denied. The focused host check proves no-flag parity, one accepted blur flag, duplicate rejection, and exact hidden-window attributes; dependency checks resolve one forked winit shared with AccessKit and one fork-workspace `dpi`. Native COSMIC Wayland 1.0.0 at `091583ac84abac02967ae358cf9570ddfef63b31` visibly distinguishes blur off/on at opacity `0.0` and `0.88` across decorated and undecorated standalone creation; an additional `0.65` pair shows the compositor effect clearly while prompt text and cursor remain crisp. An idle Eon workspace attachment uses the same blurred host path and retains its bounded workspace-loss notice. Unchanged deterministic workspace, scene, input, IME, and accessibility checks plus accepted `VEN-C11` proof preserve the existing layer owners. The user accepted the `0.65` and `0.0` native results. | Stable crates.io winit does not yet carry the selected Wayland mechanism. A populated current Eon workspace was not re-dogfooded because its renderer and composition owners are unchanged; this proof reuses accepted `VEN-C11` evidence. Non-COSMIC compositors, X11, and macOS remain unproved, and the public API exposes neither capability nor compositor acceptance. |
-| `VEN-C16` | The native Venus application supports only Linux on native Wayland with Vulkan. It selects no X11 or Metal backend feature and rejects non-Linux application builds. X11, Xwayland, and macOS are unsupported. Launch without a usable Wayland display fails before presentation attachment. | Proved | User-approved EON-C7 platform policy; exact winit 0.30.13 at `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; exact wgpu 30.0.0; exact wl-clipboard-rs 0.9.3; unchanged ORBS v4 and EONW v1 | Venus `e033efadf023492ae02eb1e9036de98ad93d2f98`; clean locked format, check, test, Clippy, dependency-feature, and diff checks pass; 59 library, 26 host, and 14 canonical integration tests pass. Exact locked winit source proves the deleted focus, unminimize, visibility, and attention-clear calls are unsupported or inert on Wayland; unfocused Present retains compositor-controlled `xdg_activation_v1` attention. The direct paste reader consumes at most the canonical 1 MiB limit plus one byte before rejecting oversize or invalid UTF-8. A launch with Wayland variables absent exits before attachment with `Venus requires a native Wayland display`; a launch on the current native Wayland compositor reaches the live event loop without stderr. | Exact Eon pin/package integration remains pending. Clipboard delivery through the new direct owner retains the accepted deterministic checks and needs installed Eon acceptance. |
-| `VEN-C17` | Venus accepts one bounded caller-owned application ID before window creation and maps it to the native Wayland app ID without changing terminal-authored titles. | Proved | Eon owns the selected identity; exact winit 0.30.13 commit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` owns the Wayland mapping. | Venus `ab24961bd6b2f9403736e52ebbac8cc266488a41`; clean locked format, check, test, and Clippy pass with 61 library, 28 host, and 14 canonical integration tests; installed Eonova acceptance below. | No accepted-slice gap. |
+## VEN-C1 — Authoritative native presentation
 
-## Approved caller-owned application identity contract VEN-C17
+- **Status:** Proved
+- **Consumer:** One Venus native surface consuming canonical Orbit frames and an
+  optional Eon cursor profile.
+- **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
+  cursor-profile value.
+- **Result:**
+  - Venus validates and materializes one coherent Orbit-authored structured
+    frame into native draw inputs without terminal authority.
+  - An omitted cursor profile uses the Venus `#89b4fa`, duration-`1.0` tail;
+    `none` is static; a complete `tail` supplies one validated color and duration.
+  - A bounded four-corner trail approaches Orbit's exact cursor destination while
+    preserving authoritative shape, visibility, blink, wide-cell geometry, and
+    color.
+  - The immutable Scene alone owns accessible text and selection. Each visible,
+    nonblank canonical head cell is one selectable UTF-8 unit; text above the
+    AccessKit 255-byte unit limit becomes one U+FFFD accessibility unit without
+    changing visual or protocol text.
+- **Important failures:** Invalid frames, topology, cursor profiles, renderer
+  admission, focus, occlusion, or presentation failure cannot publish stale draw
+  or accessibility state.
+- **Owner:** Venus Scene, renderer, and cursor-animation state; Orbit retains
+  terminal and cursor authority.
+- **Consumes:** Orbit `ORB-C4` and `ORB-C6` at accepted proof
+  `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`; ORBF v1 in canonical ORBS v4
+  at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
+  owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
+- **Boundary:** Graphics, broader Linux compositors, fractional/HiDPI native
+  quality, and non-Linux platforms remain outside the proof.
+- **Proof:** `5d22b09e323212693a8e54c4c63089784b660cad`
+  - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
+    evidence from the accepted presentation lineage
+  - **Evidence:**
+    - Static presentation `74ab5a0b661210f0afec94086f5358fe50b01f05`
+      with native predecessor `534e47908b7bb7e8286949fe39bf4b0f7cc811f9`
+    - Typography `846daf8fb7846b0e8dc227e533aa8d51a691f76f` and
+      cell placement `99539163ae901413c56388ae8959c49c608dd46e`, retaining
+      `457b3da837f07d186a99ca20930f2146c3d78f36`,
+      `3e27bb7e377da9d9eb7e5cbdbfcfa5add3de0cad`, and
+      `038cc2129d7cb4047350a37bb4aa6e4c3b93ccee`
+    - Cursor tail `254beec194fe5cac208cced34d346014b0484319`, native
+      dogfood `c618cfd087da7c64adf8cd093c3f4b458e8fd5d4`, and wide
+      timing comparison `9a1658561a130f6d4656a3049a707feb7cecaa72`
+    - Omitted-profile tail and explicit-`none` proof at the listed revision
+- **Open proof:** Composed Eon cursor-profile serialization and broader Linux
+  compositor coverage remain separately tracked.
 
-- Consumer: Eon, EonTerm, or one approved EonTerm composition.
-- Trigger: launch Venus with one optional validated desktop application ID before
-  window creation.
-- Result: the accepted value becomes winit's Wayland general name and therefore
-  the xdg-toplevel app ID. An omitted value remains `eon`. Orbit-authored window
-  titles remain independent presentation state.
-- Important failures: empty, non-UTF-8, oversized, or non-token values fail
-  before a native window is created. Venus does not infer identity from child
-  argv, environment, titles, executable names, runtime paths, or desktop files.
-- Ownership: the caller owns selection and desktop metadata; Venus owns only
-  validation at its direct CLI boundary and native Wayland materialization.
-- Boundary: isolated native Wayland mapping only. The contract adds no branding
-  framework, mutable identity, X11/Xwayland compatibility, or other-platform
-  promise.
-- Installed Eonova `a9d5946686ab28e51b2c10cc9f2d3f6fb1282b52`
-  consumed this exact Venus source through Eon
-  `5631d8dc4de49bfd3831aa3abef300b7734ad36c`. On COSMIC Wayland, its live
-  Venus argv contained exactly `--application-id eonova`; repeated launch kept
-  one Session, and the user accepted its distinct Eonova grouping on 2026-08-24.
+## VEN-C2 — Native semantic interaction
 
-`VEN-C8` treats file URI decoration as transport-only within the local Eon
-product boundary. The normalized path equal to `HOME` displays the same U+F015
-marker used by Nova home tabs; descendants use a `~/`-anchored lexical path,
-paths outside home remain absolute, and overlong values elide their leftmost
-components. An unset or empty `HOME` leaves absolute paths absolute. Two ASCII
-spaces separate pane identity from location. Root remains `/`, and empty values
-fall back to the exact pane identity.
+- **Status:** Proved
+- **Consumer:** One focused Venus terminal surface.
+- **Trigger:** Native key, mouse, focus, paste, input-method, or resize activity.
+- **Result:** Venus maps native activity to canonical Orbit semantic input and
+  resize messages using one shared scaled geometry owner.
+- **Important failures:** Invalid, stale, unsettled, or non-presented geometry
+  cannot reach Orbit; capture and focus transitions withdraw obsolete input.
+- **Owner:** Venus native input and geometry owners; Orbit encodes terminal
+  behavior.
+- **Consumes:** Orbit `ORB-C5` proof
+  `c905bf9610581747f1b07565814b501ca66cfaa6` through canonical ORBS v4 at
+  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
+- **Boundary:** Candidate-list IMEs and broader native hardware quality remain
+  manual surfaces.
+- **Proof:** `c0766532c7669a2ae9dac6a26ae94d467110896b`
+  - **Environment:** Accepted deterministic host coverage plus retained native
+    geometry and input evidence
+  - **Evidence:** Shared geometry, resize-settlement, semantic mapping,
+    preedit, focus cleanup, and fullscreen checks, retaining typography proof
+    `846daf8fb7846b0e8dc227e533aa8d51a691f76f`, semantic-input proof
+    `a17d100d11d38acf515cf96af34df6bbfef9850b`, and focused geometry proofs
+    `f84493781956a1f5c24be3dab148bef02748cdfe`,
+    `6df14c7e2ca8c27d587d6c138200f4d39d6b12a9`,
+    `6f919a6e3d2f51b661f76be644a4354a003a3404`,
+    `ba7177ca9380f2f5800bcea20da3f81e96b090cd`, and
+    `8929c9f9d151641a343813ddeb6005cb9c771286`
 
-Atomic terminal-cell accessibility proof for `VEN-C1`, `VEN-C2`, and `VEN-C7`:
-Venus `96f04d6091e9b1f94dceda53ce302b8eb42e41c0`; clean locked checks pass
-59 library, 27 host, and 14 canonical integration tests with Clippy warnings
-denied. Scene projects each visible nonblank canonical head cell as one
-AccessKit selectable unit through 255 UTF-8 bytes. A longer otherwise-exposed
-cell becomes one U+FFFD accessibility unit and one selection unit while its
-complete visual text and canonical ORBS v4 acceptance remain unchanged.
-Focused checks cover combining and ZWJ cells, exact 255- and 257-byte bounds,
-visual-text preservation, wide/spacer cells, spaces, trimming, and row breaks.
-Private Linux Xvfb/X11 AT-SPI dogfood on the mechanically equivalent predecessor
-selected one complete combining cell, retained the complete ZWJ cell, and
-exposed the 257-byte cell as U+FFFD against exact Orbit proof
-`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`, AccessKit 0.24.1, and
-accesskit_winit 0.33.2. The committed simplification stores the already-checked
-unit length and was mechanically reverified without another native run. Native
-Wayland, screen-reader-specific announcements, and macOS remain unproved.
+## VEN-C3 — Transient client recovery
 
-Retained-event byte-bound hardening for `VEN-C4`: Venus
-`a910ebcebd4013e5016c8d8ecac696a1df13fd7b`; clean locked checks pass 58
-library, 27 host, and 14 canonical integration tests with Clippy warnings
-denied. `EventQueue` accounts each decoded server event by the complete framed
-length already validated by canonical ORBS v4 and independently caps retained
-bytes at three maximum complete messages while preserving the existing
-256-event and two-frame ceilings. Frame replacement subtracts the displaced
-cost, drain resets accounting, and the first excess clears retained payload,
-emits one existing bounded Lost event, and stops later admission. No message
-is re-encoded and no protocol, producer, clipboard policy, outbound channel,
-dependency, configuration, or platform behavior changed. Linux proof is
-deterministic; actual retained heap and native macOS timing remain unmeasured.
+- **Status:** Proved
+- **Consumer:** Standalone or Eon-supervised Venus attached to one selected live
+  Orbit endpoint.
+- **Trigger:** Client close or crash, retryable connection loss, control-stream
+  loss, or replacement attachment.
+- **Result:**
+  - Client loss never owns or terminates the Orbit Session.
+  - Reopening materializes the coherent current state.
+  - An open client retries the same live endpoint with bounded backoff while
+    retaining the last coherent scene.
+  - In supervised mode, control loss exits Venus and a replacement may retry
+    transient Busy while the departing attachment releases.
+  - Endpoint replacement, non-live workspace state, successful attachment, or
+    exit cancels obsolete retry state.
+- **Important failures:** Standalone Busy and incompatible, exited, malformed,
+  or replaced endpoints remain terminal rather than creating duplicate clients.
+- **Owner:** Venus connection/retry and native event-loop lifecycle; Orbit owns
+  Session survival.
+- **Consumes:** Orbit `ORB-C1`, `ORB-C3`, `ORB-C4`, and `ORB-C7` through canonical
+  ORBS v4 at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
+- **Boundary:** Broader compositor coverage and non-Linux platforms are unproved.
+- **Proof:** `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`
+  - **Environment:** x86_64 Linux with deterministic host and composed Eon
+    acceptance
+  - **Evidence:** Supervised control EOF, managed-only Busy retry, exact current
+    reattachment, and unrelated-Session survival; native predecessor
+    `754eb057ea71ddee57b2f543d85d08d66edc953e`, prior loss proof
+    `8e2d22a36ae6f6cab74d3556204a2a537265bff7`, exact Orbit
+    `86aa130629c09dce61d0f232150298656fa5cef4`, and composed Eon acceptance
+    `0bf0b165d06b4a8162be497011070f61f6c2000a`
 
-GPU device-loss hardening for `VEN-C4`: Venus
-`e6326b2578beff0932fe51504935b7296070b0ba`; clean locked checks pass 55
-library, 27 host, and 14 canonical integration tests with Clippy warnings
-denied. One renderer-owned atomic flag consumes exact wgpu 30 device-loss
-notification and ignores explicit destruction. A narrow uncaptured-error
-handler suppresses only errors reported after that flag is set, so
-callback-reported OOM reaches the fixed failure instead of wgpu's default
-panic while every unrelated error stays fatal. The callback requests redraw
-of the existing native window, and the existing bounded title, stderr,
-AccessKit, and input-invalidation path owns the failure without returning
-`Presented` or surface-only `Recovered` from invalid resources. No actual GPU
-reset or HAL OOM was injected; native device-loss occurrence and macOS remain
-unproved.
+## VEN-C4 — Bounded explicit failure UX
 
-Native presentation-attention proof for `VEN-C14`: Venus
-`9e95799669830e63c6b5629a4ca9fe1bc2efa72c`; clean locked checks pass 53
-library, 26 host, and 14 canonical integration tests with Clippy warnings
-denied. One native-attention owner preserves unminimize and focus requests,
-requests informational attention only while unfocused, retains it through
-`Focused(false)`, and clears it on `Focused(true)`. Disposable Linux Xvfb/X11
-proof left `WM_HINTS` empty for focused Present, set urgency for unfocused
-Present, and removed it after focus. Wayland activation remains
-compositor-controlled; no protocol, dependency, or platform promise changed.
+- **Status:** Proved
+- **Consumer:** A Venus user observing connection, protocol, model, renderer, or
+  Orbit failure.
+- **Trigger:** Attachment rejection, incompatibility, invalid frame, Orbit loss,
+  renderer failure, or retry transition.
+- **Result:** Venus exposes one bounded truthful notice instead of hanging or
+  inventing state; retryable loss retains its failure during backoff, reports an
+  active attempt, and clears only after a fresh coherent frame.
+- **Important failures:** Standalone Busy is terminal; only supervised
+  replacement retries it. Incompatible, Exited, model, queue, invalid-input,
+  worker-start, and persistent-renderer failures remain terminal and withdraw
+  presented input.
+- **Owner:** Venus connection state, notice projection, and renderer lifecycle.
+- **Consumes:** Orbit `ORB-C3`, `ORB-C4`, and `ORB-C7` through canonical ORBS v4
+  at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
+- **Boundary:** Compositor title-bar visibility and broader platform proof remain
+  outside the accepted slice.
+- **Proof:** `588996739aaff32756ca24960135371a94636801`
+  - **Environment:** x86_64 Linux deterministic host coverage with retained
+    native title and supervised-loss evidence
+  - **Evidence:** First-renderer-error retention, best-effort diagnostics,
+    presented-input withdrawal, terminal-versus-retryable classification, and
+    later recovery; native title proof `4c95652b2fe1af28df5964b5686daf44676a171e`,
+    exact winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`,
+    supervised proof `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`, native
+    predecessor `754eb057ea71ddee57b2f543d85d08d66edc953e`, prior loss
+    proof `8e2d22a36ae6f6cab74d3556204a2a537265bff7`, and composed Eon
+    acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a`
 
-Stable workspace accessibility identity proof for `VEN-C8`: Venus
-`0d8e73a861110e2525cf6e767b072ab1e714cec8`; clean locked checks pass 53
-library, 24 host, and 14 canonical integration tests with Clippy warnings
-denied. The existing accessibility snapshot retains only current Eon tab and
-pane identity mappings, allocates collision-free NodeIds monotonically without
-reuse, and derives tree order, focus, activation, and actions from that one
-owner. Isolated Linux Xvfb/X11 AT-SPI dogfood against EONW v1 removed an earlier
-pane and then an earlier tab: each retired object rejected `DoAction` without
-changing the selected sibling, while the original surviving object paths still
-activated their exact Eon identities. AccessKit remains at 0.24.1 with
-accesskit_winit 0.33.2; no dependency or protocol changed. Native Wayland and
-macOS timing remain unproved.
+## VEN-C7 — Authoritative history selection and copy
 
-Rendered-workspace accessibility geometry proof for `VEN-C2` and `VEN-C8`:
-Venus `089ffd4dfaedd3df25f92ad47b2f0b1542b02c59`; clean locked checks pass
-57 library, 27 host, and 14 canonical integration tests with Clippy warnings
-denied. The AccessKit snapshot consumes the renderer's existing `CellMetrics`
-and accepted Scene columns, while tab, pane, terminal, and TextRun bounds reuse
-`WorkspaceScene` and `SceneRect::intersection`. Fully clipped descendants keep
-their identity, order, focus, actions, and text without publishing bounds.
-Isolated Linux Xvfb/X11 dogfood at 100×140 on private display, session, and
-AT-SPI buses used AccessKit 0.24.1, accesskit_consumer 0.38.0,
-accesskit_atspi_common 0.19.1, exact EONW v1 producer proof
-`4af395aea06c230ee6b18cf0755ae25915c0b88d`, and exact ORBS v4 proof
-`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`. After tab and pane scrolling,
-clipped descendants retained semantic paths without Component bounds;
-`Contains` rejected points outside the visible intersections, and point lookup
-resolved only the visible tab, terminal, and pane regions. No dependency,
-protocol, module, or platform policy changed. Native Wayland, macOS, optional
-per-character geometry, and screen-reader-specific touch exploration remain
-unproved.
+- **Status:** Proved
+- **Consumer:** One presented Venus terminal surface.
+- **Trigger:** Bounded wheel movement, explicit Shift-drag selection, or copy.
+- **Result:** Venus maps interaction against the last presented frame into
+  canonical Orbit messages, renders only Orbit-authored selection, and writes
+  only Orbit-returned copied text to the native clipboard.
+- **Important failures:** Stale presentation, failed gesture admission, resize,
+  capture loss, or Orbit rejection cannot fabricate selection, copied text, or
+  viewport state.
+- **Owner:** Venus native gesture and clipboard effects; Orbit alone owns history,
+  viewport movement, input precedence, selection, and copied terminal text.
+- **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v4 at
+  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
+- **Boundary:** Real touchpad hardware, broader compositor coverage, and full
+  Neovim/Yazi dogfood remain open quality surfaces.
+- **Proof:** `3230c5820c821fd2437dcf0399d2ba921cec2c94`
+  - **Environment:** Accepted deterministic checks and retained x86_64 Linux
+    native Orbit/Venus dogfood
+  - **Evidence:** Gesture reconciliation, pointer-exclusive selection, exact
+    clipboard text, resize cancellation, reattachment, and client loss; accepted
+    base `04cdd6aaf5cf4f1c74984a5b129d7c61ed9d7536` and native pair
+    `1e6583ec83348617980d400e2cbdf5b1f1a6e3da`
 
-Presented-composite proof for `VEN-C1`, `VEN-C2`, and `VEN-C8`: Venus
-`20ff7bf39d629275b99853e688e7025ecc3738d7`; clean locked checks pass 50
-library, 24 host, and 14 canonical integration tests with Clippy warnings
-denied. One Application-owned generation covers the current attachment,
-accepted ready Orbit revision, and geometry-driving workspace composite. The
-renderer keys static content with that generation; visual and keyboard workspace
-actions plus terminal mouse, wheel, selection, and copy input require the same
-successfully presented identity. Native cursor tracking and already-admitted
-releases remain coherent while admission is withdrawn. Attachment, reconnect,
-accepted frames, workspace snapshots or header scroll, resize, scale, transport
-loss, and renderer failure invalidate publication. Deferred presentation
-publishes nothing, recovered presentation withdraws admission, and only a later
-Presented outcome publishes the candidate. Native timing was not reinjected;
-Linux proof is deterministic lifecycle coverage plus the unchanged accepted
-native evidence.
+## VEN-C8 — Eon workspace presentation
 
-Published-accessibility action hardening for `VEN-C8`: Venus
-`1f6af23860ce4c9f135a8eeb9e3e66cf75b4c619`; clean locked checks pass 59
-library, 28 host, and 14 canonical integration tests with Clippy warnings
-denied. AccessKit tab and pane actions resolved from the latest published tree
-queue their exact EONW v1 `FocusId` without waiting for GPU presentation, while
-visual and keyboard input retain the presented-composite gate. Local workspace
-focus follows successful bounded Eon queue admission for both AccessKit and
-pointer activation; a rejected queue changes no local focus. The focused check
-covers exact tab and pane actions, rejected admission, and terminal focus
-without an Eon action. No protocol, dependency, renderer, or platform policy
-changed. Native AT-SPI action timing during occlusion or recovery was not
-reinjected; Linux proof is deterministic and macOS remains unproved.
+- **Status:** Candidate
+- **Consumer:** One Venus surface controlled by an Eon workspace.
+- **Trigger:** Eon supplies topology or a workspace action changes tab, pane,
+  focus, liveness, endpoint, or metadata.
+- **Result:**
+  - Venus materializes ordered horizontal tabs and every fitting header for the
+    active tab around exactly one expanded pane.
+  - Every visible live endpoint has one bounded read-only metadata observer.
+  - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
+    and one compact working-directory label.
+  - Home displays the packaged home marker; descendants use `~/`; paths outside
+    home remain absolute; overlong paths elide from the left to preserve the
+    leaf; an unset or empty `HOME` keeps absolute paths.
+  - Terminal title remains available to the selected window and is not repeated
+    in pane chrome. Empty, offline, unavailable, or incompatible metadata falls
+    back to pane identity without exposing mapped Session identity.
+  - Hidden tabs have no observers, obsolete observations retire, and a 250 ms
+    reinspection exposes accepted external workspace changes without native
+    input.
+  - Existing pointer, keyboard traversal, creation, focus, and selected-terminal
+    attachment owners remain unchanged.
+- **Important failures:** Workspace loss, Orbit exit, endpoint replacement,
+  liveness change, or incompatible metadata retires stale observations and never
+  grants Venus topology or Session-lifecycle ownership.
+- **Owner:** Venus workspace materialization, bounded metadata observation,
+  clipping, and accessibility projection; Eon owns topology and Orbit owns
+  terminal metadata and Session lifetime.
+- **Consumes:** Eon `EON-C10`, EONW v1, and `eon-workspace-protocol` 0.1.0 at
+  `4af395aea06c230ee6b18cf0755ae25915c0b88d`; Orbit metadata observation in
+  ORBS v5 and `orbit-protocol` 0.1.0 at
+  `69c402737799f03e615473956954a043647a4713`.
+- **Boundary:** Other compositors and native AT-SPI inspection remain outside the
+  candidate proof.
+- **Proof:** `ee3defea55c77f7acc4559606965d93d39bba8b5`
+  - **Environment:** x86_64 Linux deterministic candidate
+  - **Evidence:** Workspace composition, exact metadata fallback, two-space
+    home-relative labels, clipping, AccessKit-name parity, and scale geometry;
+    accepted base `3612a929402de00d07d582b6547d99f66afe5cad`
+- **Open proof:** Fractional native scale and native AT-SPI were not rerun.
 
-Input-generation proof for `VEN-C2`, `VEN-C3`, and `VEN-C8`: Venus
-`f1bb47525973f7ddb250eeed9bc20c599dd9fbaa`; clean locked checks pass 52
-library, 24 host, and 14 canonical integration tests with Clippy warnings
-denied. One `InputState` keeps winit's current native modifier truth separate
-from keys, buttons, shortcuts, composition, selection, and semantic focus that
-belong to one Orbit attachment. Internal workspace focus retirement preserves
-still-held modifiers; endpoint replacement, attachment establishment, and
-retryable or terminal transport loss retire the old generation. Only admitted
-key and button presses can pair with Orbit releases or repeats, and only a
-non-repeat press starts shortcut capture. Stale native remainders are consumed
-after retirement. Native IME is enabled and admitted only for the current
-attached, native-focused terminal, so its `Disabled` transition clears pending
-composition while no Orbit generation accepts text. An attached replaced
-endpoint is offered `Focus(Lost)` before its bounded FIFO closes. Focus replay
-remains the current native and terminal-region truth. No protocol, manifest,
-dependency, module, or producer changed. Native event timing was not reinjected; Linux proof
-is deterministic state-transition coverage plus the unchanged accepted native
-evidence, and macOS ordering remains unproved.
+## VEN-C9 — Optional native decorations
 
-Native-IME rejection proof for `VEN-C2` and `VEN-C4`: Venus
-`a5bf5fde74618532e437ddfcbde3487922a9f394`; clean locked checks pass 53
-library, 25 host, and 14 canonical integration tests with Clippy warnings
-denied. `InputState` distinguishes silent state-only or empty transitions from
-one valid semantic key and a rejected non-empty commit after composition
-cleanup. `Application` routes only that rejection through the existing bounded
-Input notice owner; a later successfully queued semantic input retains the
-existing notice-recovery path. Focused checks cover valid Unicode, the exact
-canonical bound, over-bound text, control and private-use text, empty commit,
-preedit, disable, and notice recovery. No validator, protocol, dependency,
-module, split-commit, or platform policy changed. Linux proof is deterministic;
-native macOS IME quality remains unproved.
+- **Status:** Proved
+- **Consumer:** A user launching Venus.
+- **Trigger:** Launch with or without one `--no-decorations` option.
+- **Result:** The option requests an undecorated native window before creation;
+  omission retains decorations.
+- **Important failures:** Unknown, duplicate, or excess arguments fail with
+  bounded usage before window or transport creation.
+- **Owner:** Venus CLI admission and winit native window attributes.
+- **Consumes:** Exact locked winit 0.30.13; no Orbit or Eon protocol boundary.
+- **Boundary:** Non-Linux platforms are unproved.
+- **Proof:** `90988f6ebcde68338e202a9c637c59398aafe93d`
+  - **Environment:** x86_64 Linux Wayland and retained Xwayland comparison
+  - **Evidence:** Decorated default, both socket forms, invalid-input rejection,
+    and pre-window attribute application
 
-`VEN-C1` Nerd Font materialization proof: Venus
-`a19f53578668b2234391fffbb29e7a3e1b61cc3d`; clean locked checks pass 48
-library, 19 host, and 14 canonical integration tests. A distribution-equivalent
-Nix artifact proves packaged Symbols Nerd Font Mono 3.4.0 availability and
-representative BMP/supplementary PUA coverage. Isolated native COSMIC Wayland
-dogfood renders populated Yazi icons completely and retains equal U+F015
-geometry through a Zellij active/inactive transition without touching existing
-Sessions.
+## VEN-C10 — Native paste
 
-The Orbit proof revisions above establish source boundaries; they do not prove
-a Venus contract. Every consumer proof records the exact Orbit revisions tested
-and reports any gap to Orbit. Test-only proof maintenance at `7fab37efa40de5f340557cc31e061f37ed43859f` passed the locked checks without changing product logic; native proof remains at `8929c9f9d151641a343813ddeb6005cb9c771286`.
+- **Status:** Partially proved
+- **Consumer:** One attached focused Linux terminal surface.
+- **Trigger:** Native Paste or logical Ctrl+Shift+V.
+- **Result:** Venus reads ordinary native clipboard text once, admits at most
+  1 MiB, and submits exactly one canonical semantic paste to Orbit; Orbit alone
+  owns normal and bracketed terminal encoding.
+- **Important failures:** Oversized, invalid, unavailable, unfocused, detached,
+  or overlapping shortcut input fails visibly without duplicate submission.
+- **Owner:** Venus shortcut precedence, native clipboard read, admission bound,
+  and visible failure.
+- **Consumes:** Orbit `ORB-C5` and canonical semantic paste at
+  `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`, exact winit 0.30.13, and the
+  accepted Linux native clipboard owner.
+- **Boundary:** Hardware Paste key, broader clipboard environments, and
+  non-Linux destination policy remain unproved.
+- **Proof:** `9c56eb17613e10ef7712a1852b049ed63cf22b18`
+  - **Environment:** Deterministic checks plus isolated Sway 1.12 Wayland proof
+  - **Evidence:** Overlapping shortcuts, layout-independent release pairing,
+    multiline Unicode, normal mode, bracketed mode, and reattachment; native
+    Sway source `eb67dac509d0c6033e4373caf8c63eb6e4c88868`
+- **Open proof:** Manual Zellij, Helix, and Yazi acceptance remains assigned to
+  the user.
 
-Orbit proof `69c402737799f03e615473956954a043647a4713` is Venus's exact
-`orbit-protocol` dependency. It preserves the accepted ORBF v1 interaction
-surface and advances the attachment boundary to canonical ORBS v5 with one
-bounded read-only metadata observer.
+## VEN-C11 — Terminal-background opacity
 
-Venus `ae28346760253442fb4b54a97f57eea8d080b62e` mechanically proves the exact
-ORBS v5 consumer across the existing contracts plus the `VEN-C8` metadata
-projection: clean locked checks pass 61 library, 28 host, and 14 canonical
-integration tests. Venus sends only `ObserveMetadata` on observers, retains no
-schema mirror or history, and leaves presentation and input on the selected
-interactive attachment.
+- **Status:** Proved
+- **Consumer:** One Venus native surface.
+- **Trigger:** Launch with an optional finite `--background-opacity VALUE` in
+  `0.0..=1.0`.
+- **Result:** Omission equals `1.0`; the value applies only to terminal default
+  background, later Orbit-authored background changes, and terminal padding.
+  Explicit cells, selection, inverse video, workspace chrome, notices, focus,
+  foreground effects, input, hit testing, and accessibility remain unchanged.
+- **Important failures:** Invalid values fail before window creation; values
+  below `1.0` require a proved premultiplied surface and otherwise fail before
+  presentation.
+- **Owner:** Venus launch policy and renderer surface composition.
+- **Consumes:** Exact winit 0.30.13, wgpu 30.0.0, glyphon 0.12.0, ORBS v4 at
+  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`, and EONW v1 at
+  `4af395aea06c230ee6b18cf0755ae25915c0b88d`.
+- **Boundary:** Broader Linux compositor proof remains open; non-Linux output
+  conversion is not inherited from this proof.
+- **Proof:** `74ab5a0b661210f0afec94086f5358fe50b01f05`
+  - **Environment:** x86_64 Linux deterministic checks with retained COSMIC
+    native opacity dogfood
+  - **Evidence:** Default/background provenance, later background revision,
+    opaque chrome and notices, selection, resize, reattachment, and invalid NaN
+    with native predecessor `534e47908b7bb7e8286949fe39bf4b0f7cc811f9`
 
-Two-space home-relative pane-label candidate
-`ee3defea55c77f7acc4559606965d93d39bba8b5` keeps the same metadata, header,
-and AccessKit owners. One lexical projection uses U+F015 at exact `HOME`, `~/`
-below it, and absolute paths elsewhere; two ASCII spaces separate identity from
-location. Unset or empty `HOME` leaves absolute paths absolute. The existing
-80-character bound elides leftmost components and retains control-byte
-replacement. Clean locked format, check, 61 library, 28 host, 14 canonical
-integration tests, warnings-denied Clippy, and diff checks pass on x86_64 Linux.
-Phase: mechanically verified; composed native dogfood remains pending.
+## VEN-C13 — Terminal-authored clipboard delivery
 
-Venus `5a1506b24886b48bf6039b5a95c4ff66d0f09a42` mechanically proves the exact
-ORBS v4 consumer for `VEN-C1` through `VEN-C4`, `VEN-C7`, `VEN-C8`, `VEN-C11`,
-`VEN-C13`, and `VEN-C15`: clean locked checks pass 47 library, 19 host, and 14
-canonical integration tests. Isolated Linux Xwayland dogfood on predecessor
-Venus `0339135f13efebbddacb993d0782624bc58ab42e` against exact Orbit `7f067b30`
-covers coherent attachment and input, whole-row wheel movement, selection/copy,
-terminal clipboard delivery, detach/reopen with stable Orbit and PTY identities,
-and authoritative status-0 exit. The current 29-line-smaller corrections
-centralize transient-input cleanup, restore direct frame classification, collapse
-model ordering into one guarded match, let terminal model state own non-retryable
-teardown, derive frame capacity from the bounded event deque, and nest frame
-revisions under their server event owner. These corrections were not dogfooded
-again. `VEN-C9` remains unchanged. Venus sends no preview request and uses no
-schema mirror, adapter, dual decoder, downgrade, or interaction expansion.
+- **Status:** Partially proved
+- **Consumer:** One attached Venus client and its native clipboard owner.
+- **Trigger:** Orbit emits one canonical terminal clipboard-write effect.
+- **Result:** Venus delivers it once without storing, replaying, parsing, or
+  reconstructing terminal text; Linux standard maps to ordinary clipboard and
+  selection or primary maps to primary selection.
+- **Important failures:** Pre-attachment effect, native failure, invalid
+  destination, or Orbit rejection remains bounded and visible without changing
+  Scene state or selection-copy behavior.
+- **Owner:** Venus native clipboard effect delivery; Orbit owns terminal
+  interpretation and text.
+- **Consumes:** Orbit `ORB-C11` through canonical ORBS v4 at
+  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` and the accepted Linux native
+  clipboard owner.
+- **Boundary:** Ordinary clipboard delivery, Wayland without data-control,
+  broader compositors, and non-Linux destination policy remain unproved.
+- **Proof:** `2d3498258920736eb1bdae2b8869b6547b9735d4`
+  - **Environment:** Deterministic Venus checks with accepted x86_64 Linux
+    Wayland primary-selection composition
+  - **Evidence:** One-shot destination/text forwarding, unchanged Scene,
+    preserved selection copy, and exact primary-selection dogfood through Eon
+    `0e25ebc2311d7e41edf90c940f8211dd5839bb83` and Eonova
+    `4fda9b67b0faa33561624633229135e5e2d579ea`
 
-Launch-policy ownership proof for `VEN-C1`, `VEN-C9`, `VEN-C11`, `VEN-C14`,
-`VEN-C15`, and `VEN-C16`: Venus
-`bab89d1a31bdb7a6a5985f12443f1ace3b0d7f18`; clean locked checks pass 59
-library, 27 host, and 14 canonical integration tests. Binary-private
-`src/launch.rs` solely owns the unchanged CLI validation, defaults, socket
-fallback, and supervision selection; the application consumes one validated
-value. ORBS v4, EONW v1, dependencies, native behavior, and prior native proofs
-remain unchanged.
+## VEN-C14 — Supervised native presentation lifecycle
 
-Native-application ownership proof for `VEN-C1` through `VEN-C4`, `VEN-C7`
-through `VEN-C11`, and `VEN-C13` through `VEN-C16`: Venus
-`8e506a247af7ce031798e198e691ca64671b5c27`; clean locked checks pass 59
-library, 27 host, and 14 canonical integration tests with Clippy warnings
-denied. Binary-private `src/application.rs` solely owns the unchanged concrete
-winit lifecycle, retry and presentation state, application events, native host
-helpers, and stdin presentation control; `src/main.rs` only composes validated
-launch values into `application::run`. An absent display preserves the exact
-native-Wayland startup error, while an isolated native Wayland launch against a
-private nonexistent endpoint stayed live until the bounded observation ended.
-ORBS v4, EONW v1, dependencies, behavior, and existing subsystem owners remain
-unchanged.
+- **Status:** Proved
+- **Consumer:** One Eon-supervised Venus process.
+- **Trigger:** A complete private Present command, control EOF, or terminal read
+  failure.
+- **Result:** Present preserves process and terminal attachment while requesting
+  presentation of the existing native window; control loss exits through the
+  native event loop, releases attachments, and leaves Orbit live; replacement
+  may retry transient Busy while the old client releases.
+- **Important failures:** Malformed or partial commands do not present; standalone
+  Busy remains terminal; Present followed by EOF preserves exact Present-then-
+  Exit ordering.
+- **Owner:** Venus supervised control stream and native event-loop lifecycle.
+- **Consumes:** Eon `EON-C11`, one bounded private byte stream, Unix EOF, and
+  exact winit 0.30.13 event/exit APIs.
+- **Boundary:** Native focus and unminimize remain compositor-controlled on
+  Wayland; non-Linux platforms are unproved.
+- **Proof:** `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`
+  - **Environment:** x86_64 Linux deterministic host and composed Eon acceptance
+  - **Evidence:** Complete-command admission, malformed/partial rejection,
+    Present-then-Exit, ORBS release, replacement presentation, and live Orbit;
+    native predecessor `754eb057ea71ddee57b2f543d85d08d66edc953e`, exact
+    Orbit `86aa130629c09dce61d0f232150298656fa5cef4`, prior native
+    Present proof `50b7ef7f6c9d5b531b79ecca67c9c8fdf40f355f`, and composed
+    Eon acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a`
+
+## VEN-C15 — Compositor-owned background blur
+
+- **Status:** Proved
+- **Consumer:** One Venus native Wayland surface.
+- **Trigger:** Launch with an optional `--background-blur` flag.
+- **Result:** Before showing the window, Venus asks its native host for full-
+  surface compositor blur; omission makes no request. Translucent terminal
+  pixels reveal compositor blur while explicit cells, selection, inverse,
+  chrome, notices, focus, text, cursor, input, IME, and accessibility retain
+  their owners. The compositor owns capability, algorithm, strength, and policy.
+- **Important failures:** Unsupported or policy-disabled compositors remain best
+  effort without failing launch; duplicate, unknown, or excess arguments fail
+  before window creation.
+- **Owner:** Venus owns one boolean request, winit owns native protocol lifecycle,
+  and the compositor owns the effect.
+- **Consumes:** Exact patched winit 0.30.13 at
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, backporting upstream
+  `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`; unchanged `VEN-C11`, ORBS v4,
+  and EONW v1.
+- **Boundary:** Stable crates.io winit lacks the mechanism; non-COSMIC
+  compositors and unsupported platforms are unproved; no capability or strength
+  API is exposed.
+- **Proof:** `7fc7e4ba97aaf48b586002934a580ef2d1c31694`
+  - **Environment:** COSMIC Wayland 1.0.0 on x86_64 Linux
+  - **Evidence:** Flag admission, hidden-window attributes, blur off/on at
+    opacity `0.0`, `0.65`, and `0.88`, and preserved terminal/chrome semantics
+    on COSMIC revision `091583ac84abac02967ae358cf9570ddfef63b31`
+
+## VEN-C16 — Native Linux Wayland platform
+
+- **Status:** Proved
+- **Consumer:** Every packaged Venus application launch.
+- **Trigger:** Build or launch the native application.
+- **Result:** Venus supports only Linux on native Wayland with Vulkan, selects no
+  X11 or Metal backend, rejects non-Linux builds, and reaches attachment only
+  with a usable Wayland display.
+- **Important failures:** Launch without Wayland fails before presentation
+  attachment with a bounded explicit error.
+- **Owner:** Venus native host and dependency feature selection.
+- **Consumes:** User-approved `EON-C7`; exact winit 0.30.13 at
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; wgpu 30.0.0;
+  wl-clipboard-rs 0.9.3; unchanged ORBS v4 and EONW v1.
+- **Boundary:** X11, Xwayland, macOS, and other native platforms are unsupported.
+- **Proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
+  - **Environment:** x86_64 Linux native Wayland
+  - **Evidence:** Locked format/check/test/Clippy, exact dependency features,
+    no-Wayland failure, and live native event-loop launch
+- **Open proof:** Exact Eon pin/package integration and installed clipboard
+  acceptance are pending.
+
+## VEN-C17 — Caller-owned native application identity
+
+- **Status:** Proved
+- **Consumer:** Eon, EonTerm, or one approved EonTerm composition.
+- **Trigger:** The caller supplies one optional validated application ID before
+  Venus creates its window.
+- **Result:** The accepted value becomes winit's Wayland general name and native
+  xdg-toplevel app ID; omission remains `eon`; Orbit-authored titles remain
+  independent presentation state.
+- **Important failures:** Empty, non-UTF-8, oversized, or non-token values fail
+  before window creation; Venus never infers identity from child argv,
+  environment, titles, executable names, runtime paths, or desktop files.
+- **Owner:** The caller owns identity choice and desktop metadata; Venus owns
+  direct CLI validation and native Wayland materialization.
+- **Consumes:** Exact winit 0.30.13 commit
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; Eon owns the selected value.
+- **Boundary:** Immutable launch metadata only; no branding framework, mutable
+  identity, discovery, X11/Xwayland compatibility, or wider platform promise.
+- **Proof:** `ab24961bd6b2f9403736e52ebbac8cc266488a41`
+  - **Environment:** x86_64 Linux Wayland with installed Eonova acceptance
+  - **Evidence:** Locked format/check/test/Clippy and exact live
+    `--application-id eonova` grouping without Session duplication
+
+## Rules
+
+- Each contract uses one `## VEN-CN — Name` heading and the semantic fields
+  `Status`, `Consumer`, `Trigger`, `Result`, `Important failures`, `Owner`,
+  `Boundary`, and `Proof`; use nested bullets instead of prose table cells.
+- Contract IDs are stable and repository-qualified. Never renumber or reuse an
+  ID; mark an explicitly removed contract retired.
+- Only current user-visible behavior, correctness boundaries, ownership
+  invariants, and cross-repository interfaces belong here.
+- Every implementation Bead names contracts it changes, proves, consumes,
+  hardens, or preserves and maps consumed Orbit contracts to exact revisions.
+- Historical execution evidence belongs in Beads and Git, not this current-state
+  index. User-visible chronology belongs in `CHANGELOG.md`.
+- Later work touching a proved owner reruns its indexed checks and advances the
+  proof revision or records the remaining gap.
