@@ -4,6 +4,8 @@ This is the canonical current state of Venus behavior, ownership, proof, and
 remaining limitations. Beads and Git retain execution history; `CHANGELOG.md`
 retains accepted user-visible chronology.
 
+`VEN-C16` owns platform scope.
+
 ## Status
 
 - **Planned:** accepted contract with no sufficient implementation evidence
@@ -42,8 +44,7 @@ retains accepted user-visible chronology.
   `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`; ORBF v1 in canonical ORBS v4
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
   owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
-- **Boundary:** Graphics, broader Linux compositors, fractional/HiDPI native
-  quality, and non-Linux platforms remain outside the proof.
+- **Boundary:** Fractional/HiDPI native quality remains outside the proof.
 - **Proof:** `5d22b09e323212693a8e54c4c63089784b660cad`
   - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
     evidence from the accepted presentation lineage
@@ -76,8 +77,8 @@ retains accepted user-visible chronology.
 - **Consumes:** Orbit `ORB-C5` proof
   `c905bf9610581747f1b07565814b501ca66cfaa6` through canonical ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
-- **Boundary:** Candidate-list IMEs and broader native hardware quality remain
-  manual surfaces.
+- **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
+  Linux Wayland compositor behavior remain manual quality surfaces.
 - **Proof:** `c0766532c7669a2ae9dac6a26ae94d467110896b`
   - **Environment:** Accepted deterministic host coverage plus retained native
     geometry and input evidence
@@ -113,7 +114,7 @@ retains accepted user-visible chronology.
   Session survival.
 - **Consumes:** Orbit `ORB-C1`, `ORB-C3`, `ORB-C4`, and `ORB-C7` through canonical
   ORBS v4 at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
-- **Boundary:** Broader compositor coverage and non-Linux platforms are unproved.
+- **Boundary:** Broader Linux compositor coverage remains unproved.
 - **Proof:** `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`
   - **Environment:** x86_64 Linux with deterministic host and composed Eon
     acceptance
@@ -141,8 +142,8 @@ retains accepted user-visible chronology.
 - **Owner:** Venus connection state, notice projection, and renderer lifecycle.
 - **Consumes:** Orbit `ORB-C3`, `ORB-C4`, and `ORB-C7` through canonical ORBS v4
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
-- **Boundary:** Compositor title-bar visibility and broader platform proof remain
-  outside the accepted slice.
+- **Boundary:** Compositor title-bar visibility and broader Linux compositor
+  proof remain outside the accepted slice.
 - **Proof:** `588996739aaff32756ca24960135371a94636801`
   - **Environment:** x86_64 Linux deterministic host coverage with retained
     native title and supervised-loss evidence
@@ -170,8 +171,9 @@ retains accepted user-visible chronology.
   viewport movement, input precedence, selection, and copied terminal text.
 - **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
-- **Boundary:** Real touchpad hardware, broader compositor coverage, and full
-  Neovim/Yazi dogfood remain open quality surfaces.
+- **Boundary:** Real touchpad hardware, resize under a non-tiling window manager,
+  broader Linux compositor coverage, and full Neovim/Yazi dogfood remain open
+  quality surfaces.
 - **Proof:** `3230c5820c821fd2437dcf0399d2ba921cec2c94`
   - **Environment:** Accepted deterministic checks and retained x86_64 Linux
     native Orbit/Venus dogfood
@@ -201,8 +203,9 @@ retains accepted user-visible chronology.
   - Hidden tabs have no observers, obsolete observations retire, and a 250 ms
     reinspection exposes accepted external workspace changes without native
     input.
-  - Existing pointer, keyboard traversal, creation, focus, and selected-terminal
-    attachment owners remain unchanged.
+  - Pointer input, Alt+H/L tab traversal, Alt+K/J pane traversal, Alt+M pane
+    creation, Ctrl+T tab creation, focused arrow traversal, and selected-terminal
+    attachment retain their existing owners.
 - **Important failures:** Workspace loss, Orbit exit, endpoint replacement,
   liveness change, or incompatible metadata retires stale observations and never
   grants Venus topology or Session-lifecycle ownership.
@@ -213,8 +216,8 @@ retains accepted user-visible chronology.
   `4af395aea06c230ee6b18cf0755ae25915c0b88d`; Orbit metadata observation in
   ORBS v5 and `orbit-protocol` 0.1.0 at
   `69c402737799f03e615473956954a043647a4713`.
-- **Boundary:** Other compositors and native AT-SPI inspection remain outside the
-  candidate proof.
+- **Boundary:** Other Linux Wayland compositors remain outside the candidate
+  proof.
 - **Proof:** `ee3defea55c77f7acc4559606965d93d39bba8b5`
   - **Environment:** x86_64 Linux deterministic candidate
   - **Evidence:** Workspace composition, exact metadata fallback, two-space
@@ -233,9 +236,9 @@ retains accepted user-visible chronology.
   bounded usage before window or transport creation.
 - **Owner:** Venus CLI admission and winit native window attributes.
 - **Consumes:** Exact locked winit 0.30.13; no Orbit or Eon protocol boundary.
-- **Boundary:** Non-Linux platforms are unproved.
+- **Boundary:** Runtime decoration changes are outside this launch-only contract.
 - **Proof:** `90988f6ebcde68338e202a9c637c59398aafe93d`
-  - **Environment:** x86_64 Linux Wayland and retained Xwayland comparison
+  - **Environment:** x86_64 Linux Wayland
   - **Evidence:** Decorated default, both socket forms, invalid-input rejection,
     and pre-window attribute application
 
@@ -254,8 +257,8 @@ retains accepted user-visible chronology.
 - **Consumes:** Orbit `ORB-C5` and canonical semantic paste at
   `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`, exact winit 0.30.13, and the
   accepted Linux native clipboard owner.
-- **Boundary:** Hardware Paste key, broader clipboard environments, and
-  non-Linux destination policy remain unproved.
+- **Boundary:** A hardware Paste key and native Wayland without data-control
+  remain unproved.
 - **Proof:** `9c56eb17613e10ef7712a1852b049ed63cf22b18`
   - **Environment:** Deterministic checks plus isolated Sway 1.12 Wayland proof
   - **Evidence:** Overlapping shortcuts, layout-independent release pairing,
@@ -281,8 +284,7 @@ retains accepted user-visible chronology.
 - **Consumes:** Exact winit 0.30.13, wgpu 30.0.0, glyphon 0.12.0, ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`, and EONW v1 at
   `4af395aea06c230ee6b18cf0755ae25915c0b88d`.
-- **Boundary:** Broader Linux compositor proof remains open; non-Linux output
-  conversion is not inherited from this proof.
+- **Boundary:** Broader Linux compositor proof remains open.
 - **Proof:** `74ab5a0b661210f0afec94086f5358fe50b01f05`
   - **Environment:** x86_64 Linux deterministic checks with retained COSMIC
     native opacity dogfood
@@ -306,8 +308,8 @@ retains accepted user-visible chronology.
 - **Consumes:** Orbit `ORB-C11` through canonical ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` and the accepted Linux native
   clipboard owner.
-- **Boundary:** Ordinary clipboard delivery, Wayland without data-control,
-  broader compositors, and non-Linux destination policy remain unproved.
+- **Boundary:** Ordinary clipboard delivery, Wayland without data-control, and
+  broader Linux compositor coverage remain unproved.
 - **Proof:** `2d3498258920736eb1bdae2b8869b6547b9735d4`
   - **Environment:** Deterministic Venus checks with accepted x86_64 Linux
     Wayland primary-selection composition
@@ -332,8 +334,8 @@ retains accepted user-visible chronology.
 - **Owner:** Venus supervised control stream and native event-loop lifecycle.
 - **Consumes:** Eon `EON-C11`, one bounded private byte stream, Unix EOF, and
   exact winit 0.30.13 event/exit APIs.
-- **Boundary:** Native focus and unminimize remain compositor-controlled on
-  Wayland; non-Linux platforms are unproved.
+- **Boundary:** Direct focus and unminimize are unavailable through winit;
+  xdg activation remains compositor-controlled.
 - **Proof:** `a768e9a1bcb61eac5a21d25b7463c9dc44aa2df8`
   - **Environment:** x86_64 Linux deterministic host and composed Eon acceptance
   - **Evidence:** Complete-command admission, malformed/partial rejection,
@@ -362,14 +364,16 @@ retains accepted user-visible chronology.
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, backporting upstream
   `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`; unchanged `VEN-C11`, ORBS v4,
   and EONW v1.
-- **Boundary:** Stable crates.io winit lacks the mechanism; non-COSMIC
-  compositors and unsupported platforms are unproved; no capability or strength
-  API is exposed.
+- **Boundary:** Stable crates.io winit lacks the mechanism; non-COSMIC Linux
+  compositors remain unproved; no API reports capability or compositor
+  acceptance or controls strength.
 - **Proof:** `7fc7e4ba97aaf48b586002934a580ef2d1c31694`
   - **Environment:** COSMIC Wayland 1.0.0 on x86_64 Linux
   - **Evidence:** Flag admission, hidden-window attributes, blur off/on at
     opacity `0.0`, `0.65`, and `0.88`, and preserved terminal/chrome semantics
     on COSMIC revision `091583ac84abac02967ae358cf9570ddfef63b31`
+- **Open proof:** A populated current Eon workspace was not re-dogfooded; this
+  proof reuses accepted VEN-C11 composition evidence.
 
 ## VEN-C16 — Native Linux Wayland platform
 
@@ -409,8 +413,7 @@ retains accepted user-visible chronology.
   direct CLI validation and native Wayland materialization.
 - **Consumes:** Exact winit 0.30.13 commit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; Eon owns the selected value.
-- **Boundary:** Immutable launch metadata only; no branding framework, mutable
-  identity, discovery, X11/Xwayland compatibility, or wider platform promise.
+- **Boundary:** Native mapping only; no branding framework or mutable identity.
 - **Proof:** `ab24961bd6b2f9403736e52ebbac8cc266488a41`
   - **Environment:** x86_64 Linux Wayland with installed Eonova acceptance
   - **Evidence:** Locked format/check/test/Clippy and exact live
@@ -418,9 +421,12 @@ retains accepted user-visible chronology.
 
 ## Rules
 
-- Each contract uses one `## VEN-CN — Name` heading and the semantic fields
+- Each contract uses one `## VEN-CN — Name` heading and the required fields
   `Status`, `Consumer`, `Trigger`, `Result`, `Important failures`, `Owner`,
-  `Boundary`, and `Proof`; use nested bullets instead of prose table cells.
+  `Boundary`, and `Proof`.
+- Add optional `Consumes` and `Open proof` fields when applicable; nest
+  `Environment` and `Evidence` under `Proof`, and use nested bullets instead of
+  prose table cells.
 - Contract IDs are stable and repository-qualified. Never renumber or reuse an
   ID; mark an explicitly removed contract retired.
 - Only current user-visible behavior, correctness boundaries, ownership
