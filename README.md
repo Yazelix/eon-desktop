@@ -67,6 +67,15 @@ For an Eon workspace, pass the initial Orbit socket followed by the EONW socket:
 cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
 ```
 
+Pass `--application-id ID` before the sockets when the caller owns a distinct
+desktop identity. The bounded ASCII token becomes the Wayland app ID before
+window creation and does not replace Orbit-authored window titles. Direct Venus
+launches use `eon`:
+
+```sh
+cargo run --locked -- --application-id eonova /path/to/orbit.sock
+```
+
 Pass `--no-decorations` to request a window without its native title bar. The
 default remains decorated:
 
@@ -197,11 +206,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 207 |
-| Contracts and references | 598 |
+| README | 216 |
+| Contracts and references | 627 |
 | Crate decisions | 160 |
-| Changelog | 125 |
-| Rust source, including unit tests | 10,801 |
+| Changelog | 128 |
+| Rust source, including unit tests | 10,837 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **12,942** |
+| **Total** | **13,019** |

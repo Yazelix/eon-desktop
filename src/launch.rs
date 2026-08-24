@@ -10,10 +10,11 @@ const DEFAULT_CURSOR_TAIL: (Color, f32) = (
     },
     1.0,
 );
-const USAGE: &str = "usage: yazelix-venus [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
+const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
 
 #[derive(Debug)]
 pub(super) struct LaunchArguments {
+    pub(super) application_id: String,
     pub(super) orbit_socket: PathBuf,
     pub(super) workspace_socket: Option<PathBuf>,
     pub(super) supervised: bool,
@@ -28,6 +29,7 @@ pub(super) fn launch_arguments(
     presentation_control: Option<OsString>,
 ) -> Result<LaunchArguments> {
     let mut arguments = arguments.into_iter();
+    let mut application_id = None;
     let mut orbit_socket = None;
     let mut workspace_socket = None;
     let mut decorations = true;
@@ -38,7 +40,18 @@ pub(super) fn launch_arguments(
     let mut cursor_trail_duration = None;
 
     while let Some(argument) = arguments.next() {
-        if argument == "--no-decorations" {
+        if argument == "--application-id" {
+            if application_id.is_some() {
+                return Err(USAGE.into());
+            }
+            application_id = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .filter(|value| valid_application_id(value));
+            if application_id.is_none() {
+                return Err(USAGE.into());
+            }
+        } else if argument == "--no-decorations" {
             decorations = false;
         } else if argument == "--background-opacity" {
             if background_opacity.is_some() {
@@ -109,6 +122,7 @@ pub(super) fn launch_arguments(
     };
 
     Ok(LaunchArguments {
+        application_id: application_id.unwrap_or_else(|| "eon".into()),
         orbit_socket: orbit_socket.map_or_else(default_socket_path, Ok)?,
         workspace_socket,
         supervised: presentation_control == Some(OsString::from("stdin")),
@@ -117,6 +131,14 @@ pub(super) fn launch_arguments(
         background_blur,
         cursor_tail,
     })
+}
+
+fn valid_application_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
 }
 
 fn parse_cursor_color(value: &str) -> Option<Color> {
@@ -155,6 +177,7 @@ mod tests {
             |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from), None);
 
         let default = parse(&[]).unwrap();
+        assert_eq!(default.application_id, "eon");
         assert!(default.decorations && default.workspace_socket.is_none());
         assert!(!default.supervised);
         assert_eq!(default.background_opacity, 1.0);
@@ -220,6 +243,12 @@ mod tests {
             parse(&["--cursor-effect-v1", "none"]).unwrap().cursor_tail,
             None
         );
+        assert_eq!(
+            parse(&["--application-id", "eonova"])
+                .unwrap()
+                .application_id,
+            "eonova"
+        );
 
         for invalid in [
             &["--unknown"][..],
@@ -232,6 +261,10 @@ mod tests {
             &["--background-opacity", "1.01"][..],
             &["--background-opacity", "0.5", "--background-opacity", "0.6"][..],
             &["--background-blur", "--background-blur"][..],
+            &["--application-id"][..],
+            &["--application-id", ""][..],
+            &["--application-id", "bad/id"][..],
+            &["--application-id", "eon", "--application-id", "eonova"][..],
             &["--cursor-effect-v1"][..],
             &["--cursor-effect-v1", "warp"][..],
             &["--cursor-effect-v1", "tail"][..],

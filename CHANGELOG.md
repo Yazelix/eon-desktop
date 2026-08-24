@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept one bounded caller-owned application ID before native Wayland window
+  creation, preserving `eon` as the direct default and keeping terminal titles
+  independent from launcher grouping.
 - Show each visible live pane's exact Eon identity, two spaces, then a
   `~/`-anchored path below `HOME`, an absolute path elsewhere, or Nova's marker
   at exact `HOME`; unset or empty `HOME` leaves paths absolute.

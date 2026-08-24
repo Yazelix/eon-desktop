@@ -157,6 +157,7 @@ struct MetadataObserver {
 }
 
 struct Application {
+    application_id: String,
     orbit_socket: PathBuf,
     workspace_socket: Option<PathBuf>,
     supervised: bool,
@@ -193,6 +194,7 @@ struct Application {
 impl Application {
     fn new(arguments: LaunchArguments, proxy: EventLoopProxy<UserEvent>) -> Self {
         let LaunchArguments {
+            application_id,
             orbit_socket,
             workspace_socket,
             supervised,
@@ -202,6 +204,7 @@ impl Application {
             cursor_tail,
         } = arguments;
         Self {
+            application_id,
             orbit_socket,
             workspace_socket,
             supervised,
@@ -243,7 +246,7 @@ impl Application {
             self.background_blur,
         );
         #[cfg(target_os = "linux")]
-        let attributes = attributes.with_name("eon", "yazelix-venus");
+        let attributes = attributes.with_name(self.application_id.as_str(), "yazelix-venus");
         let window = Arc::new(event_loop.create_window(attributes)?);
         let accessibility = Accessibility::new(window.inner_size());
         let adapter = accesskit_winit::Adapter::with_mixed_handlers(

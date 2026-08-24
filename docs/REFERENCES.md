@@ -295,6 +295,17 @@ v0.30.13 tag and is an exact backport of verified merged upstream commit
 `WindowAttributes::with_blur` contract unchanged. The fork and upstream remain
 Apache-2.0.
 
+## Required for caller-owned application identity
+
+Exact patched winit 0.30.13 commit
+`fb45fbf901fbe70cc9a877b5d651d0b60c206b08` documents and implements
+`WindowAttributesExtWayland::with_name`: its general name becomes the Wayland
+application ID and should match the distributed desktop-file ID; its instance
+name is unused on Wayland. VEN-C17 reuses only this existing native window
+attribute seam before creation. It rejects desktop-file loading, title-based
+grouping, product-specific branches, mutable identity, and another window or
+event-loop owner.
+
 Wayland Protocols 1.46 at peeled commit
 `6141e1154303dadd5c3e480bc4a16e26f1dcb2af` is the first corrected protocol
 reference and is byte-identical to the XML bundled by locked
