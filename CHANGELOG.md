@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- Show each visible live pane's exact Eon identity beside a `~/`-anchored path
-  below `HOME`, an absolute path elsewhere, or Nova's marker at exact `HOME`.
+- Show each visible live pane's exact Eon identity, two spaces, then a
+  `~/`-anchored path below `HOME`, an absolute path elsewhere, or Nova's marker
+  at exact `HOME`.
   Overlong labels preserve their rightmost components, while terminal titles
   stay in the selected native window without title-only pane redraws.
 - Make Venus native Linux Wayland/Vulkan-only, remove X11 and Metal features and
