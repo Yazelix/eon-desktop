@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- Show each visible live pane's exact Eon identity beside only the final
-  working-directory component in its existing clipped header and accessibility
-  name, use Nova's home marker at `HOME`, and leave terminal titles to the
-  selected native window without title-only pane redraws.
+- Show each visible live pane's exact Eon identity beside a `~/`-anchored path
+  below `HOME`, an absolute path elsewhere, or Nova's marker at exact `HOME`.
+  Overlong labels preserve their rightmost components, while terminal titles
+  stay in the selected native window without title-only pane redraws.
 - Make Venus native Linux Wayland/Vulkan-only, remove X11 and Metal features and
   unsupported compatibility calls, and replace arboard's X11 fallback with
   direct Wayland data-control clipboard ownership.
