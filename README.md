@@ -9,8 +9,9 @@ and sends semantic interaction back to the authoritative session runtime.
 The Venus client implements one native Wayland window on Linux for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
-pane accordion. Visible live pane headers show Orbit's current title and working
-directory, while only the selected endpoint receives presentation and input. It
+pane accordion. Visible live pane headers show Eon's opaque pane identity beside
+Orbit's compact working directory, using a home marker at `HOME`, while only the
+selected endpoint receives presentation and input. It
 automatically recovers that attachment after retryable local socket loss, detaches
 without ending any Session, and does not own a PTY, terminal emulator, or
 workspace topology.
@@ -142,8 +143,10 @@ replacement or authoritative offline state cancels obsolete retry state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
 and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
-available. Pane headers show pane identity and offline state; Session mappings
-remain in Eon diagnostics. Wheel over the tab strip or a pane header to reach
+available. Pane headers show pane identity plus the final working-directory
+component, or the home marker for the exact home directory; terminal titles stay
+in the selected native window. Session mappings remain in Eon diagnostics. Wheel
+over the tab strip or a pane header to reach
 clipped headers without scrolling the terminal. In standalone mode these keys
 remain Orbit input.
 
@@ -192,11 +195,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 202 |
-| Contracts and references | 587 |
+| README | 205 |
+| Contracts and references | 585 |
 | Crate decisions | 160 |
 | Changelog | 124 |
-| Rust source, including unit tests | 10,735 |
+| Rust source, including unit tests | 10,752 |
 | Rust integration tests | 612 |
 | Cargo manifest | 23 |
-| **Total** | **12,859** |
+| **Total** | **12,877** |
