@@ -10,7 +10,7 @@ The Venus client implements one native Wayland window on Linux for an Eon worksp
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion. Visible live pane headers show Eon's opaque pane identity, a
-two-space gutter, and Orbit's home-relative working directory, using a home
+two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
 only the selected endpoint receives presentation and input. It
 automatically recovers that attachment after retryable local socket loss, detaches

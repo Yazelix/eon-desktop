@@ -160,9 +160,9 @@ source `69c402737799f03e615473956954a043647a4713`. Orbit owns bounded title and
 working-directory values plus the read-only `ObserveMetadata` role; Venus sends
 that one request, rejects every other role or message order, and retains only
 the latest accepted update for each visible live endpoint.
-The projection removes only `file://localhost` and empty-authority `file://`
-decoration from an absolute local path. Remote authorities, percent encoding,
-and every other value remain literal rather than introducing URI policy.
+Within Eon's local-only product boundary, the projection treats a `file://`
+authority as transport decoration and displays only the absolute path. Remote
+working-directory semantics and percent decoding remain outside the contract.
 
 Exact EONW producer proof `4af395aea06c230ee6b18cf0755ae25915c0b88d`
 remains authoritative for active-tab visibility, pane liveness, endpoint
