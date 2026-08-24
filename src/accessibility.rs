@@ -710,7 +710,6 @@ mod tests {
     #[test]
     fn workspace_accessibility_order_matches_tabs_then_one_expanded_pane() {
         let metadata = PaneMetadata::Available {
-            title: "Codex ◐".into(),
             working_directory: "file:///tmp/eon".into(),
         };
         let workspace = WorkspaceScene::from_snapshot_with_metadata(
@@ -719,16 +718,16 @@ mod tests {
                 tabs: vec![
                     Tab {
                         id: "tab-1".into(),
-                        selected_pane: "pane-2".into(),
+                        selected_pane: "p2".into(),
                         panes: vec![
                             Pane {
-                                id: "pane-1".into(),
+                                id: "p1".into(),
                                 session: "session-1".into(),
                                 endpoint: b"/run/eon/one.sock".to_vec(),
                                 live: false,
                             },
                             Pane {
-                                id: "pane-2".into(),
+                                id: "p2".into(),
                                 session: "session-2".into(),
                                 endpoint: b"/run/eon/two.sock".to_vec(),
                                 live: true,
@@ -737,9 +736,9 @@ mod tests {
                     },
                     Tab {
                         id: "tab-2".into(),
-                        selected_pane: "pane-3".into(),
+                        selected_pane: "p3".into(),
                         panes: vec![Pane {
-                            id: "pane-3".into(),
+                            id: "p3".into(),
                             session: "session-3".into(),
                             endpoint: b"/run/eon/three.sock".to_vec(),
                             live: false,
@@ -771,8 +770,8 @@ mod tests {
         snapshot.set_workspace(Some(&workspace));
         let tab_1 = snapshot.tab_ids["tab-1"];
         let tab_2 = snapshot.tab_ids["tab-2"];
-        let pane_1 = snapshot.pane_ids["pane-1"];
-        let pane_2 = snapshot.pane_ids["pane-2"];
+        let pane_1 = snapshot.pane_ids["p1"];
+        let pane_2 = snapshot.pane_ids["p2"];
         let update = snapshot.tree();
         assert_eq!(node(&update, WINDOW).children(), &[TAB_LIST, PANE_PANEL]);
         assert_eq!(node(&update, TAB_LIST).children(), &[tab_1, tab_2]);
@@ -781,8 +780,8 @@ mod tests {
             &[pane_1, pane_2, CONTENT]
         );
         assert_eq!(node(&update, tab_1).role(), Role::Tab);
-        assert_eq!(node(&update, pane_1).label(), Some("pane-1 offline"));
-        assert_eq!(workspace.panes[1].label(), "Codex ◐ · /tmp/eon");
+        assert_eq!(node(&update, pane_1).label(), Some("p1 offline"));
+        assert_eq!(workspace.panes[1].label(), "p2 · eon");
         assert_eq!(
             node(&update, pane_2).label(),
             Some(workspace.panes[1].label())

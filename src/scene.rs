@@ -3,7 +3,7 @@ use eon_workspace_protocol::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Screen, StyleColor, Underline,
 };
-use std::fmt::Write;
+use std::{fmt::Write, path::Path};
 use winit::dpi::PhysicalSize;
 
 /// Physical rectangle shared by workspace drawing, hit testing, and accessibility.
@@ -73,7 +73,6 @@ impl WorkspacePane {
 pub enum PaneMetadata {
     Connecting,
     Available {
-        title: String,
         working_directory: String,
     },
     #[default]
@@ -81,40 +80,44 @@ pub enum PaneMetadata {
 }
 
 const MAX_PANE_METADATA_FIELD_CHARS: usize = 80;
+const HOME_MARKER: &str = "\u{f015}";
 
 fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
     if !live {
         return format!("{id} offline");
     }
-    let (title, working_directory) = match metadata {
+    let working_directory = match metadata {
         PaneMetadata::Connecting => return format!("{id} connecting"),
-        PaneMetadata::Available {
-            title,
-            working_directory,
-        } => (title, working_directory),
+        PaneMetadata::Available { working_directory } => working_directory,
         PaneMetadata::Unavailable => return format!("{id} unavailable"),
     };
-    let empty = (title.trim().is_empty(), working_directory.trim().is_empty());
-    let title = bounded_metadata_field(title);
-    let working_directory = bounded_metadata_field(local_working_directory(working_directory));
-    match empty {
-        (false, false) => format!("{title} · {working_directory}"),
-        (false, true) => title,
-        (true, false) => working_directory,
-        (true, true) => id.to_owned(),
+    if working_directory.trim().is_empty() {
+        return id.to_owned();
     }
+    let working_directory = bounded_metadata_field(compact_working_directory(working_directory));
+    format!("{id} · {working_directory}")
 }
 
 fn local_working_directory(value: &str) -> &str {
     value
-        .strip_prefix("file://localhost")
-        .filter(|path| path.starts_with('/'))
-        .or_else(|| {
-            value
-                .strip_prefix("file://")
-                .filter(|path| path.starts_with('/'))
-        })
+        .strip_prefix("file://")
+        .and_then(|path| path.find('/').map(|slash| &path[slash..]))
         .unwrap_or(value)
+}
+
+fn compact_working_directory(value: &str) -> &str {
+    let value = local_working_directory(value);
+    if std::env::var_os("HOME")
+        .as_deref()
+        .is_some_and(|home| Path::new(value) == Path::new(home))
+    {
+        HOME_MARKER
+    } else {
+        Path::new(value)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(value)
+    }
 }
 
 fn bounded_metadata_field(value: &str) -> String {
@@ -792,57 +795,73 @@ mod tests {
     #[test]
     fn pane_metadata_label_is_bounded_safe_and_has_honest_fallbacks() {
         let metadata = PaneMetadata::Available {
-            title: format!("Codex\n{}", "界".repeat(90)),
             working_directory: format!("file:///tmp/{}", "eon".repeat(30)),
         };
-        let label = pane_label("pane-1", true, &metadata);
+        let label = pane_label("p1", true, &metadata);
 
-        assert!(label.starts_with("Codex�界"));
-        assert!(label.contains(" · /tmp/"));
+        assert_eq!(label, format!("p1 · {}e…", "eon".repeat(26)));
         assert!(!label.contains("file://"));
-        assert!(label.chars().count() <= 163);
+        assert_eq!(label.chars().count(), 85);
         assert_eq!(
             pane_label(
-                "pane-1",
+                "p1",
                 true,
                 &PaneMetadata::Available {
-                    title: String::new(),
-                    working_directory: "file://localhost/home/lucca".into(),
+                    working_directory: "file://localhost/home/lucca/project".into(),
                 },
             ),
-            "/home/lucca"
+            "p1 · project"
         );
         assert_eq!(
             pane_label(
-                "pane-1",
+                "p1",
                 true,
                 &PaneMetadata::Available {
-                    title: String::new(),
                     working_directory: "file://server/share".into(),
                 },
             ),
-            "file://server/share"
-        );
-        assert_eq!(
-            pane_label("pane-1", true, &PaneMetadata::Connecting),
-            "pane-1 connecting"
-        );
-        assert_eq!(
-            pane_label("pane-1", true, &PaneMetadata::Unavailable),
-            "pane-1 unavailable"
+            "p1 · share"
         );
         assert_eq!(
             pane_label(
-                "pane-1",
+                "p1",
                 true,
                 &PaneMetadata::Available {
-                    title: " \t".into(),
+                    working_directory: "file:///".into(),
+                },
+            ),
+            "p1 · /"
+        );
+        let home = std::env::var("HOME").expect("HOME is required by Venus");
+        assert_eq!(
+            pane_label(
+                "p1",
+                true,
+                &PaneMetadata::Available {
+                    working_directory: format!("file://host{home}"),
+                },
+            ),
+            "p1 · "
+        );
+        assert_eq!(
+            pane_label("p1", true, &PaneMetadata::Connecting),
+            "p1 connecting"
+        );
+        assert_eq!(
+            pane_label("p1", true, &PaneMetadata::Unavailable),
+            "p1 unavailable"
+        );
+        assert_eq!(
+            pane_label(
+                "p1",
+                true,
+                &PaneMetadata::Available {
                     working_directory: String::new(),
                 },
             ),
-            "pane-1"
+            "p1"
         );
-        assert_eq!(pane_label("pane-1", false, &metadata), "pane-1 offline");
+        assert_eq!(pane_label("p1", false, &metadata), "p1 offline");
     }
 
     fn draw_style(selected: bool) -> DrawStyle {

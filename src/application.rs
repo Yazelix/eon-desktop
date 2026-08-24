@@ -490,7 +490,6 @@ impl Application {
             };
             let metadata = match event {
                 MetadataEvent::Metadata(metadata) => PaneMetadata::Available {
-                    title: metadata.title,
                     working_directory: metadata.working_directory,
                 },
                 MetadataEvent::Unavailable => PaneMetadata::Unavailable,
