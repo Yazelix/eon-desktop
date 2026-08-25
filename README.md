@@ -28,8 +28,8 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
 `4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
 selection, identities, actions, and pane-to-Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v1, and ORBS v5 at exact Orbit proof
-`69c402737799f03e615473956954a043647a4713`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v1, and ORBS v6 at exact Orbit proof
+`780f5d746175b4a9b71df57c51ed4bfcc4c4c375`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -161,9 +161,12 @@ the selected native window, and Session mappings remain in Eon diagnostics.
 Wheel over the tab strip or a pane header to reach clipped headers without
 scrolling the terminal. In standalone mode these keys remain Orbit input.
 
-Wheel or trackpad movement scrolls through Orbit-owned retained history. Hold
-Shift while dragging the left mouse button to select cells, then press
-Ctrl+Shift+C to copy the exact bounded text returned by Orbit.
+Precision touchpad movement tracks Orbit-owned retained history at twice its
+native pixel distance, and a complete gesture may continue with bounded momentum
+after release. Discrete wheel steps move three retained rows without synthetic
+momentum. Terminal-owned mouse modes continue to receive their canonical Orbit
+input instead. Hold Shift while dragging the left mouse button to select cells,
+then press Ctrl+Shift+C to copy the exact bounded text returned by Orbit.
 Press Ctrl+Shift+V or the native Paste key to read the ordinary clipboard once.
 Orbit applies normal or bracketed paste from its authoritative terminal mode.
 Terminal programs can also request bounded text writes through Orbit. On Linux,
@@ -194,8 +197,9 @@ are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
-`69c402737799f03e615473956954a043647a4713` Orbit package revision supplies
-accepted ORBS v5, including read-only pane metadata, and resolves from GitHub.
+`780f5d746175b4a9b71df57c51ed4bfcc4c4c375` Orbit package revision supplies
+accepted ORBS v6, including adjacent-row previews, signed scroll batches, and
+read-only pane metadata, and resolves from GitHub.
 
 ## LOC scorecard
 
@@ -206,11 +210,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 216 |
-| Contracts and references | 784 |
+| README | 220 |
+| Contracts and references | 828 |
 | Crate decisions | 160 |
-| Changelog | 128 |
-| Rust source, including unit tests | 10,837 |
-| Rust integration tests | 612 |
+| Changelog | 133 |
+| Rust source, including unit tests | 11,873 |
+| Rust integration tests | 712 |
 | Cargo manifest | 23 |
-| **Total** | **13,176** |
+| **Total** | **14,365** |

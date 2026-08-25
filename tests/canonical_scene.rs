@@ -3,14 +3,14 @@ use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::{
-        self, ClipboardLocation, Failure, FailureCode, PreviewOutcome, ServerMessage,
-        VerticalDirection, VerticalPreview, WheelOutcome,
+        self, ClipboardLocation, Failure, FailureCode, PreviewOutcome, ScrollOutcome,
+        ServerMessage, VerticalDirection, VerticalPreview, WheelOutcome,
     },
 };
 use winit::dpi::PhysicalSize;
 use yazelix_venus::{
-    CellMetrics, ConnectionState, LocalNoticeSource, ModelError, SessionModel, WorkspaceHit,
-    WorkspaceScene,
+    CellMetrics, ConnectionState, LocalNoticeSource, ModelError, ScenePreview, SessionModel,
+    WorkspaceHit, WorkspaceScene,
 };
 
 #[test]
@@ -174,8 +174,8 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
 }
 
 #[test]
-fn canonical_session_revision_is_orbs_v5() {
-    assert_eq!(session::VERSION, 5);
+fn canonical_session_revision_is_orbs_v6() {
+    assert_eq!(session::VERSION, 6);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn ordered_frames_reject_stale_revisions_without_replacing_state() {
 }
 
 #[test]
-fn orbs_v5_wheel_outcomes_reuse_the_existing_result_and_frame_owners() {
+fn orbs_v6_scroll_outcomes_reuse_the_existing_result_and_frame_owners() {
     let mut model = attached_model();
     model
         .apply(ServerMessage::Failure(Failure {
@@ -283,16 +283,29 @@ fn orbs_v5_wheel_outcomes_reuse_the_existing_result_and_frame_owners() {
         .unwrap();
     assert_eq!(model.scene().unwrap().revision, 1);
 
-    assert_eq!(
-        model
-            .apply(ServerMessage::VerticalPreview(VerticalPreview {
-                frame_revision: 1,
-                direction: VerticalDirection::Up,
-                outcome: PreviewOutcome::TerminalRouted,
-            }))
-            .unwrap_err(),
-        ModelError::UnexpectedMessage
-    );
+    model
+        .apply(ServerMessage::VerticalPreview(VerticalPreview {
+            frame_revision: 1,
+            direction: VerticalDirection::Up,
+            outcome: PreviewOutcome::TerminalRouted,
+        }))
+        .unwrap();
+    assert!(matches!(
+        model.scroll_preview(),
+        Some(ScenePreview::TerminalOwned {
+            frame_revision: 1,
+            direction: VerticalDirection::Up,
+        })
+    ));
+    assert_eq!(model.scene().unwrap().revision, 1);
+
+    model
+        .apply(ServerMessage::Failure(Failure {
+            code: FailureCode::InvalidInput,
+            detail: "stale scroll".into(),
+        }))
+        .unwrap();
+    assert!(model.scroll_preview().is_none());
     assert_eq!(model.scene().unwrap().revision, 1);
 }
 
@@ -478,6 +491,93 @@ fn clipboard_text_is_an_attached_one_shot_effect_not_presentation_state() {
     assert_eq!(model.notice(), Some("Orbit rejected input: bad key"));
     assert_eq!(model.apply(ServerMessage::Accepted).unwrap(), None);
     assert_eq!(model.scene().unwrap().revision, 1);
+}
+
+#[test]
+fn revision_bound_scroll_previews_follow_atomic_frames() {
+    let mut model = attached_model();
+    let initial = frame(1, Screen::Primary);
+    let row = initial.rows[0].clone();
+    model
+        .apply(ServerMessage::Frame(Box::new(initial)))
+        .unwrap();
+    model
+        .apply(ServerMessage::VerticalPreview(VerticalPreview {
+            frame_revision: 1,
+            direction: VerticalDirection::Up,
+            outcome: PreviewOutcome::Viewport {
+                cols: 4,
+                edge_reached: false,
+                row: Some(row.clone()),
+            },
+        }))
+        .unwrap();
+    assert!(matches!(
+        model.scroll_preview(),
+        Some(ScenePreview::Viewport {
+            frame_revision: 1,
+            direction: VerticalDirection::Up,
+            row: Some(_),
+            ..
+        })
+    ));
+
+    assert_eq!(
+        model
+            .apply(ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+                requested_rows: -1,
+                applied_rows: -1,
+                frame: Box::new(frame(2, Screen::Primary)),
+                next: PreviewOutcome::Viewport {
+                    cols: 3,
+                    edge_reached: false,
+                    row: Some(row.clone()),
+                },
+            }))
+            .unwrap_err(),
+        ModelError::UnexpectedMessage
+    );
+    assert_eq!(model.scene().unwrap().revision, 1);
+    assert!(matches!(
+        model.scroll_preview(),
+        Some(ScenePreview::Viewport {
+            frame_revision: 1,
+            ..
+        })
+    ));
+
+    model
+        .apply(ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+            requested_rows: -1,
+            applied_rows: -1,
+            frame: Box::new(frame(2, Screen::Primary)),
+            next: PreviewOutcome::Viewport {
+                cols: 4,
+                edge_reached: false,
+                row: Some(row),
+            },
+        }))
+        .unwrap();
+    assert_eq!(model.scene().unwrap().revision, 2);
+    assert!(matches!(
+        model.scroll_preview(),
+        Some(ScenePreview::Viewport {
+            frame_revision: 2,
+            direction: VerticalDirection::Up,
+            row: Some(_),
+            ..
+        })
+    ));
+
+    model
+        .apply(ServerMessage::VerticalPreview(VerticalPreview {
+            frame_revision: 1,
+            direction: VerticalDirection::Up,
+            outcome: PreviewOutcome::TerminalRouted,
+        }))
+        .unwrap();
+    assert!(model.scroll_preview().is_none());
+    assert_eq!(model.scene().unwrap().revision, 2);
 }
 
 #[test]

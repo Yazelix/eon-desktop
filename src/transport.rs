@@ -2,7 +2,7 @@ use eon_workspace_protocol::{
     self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
     Response as WorkspaceResponse,
 };
-use orbit_protocol::session::{self, ClientMessage, ServerMessage, WheelOutcome};
+use orbit_protocol::session::{self, ClientMessage, ScrollOutcome, ServerMessage, WheelOutcome};
 use std::{
     collections::VecDeque,
     fmt,
@@ -444,6 +444,7 @@ impl EventQueue {
                         ServerMessage::Accepted
                         | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted),
                     ) => {}
+                    TransportEvent::Server(ServerMessage::ScrollOutcome(_)) => break,
                     queued => {
                         let Some(queued_revision) = frame_revision(queued) else {
                             break;
@@ -525,7 +526,8 @@ fn frame_revision(event: &TransportEvent) -> Option<u64> {
     match event {
         TransportEvent::Server(
             ServerMessage::Frame(frame)
-            | ServerMessage::WheelOutcome(WheelOutcome::Viewport { frame, .. }),
+            | ServerMessage::WheelOutcome(WheelOutcome::Viewport { frame, .. })
+            | ServerMessage::ScrollOutcome(ScrollOutcome::Viewport { frame, .. }),
         ) => Some(frame.revision),
         _ => None,
     }
@@ -901,6 +903,14 @@ mod tests {
             ]
         );
 
+        assert!(events.push(server_frame(9)));
+        assert!(!events.push(server_scroll_frame(10)));
+        assert_eq!(events.drain(), [server_scroll_frame(10)]);
+
+        assert!(events.push(server_scroll_frame(11)));
+        assert!(!events.push(server_frame(12)));
+        assert_eq!(events.drain(), [server_scroll_frame(11), server_frame(12)]);
+
         assert!(events.push(server_frame(3)));
         assert!(!events.push(server_frame(5)));
         assert_eq!(events.drain(), [server_frame(3), server_frame(5)]);
@@ -909,18 +919,18 @@ mod tests {
         assert!(!events.push(server_frame(5)));
         assert_eq!(events.drain(), [server_frame(6), server_frame(5)]);
 
-        assert!(events.push(server_frame(7)));
+        assert!(events.push(server_frame(13)));
         assert!(
             !events.push(TransportEvent::Server(ServerMessage::WheelOutcome(
                 WheelOutcome::TerminalRouted
             )))
         );
-        assert!(!events.push(server_wheel_frame(8)));
+        assert!(!events.push(server_wheel_frame(14)));
         assert_eq!(
             events.drain(),
             [
                 TransportEvent::Server(ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted)),
-                server_wheel_frame(8),
+                server_wheel_frame(14),
             ]
         );
     }
@@ -1289,6 +1299,19 @@ mod tests {
         TransportEvent::Server(ServerMessage::WheelOutcome(WheelOutcome::Viewport {
             applied_rows: -1,
             frame: Box::new(frame(revision)),
+        }))
+    }
+
+    fn server_scroll_frame(revision: u64) -> TransportEvent {
+        TransportEvent::Server(ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+            requested_rows: -1,
+            applied_rows: -1,
+            frame: Box::new(frame(revision)),
+            next: session::PreviewOutcome::Viewport {
+                cols: 0,
+                edge_reached: true,
+                row: None,
+            },
         }))
     }
 

@@ -235,6 +235,33 @@ Exact winit, wgpu, glyphon, and AccessKit versions already selected above own th
 native event, clipping, drawing, tab semantics, expanded state, and accessibility
 action mechanisms used by the workspace projection.
 
+## Required for pixel and kinetic retained-history scrolling
+
+`ven-venus-kinetic-touchpad-scroll-5sl` consumes Orbit `ORB-C8` and `ORB-C9`
+through exact ORBS v6 source
+`780f5d746175b4a9b71df57c51ed4bfcc4c4c375`. Orbit supplies one
+revision-bound adjacent row and one bounded signed atomic viewport commit;
+Venus does not infer routing, edges, cells, or revisions.
+
+Patched winit 0.30.13 at
+`fb45fbf901fbe70cc9a877b5d651d0b60c206b08` maps Wayland discrete axes to
+`LineDelta`, continuous axes to physical `PixelDelta`, and available axis-stop
+to `Ended`. It discards axis source and hardware event time and documents that
+discrete wheel sequences may lack `Ended`. Venus therefore gives momentum only
+to phase-complete pixel sequences and adds no device or source heuristic.
+`Window::request_redraw` with `pre_present_notify` owns compositor callback
+pacing. Wgpu 30.0.0 retains guaranteed FIFO and its default desired frame
+latency of two until installed measurements justify a change. Glyphon 0.12 and
+the existing rectangle batch accept fractional positions and clipping.
+
+GTK main `04275027fc556b1b0f3935e2f502fc356e88227b` is comparison-only
+evidence for a 150 ms recent-sample velocity estimate, frame-clock advancement,
+and elapsed-time exponential friction of 4 s^-1. Kitty
+`7f71461a9de44f71f631db29d50bcb3e866988b8` is comparison-only evidence for
+sub-row terminal presentation and precision momentum. Venus reuses no source
+and rejects overshoot, bounce, velocity stacking, fixed-rate timers,
+frame-dependent decay, platform source code, and public tuning.
+
 ## Required for supervisor-owned native presentation
 
 `eon-cyt` consumes Eon's existing `EON-C11` Present action and exact child-process

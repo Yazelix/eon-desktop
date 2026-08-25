@@ -5,12 +5,12 @@ use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDi
 use orbit_protocol::{
     MAX_CELLS,
     session::{
-        self, ClientMessage, ClipboardLocation, FailureCode, SelectionAction, ServerMessage,
-        SurfaceSize, WheelOutcome,
+        self, ClientMessage, ClipboardLocation, FailureCode, MAX_SCROLL_ROWS, ScrollOutcome,
+        SelectionAction, ServerMessage, SurfaceSize, VerticalDirection, WheelOutcome,
     },
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     ffi::OsString,
     io::{self, Read, Write},
     os::unix::ffi::OsStringExt,
@@ -25,22 +25,295 @@ use winit::platform::wayland::WindowAttributesExtWayland;
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
-    event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
+    event::{ElementState, Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     window::{UserAttentionType, Window, WindowAttributes, WindowId},
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, Color, ConnectionState, InputState,
-    LocalNoticeSource, MetadataEvent, MetadataTransport, PaneMetadata, PresentOutcome, Renderer,
-    SessionModel, Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus, WorkspaceHit,
-    WorkspaceModel, WorkspaceScene, WorkspaceTransport,
+    LocalNoticeSource, MetadataEvent, MetadataTransport, ModelError, PaneMetadata, PresentOutcome,
+    Renderer, ScenePreview, SessionModel, Transport, TransportEvent, WorkspaceEvent,
+    WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
+const SCROLL_SAMPLE_WINDOW: Duration = Duration::from_millis(150);
+const MAX_SCROLL_SAMPLES: usize = 256;
+const PRECISION_SCROLL_GAIN: f64 = 2.0;
+const SCROLL_DECAY: f64 = 4.0;
+const MIN_FLING_VELOCITY: f64 = 40.0;
+const MAX_FLING_VELOCITY: f64 = 8_000.0;
+
+#[derive(Debug, Default)]
+struct TerminalScroll {
+    pixels: f64,
+    line_fraction: f64,
+    terminal_lines: f64,
+    samples: VecDeque<(Instant, f64)>,
+    phase_active: bool,
+    velocity: f64,
+    last_advance: Option<Instant>,
+    preview_pending: Option<(u64, VerticalDirection)>,
+    in_flight: Option<i16>,
+    batch_cancelled: bool,
+}
+
+impl TerminalScroll {
+    fn push_lines(&mut self, lines: f64, cell_height: f64) {
+        if !lines.is_finite() || !cell_height.is_finite() || cell_height <= 0.0 {
+            return;
+        }
+        self.stop_gesture();
+        self.terminal_lines += lines;
+        self.line_fraction += lines;
+        let whole = self.line_fraction.trunc();
+        self.line_fraction -= whole;
+        self.pixels += whole * 3.0 * cell_height;
+    }
+
+    fn push_pixels(&mut self, pixels: f64, phase: TouchPhase, now: Instant, cell_height: f64) {
+        if !pixels.is_finite() || !cell_height.is_finite() || cell_height <= 0.0 {
+            return;
+        }
+        let native_pixels = pixels;
+        let pixels = native_pixels * PRECISION_SCROLL_GAIN;
+        match phase {
+            TouchPhase::Started => {
+                self.stop_gesture();
+                self.phase_active = true;
+                self.record_sample(now, pixels);
+            }
+            TouchPhase::Moved => {
+                if !self.phase_active {
+                    // A discrete Wayland axis may leave winit's shared phase at Moved.
+                    self.stop_gesture();
+                    self.phase_active = true;
+                }
+                self.record_sample(now, pixels);
+            }
+            TouchPhase::Ended if self.phase_active => {
+                self.record_sample(now, pixels);
+                self.phase_active = false;
+                self.velocity = self.release_velocity();
+                self.last_advance = (self.velocity != 0.0).then_some(now);
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled => self.stop_gesture(),
+        }
+        if phase != TouchPhase::Cancelled {
+            self.terminal_lines += native_pixels / cell_height;
+            self.pixels += pixels;
+        }
+    }
+
+    fn record_sample(&mut self, now: Instant, pixels: f64) {
+        while self.samples.len() >= MAX_SCROLL_SAMPLES
+            || self.samples.front().is_some_and(|(time, _)| {
+                now.saturating_duration_since(*time) > SCROLL_SAMPLE_WINDOW
+            })
+        {
+            self.samples.pop_front();
+        }
+        self.samples.push_back((now, pixels));
+    }
+
+    fn release_velocity(&mut self) -> f64 {
+        let velocity = self
+            .samples
+            .front()
+            .zip(self.samples.back())
+            .and_then(|((first, _), (last, _))| {
+                let seconds = last.saturating_duration_since(*first).as_secs_f64();
+                (seconds > 0.0)
+                    .then(|| self.samples.iter().map(|(_, pixels)| pixels).sum::<f64>() / seconds)
+            })
+            .unwrap_or(0.0)
+            .clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY);
+        self.samples.clear();
+        if velocity.abs() < MIN_FLING_VELOCITY {
+            0.0
+        } else {
+            velocity
+        }
+    }
+
+    fn advance(&mut self, now: Instant) {
+        let Some(last) = self.last_advance else {
+            return;
+        };
+        self.last_advance = Some(now);
+        let elapsed = now.saturating_duration_since(last).as_secs_f64();
+        let next_velocity = self.velocity * (-SCROLL_DECAY * elapsed).exp();
+        self.pixels += (self.velocity - next_velocity) / SCROLL_DECAY;
+        self.velocity = next_velocity;
+        if self.velocity.abs() / SCROLL_DECAY < 1.0 {
+            self.stop_fling();
+        }
+    }
+
+    fn stop_fling(&mut self) {
+        self.velocity = 0.0;
+        self.last_advance = None;
+    }
+
+    fn stop_gesture(&mut self) {
+        self.samples.clear();
+        self.phase_active = false;
+        self.stop_fling();
+    }
+
+    fn cancel(&mut self) {
+        // A written batch still needs its ordered response before another request.
+        let in_flight = self.in_flight;
+        *self = Self::default();
+        self.in_flight = in_flight;
+        self.batch_cancelled = in_flight.is_some();
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn direction(&self) -> Option<VerticalDirection> {
+        if self.pixels > 0.0 {
+            Some(VerticalDirection::Up)
+        } else if self.pixels < 0.0 {
+            Some(VerticalDirection::Down)
+        } else {
+            None
+        }
+    }
+
+    fn preview_arrived(&mut self, revision: u64, direction: VerticalDirection) {
+        if self.preview_pending == Some((revision, direction)) {
+            self.preview_pending = None;
+        }
+    }
+
+    fn resolve_preview(&mut self, preview: Option<&ScenePreview>) -> Option<f64> {
+        match preview {
+            Some(ScenePreview::TerminalOwned { direction, .. })
+                if Some(*direction) == self.direction() =>
+            {
+                self.pixels = 0.0;
+                self.line_fraction = 0.0;
+                self.stop_gesture();
+                Some(std::mem::take(&mut self.terminal_lines))
+            }
+            Some(ScenePreview::Viewport {
+                direction,
+                edge_reached,
+                row,
+                ..
+            }) if Some(*direction) == self.direction() => {
+                self.terminal_lines = 0.0;
+                if *edge_reached && row.is_none() {
+                    self.pixels = 0.0;
+                    self.stop_gesture();
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn next_request(
+        &mut self,
+        frame_revision: u64,
+        preview: Option<&ScenePreview>,
+        cell_height: f64,
+    ) -> Option<ClientMessage> {
+        if self.in_flight.is_some() || !cell_height.is_finite() || cell_height <= 0.0 {
+            return None;
+        }
+        let direction = self.direction()?;
+        let preview_matches = match preview {
+            Some(ScenePreview::TerminalOwned {
+                frame_revision: revision,
+                direction: candidate,
+            }) => *revision == frame_revision && *candidate == direction,
+            Some(ScenePreview::Viewport {
+                frame_revision: revision,
+                direction: candidate,
+                ..
+            }) => *revision == frame_revision && *candidate == direction,
+            None => false,
+        };
+        if !preview_matches {
+            if self.preview_pending != Some((frame_revision, direction)) {
+                self.preview_pending = Some((frame_revision, direction));
+                return Some(ClientMessage::PreviewVertical {
+                    frame_revision,
+                    direction,
+                });
+            }
+            return None;
+        }
+        let ScenePreview::Viewport { row: Some(_), .. } = preview? else {
+            return None;
+        };
+        let crossed = (self.pixels / cell_height).trunc();
+        if crossed == 0.0 {
+            return None;
+        }
+        let rows = (-(crossed as i64))
+            .clamp(-i64::from(MAX_SCROLL_ROWS), i64::from(MAX_SCROLL_ROWS))
+            as i16;
+        self.in_flight = Some(rows);
+        Some(ClientMessage::ScrollVertical {
+            frame_revision,
+            rows,
+        })
+    }
+
+    fn accept_batch(&mut self, requested_rows: i16, applied_rows: i16, cell_height: f64) -> bool {
+        let Some(expected_rows) = self.in_flight else {
+            return true;
+        };
+        if expected_rows != requested_rows {
+            return false;
+        }
+        self.in_flight = None;
+        self.preview_pending = None;
+        if !std::mem::take(&mut self.batch_cancelled) {
+            self.pixels += f64::from(applied_rows) * cell_height;
+        }
+        true
+    }
+
+    fn rebase(&mut self) {
+        self.preview_pending = None;
+    }
+
+    fn offset(&self, preview: Option<&ScenePreview>, cell_height: f64) -> f32 {
+        let Some(direction) = self.direction() else {
+            return 0.0;
+        };
+        if !matches!(
+            preview,
+            Some(ScenePreview::Viewport {
+                direction: candidate,
+                row: Some(_),
+                ..
+            }) if *candidate == direction
+        ) {
+            return 0.0;
+        }
+        let height = cell_height as f32;
+        let limit = f64::from(f32::from_bits(height.to_bits().saturating_sub(1)));
+        self.pixels.clamp(-limit, limit) as f32
+    }
+
+    fn active(&self) -> bool {
+        self.velocity != 0.0
+            || self.pixels != 0.0
+            || self.preview_pending.is_some()
+            || self.in_flight.is_some() && !self.batch_cancelled
+    }
+}
 
 struct OrbitRetry {
     deadline: Option<Instant>,
@@ -188,6 +461,7 @@ struct Application {
     workspace_focus: WorkspaceFocus,
     tab_scroll: f32,
     pane_scroll: f32,
+    terminal_scroll: TerminalScroll,
     cursor: PhysicalPosition<f64>,
 }
 
@@ -235,6 +509,7 @@ impl Application {
             workspace_focus: WorkspaceFocus::Terminal,
             tab_scroll: 0.0,
             pane_scroll: 0.0,
+            terminal_scroll: TerminalScroll::default(),
             cursor: PhysicalPosition::new(0.0, 0.0),
         }
     }
@@ -294,6 +569,55 @@ impl Application {
         self.next_animation = None;
         if let Some(state) = &mut self.window {
             state.renderer.reset_cursor_animation();
+        }
+    }
+
+    fn cancel_terminal_scroll(&mut self) {
+        let redraw = self.terminal_scroll.active();
+        self.terminal_scroll.cancel();
+        if !redraw {
+            return;
+        }
+        if let Some(state) = &mut self.window {
+            state.renderer.reset_cursor_animation();
+            state.window.request_redraw();
+        }
+    }
+
+    fn drive_terminal_scroll(&mut self) {
+        let Some(frame_revision) = self.model.scene().map(|scene| scene.revision) else {
+            self.terminal_scroll.reset();
+            return;
+        };
+        let Some(metrics) = self.window.as_ref().map(|state| state.renderer.metrics()) else {
+            return;
+        };
+        let (lines, request) = {
+            let preview = self.model.scroll_preview();
+            (
+                self.terminal_scroll.resolve_preview(preview),
+                self.terminal_scroll.next_request(
+                    frame_revision,
+                    preview,
+                    f64::from(metrics.height),
+                ),
+            )
+        };
+        if let Some(lines) = lines {
+            for message in self.input.wheel(
+                MouseScrollDelta::LineDelta(0.0, lines as f32),
+                metrics.width,
+                metrics.height,
+            ) {
+                if !self.send(message) {
+                    break;
+                }
+            }
+        }
+        if let Some(message) = request
+            && !self.send(message)
+        {
+            self.terminal_scroll.reset();
         }
     }
 
@@ -359,6 +683,7 @@ impl Application {
             return;
         }
         let was_focused = terminal_focused(self.window_focused, self.workspace_focus);
+        self.cancel_terminal_scroll();
         self.workspace_focus = focus;
         let is_focused = terminal_focused(self.window_focused, self.workspace_focus);
         if was_focused != is_focused {
@@ -369,6 +694,7 @@ impl Application {
     }
 
     fn set_orbit_attachment(&mut self, endpoint: Vec<u8>, live: bool) {
+        self.terminal_scroll.reset();
         if let Some(message) = self.input.retire_orbit_generation() {
             self.send(message);
         }
@@ -411,6 +737,7 @@ impl Application {
             return;
         }
         self.model.prepare_reconnect();
+        self.terminal_scroll.reset();
         self.reset_cursor_animation();
         self.retry_suppressed = false;
         self.last_resize = None;
@@ -436,6 +763,7 @@ impl Application {
             self.presentation.invalidate();
         }
         if snapshot_changed {
+            self.cancel_terminal_scroll();
             self.reveal_workspace_selection();
             self.presentation.invalidate();
             if let Some((endpoint, live)) = self.workspace_model.active_attachment()
@@ -638,6 +966,29 @@ impl Application {
                 );
             }
             TransportEvent::Server(message) => {
+                let preview_response = match &message {
+                    ServerMessage::VerticalPreview(preview) => {
+                        Some((preview.frame_revision, preview.direction))
+                    }
+                    _ => None,
+                };
+                let batch_response = match &message {
+                    ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+                        requested_rows,
+                        applied_rows,
+                        ..
+                    }) => Some((*requested_rows, *applied_rows)),
+                    ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned {
+                        requested_rows,
+                    }) => Some((*requested_rows, 0)),
+                    _ => None,
+                };
+                let terminal_owned_batch = matches!(
+                    &message,
+                    ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { .. })
+                );
+                let scroll_rejected = matches!(&message, ServerMessage::Failure(_));
+                let plain_frame = matches!(&message, ServerMessage::Frame(_));
                 if server_failure_suppresses_retry(&message) {
                     self.retry_suppressed = true;
                 }
@@ -646,13 +997,39 @@ impl Application {
                     &message,
                     ServerMessage::Frame(_)
                         | ServerMessage::WheelOutcome(WheelOutcome::Viewport { .. })
+                        | ServerMessage::ScrollOutcome(ScrollOutcome::Viewport { .. })
                 );
-                let result = self.model.apply(message);
+                let cell_height = self
+                    .window
+                    .as_ref()
+                    .map_or(0.0, |state| f64::from(state.renderer.metrics().height));
+                let batch_accepted = batch_response.is_none_or(|(requested, applied)| {
+                    self.terminal_scroll
+                        .accept_batch(requested, applied, cell_height)
+                });
+                let result = if batch_accepted {
+                    self.model.apply(message)
+                } else {
+                    Err(ModelError::UnexpectedMessage)
+                };
                 let accepted_frame = frame && result.is_ok();
+                let accepted = result.is_ok();
                 match result {
                     Ok(Some((location, text))) => self.write_clipboard(location, text),
                     Ok(None) => {}
                     Err(error) => self.model.mark_lost(error.to_string()),
+                }
+                if accepted {
+                    if scroll_rejected {
+                        self.terminal_scroll.reset();
+                    } else if let Some((revision, direction)) = preview_response {
+                        self.terminal_scroll.preview_arrived(revision, direction);
+                    }
+                    if terminal_owned_batch {
+                        self.cancel_terminal_scroll();
+                    } else if plain_frame {
+                        self.terminal_scroll.rebase();
+                    }
                 }
                 if accepted_frame {
                     self.presentation.invalidate();
@@ -678,6 +1055,7 @@ impl Application {
             }
             TransportEvent::Incompatible { version } => self.model.mark_incompatible(version),
             TransportEvent::InvalidInput(detail) => {
+                self.terminal_scroll.reset();
                 self.model.set_venus_notice(
                     LocalNoticeSource::Input,
                     format!("Venus could not encode input: {detail}"),
@@ -690,6 +1068,7 @@ impl Application {
             TransportEvent::Lost(detail) => self.model.mark_lost(detail),
         }
         if retryable_event || self.model.is_terminal() {
+            self.terminal_scroll.reset();
             self.input.retire_orbit_generation();
             self.reset_cursor_animation();
             self.transport = None;
@@ -878,6 +1257,10 @@ impl Application {
     }
 
     fn render(&mut self) {
+        if self.window_focused && !self.window_occluded {
+            self.terminal_scroll.advance(Instant::now());
+            self.drive_terminal_scroll();
+        }
         if !cursor_animation_allowed(self.window_focused, self.window_occluded) {
             self.reset_cursor_animation();
         }
@@ -891,12 +1274,21 @@ impl Application {
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
         let candidate = self.presentation_candidate(workspace.as_ref());
+        let scroll_offset = self.window.as_ref().map_or(0.0, |state| {
+            self.terminal_scroll.offset(
+                self.model.scroll_preview(),
+                f64::from(state.renderer.metrics().height),
+            )
+        });
+        let kinetic_active = self.terminal_scroll.velocity != 0.0;
         let mut refresh = false;
         let Some(state) = &mut self.window else {
             return;
         };
         match state.renderer.render(
             self.model.scene(),
+            self.model.scroll_preview(),
+            scroll_offset,
             workspace.as_ref(),
             self.workspace_focus,
             status,
@@ -907,13 +1299,17 @@ impl Application {
             Ok(PresentOutcome::Presented) => {
                 refresh = self.render_notice.take().is_some();
                 self.presentation.publish(candidate);
+                if kinetic_active {
+                    state.window.request_redraw();
+                }
             }
-            Ok(PresentOutcome::Deferred) => {}
+            Ok(PresentOutcome::Deferred) => self.terminal_scroll.stop_gesture(),
             Ok(PresentOutcome::Recovered) => {
                 self.presentation.unpublish();
                 state.window.request_redraw();
             }
             Err(error) => {
+                self.terminal_scroll.cancel();
                 if let Some(notice) = record_render_failure(
                     &mut self.render_notice,
                     &mut self.presentation,
@@ -985,6 +1381,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::Resized(size) => {
                 self.next_animation = None;
                 self.input.reset_scroll();
+                self.terminal_scroll.cancel();
                 state.renderer.resize(size, state.scale_factor);
                 self.reveal_workspace_selection();
                 self.presentation.invalidate();
@@ -992,19 +1389,25 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.terminal_scroll.cancel();
                 state.scale_factor = scale_factor;
             }
             WindowEvent::Occluded(occluded) => {
                 self.window_occluded = occluded;
                 self.next_animation = None;
+                self.terminal_scroll.cancel();
                 state.renderer.reset_cursor_animation();
                 if !occluded {
                     state.window.request_redraw();
                 }
             }
             WindowEvent::RedrawRequested => self.render(),
-            WindowEvent::ModifiersChanged(modifiers) => self.input.set_modifiers(modifiers.state()),
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.cancel_terminal_scroll();
+                self.input.set_modifiers(modifiers.state());
+            }
             WindowEvent::KeyboardInput { event, .. } => {
+                self.cancel_terminal_scroll();
                 if self
                     .input
                     .suppresses_retired_key(event.physical_key, event.state, event.repeat)
@@ -1039,6 +1442,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
             }
             WindowEvent::Ime(event) => {
+                self.cancel_terminal_scroll();
                 let allowed = ime_allowed(
                     self.window_focused,
                     self.workspace_focus,
@@ -1055,6 +1459,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::Focused(focused) => {
                 self.window_focused = focused;
                 self.next_animation = None;
+                self.terminal_scroll.cancel();
                 state.renderer.reset_cursor_animation();
                 let message = self
                     .input
@@ -1086,11 +1491,17 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.send(message);
                 }
             }
+            WindowEvent::CursorLeft { .. } => self.cancel_terminal_scroll(),
             WindowEvent::MouseInput {
                 state: button_state,
                 button,
                 ..
             } => {
+                if button_state == ElementState::Pressed {
+                    self.terminal_scroll.cancel();
+                    state.renderer.reset_cursor_animation();
+                    state.window.request_redraw();
+                }
                 let renderer_size = state.renderer.size();
                 let metrics = state.renderer.metrics();
                 let hit = workspace.as_ref().and_then(|workspace| {
@@ -1145,7 +1556,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.input.commit_mouse_button(button_state, button);
                 }
             }
-            WindowEvent::MouseWheel { delta, .. } => {
+            WindowEvent::MouseWheel { delta, phase, .. } => {
                 if self.input.is_selecting() {
                     return;
                 }
@@ -1153,6 +1564,11 @@ impl ApplicationHandler<UserEvent> for Application {
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
+                if !matches!(hit, Some(WorkspaceHit::Terminal)) && workspace.is_some() {
+                    self.terminal_scroll.cancel();
+                    state.renderer.reset_cursor_animation();
+                    state.window.request_redraw();
+                }
                 if matches!(hit, Some(WorkspaceHit::Tab(_))) {
                     if presentation_current {
                         self.scroll_workspace(delta, true, metrics);
@@ -1172,10 +1588,35 @@ impl ApplicationHandler<UserEvent> for Application {
                     return;
                 }
                 let _ = move_terminal_pointer(&mut self.input, self.cursor, workspace.as_ref());
-                for message in self.input.wheel(delta, metrics.width, metrics.height) {
+                let (horizontal, vertical) = match delta {
+                    MouseScrollDelta::LineDelta(horizontal, vertical) => (
+                        MouseScrollDelta::LineDelta(horizontal, 0.0),
+                        f64::from(vertical),
+                    ),
+                    MouseScrollDelta::PixelDelta(position) => (
+                        MouseScrollDelta::PixelDelta(PhysicalPosition::new(position.x, 0.0)),
+                        position.y,
+                    ),
+                };
+                for message in self.input.wheel(horizontal, metrics.width, metrics.height) {
                     if !self.send(message) {
                         break;
                     }
+                }
+                match delta {
+                    MouseScrollDelta::LineDelta(_, _) => self
+                        .terminal_scroll
+                        .push_lines(vertical, f64::from(metrics.height)),
+                    MouseScrollDelta::PixelDelta(_) => self.terminal_scroll.push_pixels(
+                        vertical,
+                        phase,
+                        Instant::now(),
+                        f64::from(metrics.height),
+                    ),
+                }
+                self.drive_terminal_scroll();
+                if let Some(state) = &self.window {
+                    state.window.request_redraw();
                 }
             }
             _ => {}
@@ -1203,6 +1644,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 for event in events {
                     self.handle_transport(event);
                 }
+                self.drive_terminal_scroll();
             }
             UserEvent::Workspace => {
                 let events = self
@@ -1648,6 +2090,256 @@ mod tests {
     use super::*;
     use crate::launch;
     use eon_workspace_protocol::{Pane, Snapshot, Tab};
+
+    #[test]
+    fn terminal_scroll_keeps_fractional_input_and_elapsed_time_physics() {
+        let start = Instant::now();
+        let mut scroll = TerminalScroll::default();
+
+        scroll.push_lines(0.4, 20.0);
+        scroll.push_lines(0.6, 20.0);
+        assert_eq!(scroll.pixels, 60.0);
+
+        scroll.cancel();
+        scroll.push_pixels(0.0, TouchPhase::Started, start, 20.0);
+        scroll.push_pixels(
+            60.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(100),
+            20.0,
+        );
+        scroll.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(100),
+            20.0,
+        );
+        assert_eq!(scroll.pixels, 120.0);
+        assert_eq!(scroll.velocity, 1_200.0);
+
+        let before = scroll.pixels;
+        scroll.advance(start + Duration::from_millis(200));
+        let one_tick = scroll.pixels - before;
+
+        let mut split = TerminalScroll::default();
+        split.push_pixels(0.0, TouchPhase::Started, start, 20.0);
+        split.push_pixels(
+            60.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(100),
+            20.0,
+        );
+        split.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(100),
+            20.0,
+        );
+        let before = split.pixels;
+        split.advance(start + Duration::from_millis(150));
+        split.advance(start + Duration::from_millis(200));
+        assert!(((split.pixels - before) - one_tick).abs() < 1e-9);
+
+        let mut incomplete = TerminalScroll::default();
+        incomplete.push_pixels(100.0, TouchPhase::Moved, start, 20.0);
+        assert_eq!(incomplete.velocity, 0.0);
+
+        let mut after_wheel = TerminalScroll::default();
+        after_wheel.push_lines(1.0, 20.0);
+        after_wheel.push_pixels(0.0, TouchPhase::Moved, start, 20.0);
+        after_wheel.push_pixels(
+            60.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        after_wheel.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        assert_eq!(after_wheel.velocity, 2_400.0);
+
+        let mut capped = TerminalScroll::default();
+        capped.push_pixels(0.0, TouchPhase::Started, start, 20.0);
+        capped.push_pixels(
+            1_000.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(1),
+            20.0,
+        );
+        capped.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(1),
+            20.0,
+        );
+        assert_eq!(capped.velocity, MAX_FLING_VELOCITY);
+
+        let mut bounded = TerminalScroll::default();
+        for _ in 0..=MAX_SCROLL_SAMPLES {
+            bounded.push_pixels(1.0, TouchPhase::Moved, start, 20.0);
+        }
+        assert_eq!(bounded.samples.len(), MAX_SCROLL_SAMPLES);
+
+        let mut expired = TerminalScroll::default();
+        expired.push_pixels(10.0, TouchPhase::Started, start, 20.0);
+        expired.push_pixels(
+            10.0,
+            TouchPhase::Moved,
+            start + SCROLL_SAMPLE_WINDOW + Duration::from_millis(1),
+            20.0,
+        );
+        expired.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + SCROLL_SAMPLE_WINDOW + Duration::from_millis(1),
+            20.0,
+        );
+        assert_eq!(expired.velocity, 0.0);
+
+        let mut paused = TerminalScroll::default();
+        paused.push_pixels(0.0, TouchPhase::Started, start, 20.0);
+        paused.push_pixels(
+            60.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        paused.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(250),
+            20.0,
+        );
+        assert_eq!(paused.velocity, 0.0);
+
+        let mut interrupted = TerminalScroll::default();
+        interrupted.push_pixels(0.0, TouchPhase::Started, start, 20.0);
+        interrupted.push_pixels(
+            60.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        interrupted.push_lines(1.0, 20.0);
+        interrupted.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        assert_eq!(interrupted.velocity, 0.0);
+
+        let mut cancelled = TerminalScroll::default();
+        cancelled.push_pixels(20.0, TouchPhase::Cancelled, start, 20.0);
+        assert_eq!(cancelled.pixels, 0.0);
+        assert_eq!(cancelled.terminal_lines, 0.0);
+    }
+
+    #[test]
+    fn terminal_scroll_coalesces_one_signed_batch_without_losing_distance() {
+        let start = Instant::now();
+        let row = yazelix_venus::DrawRow {
+            wrapped: false,
+            wrap_continuation: false,
+            kitty_virtual_placeholder: false,
+            cells: Vec::new(),
+        };
+        let preview = ScenePreview::Viewport {
+            frame_revision: 7,
+            direction: VerticalDirection::Up,
+            edge_reached: false,
+            row: Some(row),
+        };
+        let mut scroll = TerminalScroll::default();
+        scroll.push_pixels(50.0, TouchPhase::Moved, start, 20.0);
+
+        assert_eq!(
+            scroll.next_request(7, None, 20.0),
+            Some(ClientMessage::PreviewVertical {
+                frame_revision: 7,
+                direction: VerticalDirection::Up,
+            })
+        );
+        assert_eq!(scroll.next_request(7, None, 20.0), None);
+        scroll.preview_arrived(7, VerticalDirection::Up);
+        scroll.resolve_preview(Some(&preview));
+        assert_eq!(
+            scroll.next_request(7, Some(&preview), 20.0),
+            Some(ClientMessage::ScrollVertical {
+                frame_revision: 7,
+                rows: -5,
+            })
+        );
+
+        scroll.push_pixels(40.0, TouchPhase::Moved, start, 20.0);
+        assert_eq!(scroll.next_request(7, Some(&preview), 20.0), None);
+        assert!(!scroll.accept_batch(-4, -4, 20.0));
+        assert!(scroll.accept_batch(-5, -5, 20.0));
+        assert_eq!(scroll.pixels, 80.0);
+
+        let mut cancelled = TerminalScroll::default();
+        cancelled.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
+        cancelled.next_request(7, None, 20.0);
+        cancelled.preview_arrived(7, VerticalDirection::Up);
+        cancelled.resolve_preview(Some(&preview));
+        cancelled.next_request(7, Some(&preview), 20.0);
+        cancelled.cancel();
+        assert!(!cancelled.active());
+        cancelled.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
+        assert_eq!(cancelled.next_request(7, Some(&preview), 20.0), None);
+        assert!(cancelled.accept_batch(-2, -2, 20.0));
+        assert_eq!(cancelled.pixels, 40.0);
+        assert_eq!(
+            scroll.next_request(8, None, 20.0),
+            Some(ClientMessage::PreviewVertical {
+                frame_revision: 8,
+                direction: VerticalDirection::Up,
+            })
+        );
+
+        let edge = ScenePreview::Viewport {
+            frame_revision: 8,
+            direction: VerticalDirection::Up,
+            edge_reached: true,
+            row: None,
+        };
+        scroll.preview_arrived(8, VerticalDirection::Up);
+        scroll.resolve_preview(Some(&edge));
+        assert_eq!(scroll.pixels, 0.0);
+        assert_eq!(scroll.velocity, 0.0);
+
+        let mut terminal = TerminalScroll::default();
+        terminal.push_lines(1.0, 20.0);
+        let routed = ScenePreview::TerminalOwned {
+            frame_revision: 7,
+            direction: VerticalDirection::Up,
+        };
+        assert_eq!(terminal.resolve_preview(Some(&routed)), Some(1.0));
+        assert_eq!(terminal.pixels, 0.0);
+
+        terminal.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
+        assert_eq!(terminal.resolve_preview(Some(&routed)), Some(1.0));
+        assert_eq!(terminal.pixels, 0.0);
+
+        terminal.push_pixels(0.0, TouchPhase::Started, start, 20.0);
+        terminal.push_pixels(
+            20.0,
+            TouchPhase::Moved,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        assert_eq!(terminal.resolve_preview(Some(&routed)), Some(1.0));
+        terminal.push_pixels(
+            0.0,
+            TouchPhase::Ended,
+            start + Duration::from_millis(50),
+            20.0,
+        );
+        assert_eq!(terminal.velocity, 0.0);
+    }
 
     #[test]
     fn metadata_endpoints_are_only_live_panes_in_the_active_tab() {

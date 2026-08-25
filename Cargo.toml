@@ -9,7 +9,7 @@ accesskit = "=0.24.1"
 accesskit_winit = { version = "=0.33.2", default-features = false, features = ["accesskit_unix", "async-io", "rwh_06"] }
 eon-workspace-protocol = { git = "https://github.com/Yazelix/eon.git", rev = "4af395aea06c230ee6b18cf0755ae25915c0b88d" }
 glyphon = "=0.12.0"
-orbit-protocol = { git = "https://github.com/Yazelix/eon-sessions.git", rev = "69c402737799f03e615473956954a043647a4713" }
+orbit-protocol = { git = "https://github.com/Yazelix/eon-sessions.git", rev = "780f5d746175b4a9b71df57c51ed4bfcc4c4c375" }
 pollster = { version = "=1.0.1", default-features = false }
 wgpu = { version = "=30.0.0", default-features = false, features = ["std", "vulkan", "wgsl"] }
 winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "wayland", "wayland-dlopen"] }

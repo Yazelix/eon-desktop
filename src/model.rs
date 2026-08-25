@@ -1,7 +1,9 @@
-use crate::scene::Scene;
+use crate::scene::{DrawRow, Scene, ScenePreview};
 use eon_workspace_protocol::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
-use orbit_protocol::session::{ClipboardLocation, FailureCode, ServerMessage, WheelOutcome};
+use orbit_protocol::session::{
+    ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
+};
 use std::{error::Error, fmt};
 
 /// Bounded lifecycle state for one local Orbit attachment.
@@ -62,6 +64,7 @@ pub enum LocalNoticeSource {
 pub struct SessionModel {
     reducer: FrameReducer,
     scene: Option<Scene>,
+    scroll_preview: Option<ScenePreview>,
     connection: ConnectionState,
     awaiting_current_frame: bool,
     notices: Vec<Notice>,
@@ -141,6 +144,7 @@ impl SessionModel {
         Self {
             reducer: FrameReducer::default(),
             scene: None,
+            scroll_preview: None,
             connection: ConnectionState::Connecting,
             awaiting_current_frame: true,
             notices: Vec::with_capacity(4),
@@ -150,6 +154,11 @@ impl SessionModel {
     #[must_use]
     pub fn scene(&self) -> Option<&Scene> {
         self.scene.as_ref()
+    }
+
+    #[must_use]
+    pub fn scroll_preview(&self) -> Option<&ScenePreview> {
+        self.scroll_preview.as_ref()
     }
 
     #[must_use]
@@ -202,6 +211,45 @@ impl SessionModel {
             {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
+                self.scroll_preview = None;
+                self.awaiting_current_frame = false;
+            }
+            ServerMessage::VerticalPreview(preview) if attached => {
+                let frame = self
+                    .reducer
+                    .current()
+                    .ok_or(ModelError::UnexpectedMessage)?;
+                if preview.frame_revision != frame.revision {
+                    self.scroll_preview = None;
+                    return Ok(None);
+                }
+                self.scroll_preview =
+                    Some(scene_preview(frame, preview.direction, preview.outcome)?);
+            }
+            ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { requested_rows })
+                if attached =>
+            {
+                let frame_revision = self
+                    .reducer
+                    .current()
+                    .ok_or(ModelError::UnexpectedMessage)?
+                    .revision;
+                self.scroll_preview = Some(ScenePreview::TerminalOwned {
+                    frame_revision,
+                    direction: scroll_direction(requested_rows),
+                });
+            }
+            ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+                requested_rows,
+                frame,
+                next,
+                ..
+            }) if attached => {
+                let preview =
+                    scene_preview(frame.as_ref(), scroll_direction(requested_rows), next)?;
+                let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
+                self.scene = Some(Scene::from_frame(frame));
+                self.scroll_preview = Some(preview);
                 self.awaiting_current_frame = false;
             }
             ServerMessage::Accepted | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted)
@@ -210,6 +258,7 @@ impl SessionModel {
                 self.clear_orbit_notice();
             }
             ServerMessage::Failure(failure) if connecting || attached => {
+                self.scroll_preview = None;
                 let label = match failure.code {
                     FailureCode::InvalidInput => "rejected input",
                     FailureCode::Protocol => "protocol failure",
@@ -223,10 +272,12 @@ impl SessionModel {
             }
             ServerMessage::Busy if connecting => {
                 self.connection = ConnectionState::Busy;
+                self.scroll_preview = None;
                 self.notices.clear();
             }
             ServerMessage::Exited { code } if attached => {
                 self.connection = ConnectionState::Exited { code };
+                self.scroll_preview = None;
                 self.notices.clear();
             }
             ServerMessage::CopiedText(text) if attached => {
@@ -246,6 +297,7 @@ impl SessionModel {
             return;
         }
         self.connection = ConnectionState::Incompatible { version };
+        self.scroll_preview = None;
         self.notices.clear();
     }
 
@@ -256,6 +308,7 @@ impl SessionModel {
         self.connection = ConnectionState::Lost {
             detail: bounded(detail.into()),
         };
+        self.scroll_preview = None;
         self.notices.clear();
     }
 
@@ -266,6 +319,7 @@ impl SessionModel {
         self.connection = ConnectionState::Lost {
             detail: bounded(detail.into()),
         };
+        self.scroll_preview = None;
         self.notices.retain(|notice| {
             matches!(
                 notice,
@@ -278,6 +332,7 @@ impl SessionModel {
         self.reducer = FrameReducer::default();
         self.connection = ConnectionState::Connecting;
         self.awaiting_current_frame = true;
+        self.scroll_preview = None;
         self.notices.clear();
     }
 
@@ -301,6 +356,42 @@ impl SessionModel {
         self.notices
             .retain(|notice| !matches!(notice, Notice::Orbit(_, _)));
     }
+}
+
+fn scroll_direction(rows: i16) -> orbit_protocol::session::VerticalDirection {
+    if rows < 0 {
+        orbit_protocol::session::VerticalDirection::Up
+    } else {
+        orbit_protocol::session::VerticalDirection::Down
+    }
+}
+
+fn scene_preview(
+    frame: &orbit_protocol::Frame,
+    direction: orbit_protocol::session::VerticalDirection,
+    outcome: PreviewOutcome,
+) -> Result<ScenePreview, ModelError> {
+    Ok(match outcome {
+        PreviewOutcome::TerminalRouted => ScenePreview::TerminalOwned {
+            frame_revision: frame.revision,
+            direction,
+        },
+        PreviewOutcome::Viewport {
+            cols,
+            edge_reached,
+            row,
+        } => {
+            if cols != frame.dimensions.cols {
+                return Err(ModelError::UnexpectedMessage);
+            }
+            ScenePreview::Viewport {
+                frame_revision: frame.revision,
+                direction,
+                edge_reached,
+                row: row.as_ref().map(|row| DrawRow::from_protocol(row, frame)),
+            }
+        }
+    })
 }
 
 fn bounded(mut detail: String) -> String {

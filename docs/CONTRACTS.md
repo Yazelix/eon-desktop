@@ -156,31 +156,48 @@ retains accepted user-visible chronology.
     proof `8e2d22a36ae6f6cab74d3556204a2a537265bff7`, and composed Eon
     acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a`
 
-## VEN-C7 — Authoritative history selection and copy
+## VEN-C7 — Authoritative history interaction
 
-- **Status:** Proved
+- **Status:** Candidate
 - **Consumer:** One presented Venus terminal surface.
-- **Trigger:** Bounded wheel movement, explicit Shift-drag selection, or copy.
-- **Result:** Venus maps interaction against the last presented frame into
-  canonical Orbit messages, renders only Orbit-authored selection, and writes
-  only Orbit-returned copied text to the native clipboard.
+- **Trigger:** Native wheel or touchpad movement, explicit Shift-drag selection,
+  or copy.
+- **Result:**
+  - Precision movement translates and clips an accepted complete Orbit frame
+    plus its revision-bound adjacent row at two presented pixels per native
+    input pixel.
+  - Venus retains a sub-row remainder, commits crossed rows through at most one
+    coalesced signed Orbit batch, and installs only its atomic authoritative
+    frame and next preview.
+  - A phase-complete precision gesture may continue with bounded elapsed-time
+    exponential decay; discrete wheel input moves three rows per logical step
+    without synthetic momentum.
+  - Redraw follows native compositor callbacks. Selection renders only
+    Orbit-authored state, and copy writes only Orbit-returned text.
 - **Important failures:** Stale presentation, failed gesture admission, resize,
-  capture loss, or Orbit rejection cannot fabricate selection, copied text, or
-  viewport state.
-- **Owner:** Venus native gesture and clipboard effects; Orbit alone owns history,
-  viewport movement, input precedence, selection, and copied terminal text.
-- **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v4 at
-  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
-- **Boundary:** Real touchpad hardware, resize under a non-tiling window manager,
-  broader Linux compositor coverage, and full Neovim/Yazi dogfood remain open
-  quality surfaces.
+  capture loss, lifecycle or authority change, terminal-owned routing, history
+  edge, or Orbit rejection cancels synthetic motion and cannot fabricate cells,
+  selection, copied text, or viewport state.
+- **Owner:** Venus owns native fractional presentation, bounded kinetic state,
+  gesture cancellation, and clipboard effects; Orbit alone owns history,
+  viewport movement, routing, cells, revisions, selection, and copied text.
+- **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v6 at
+  `780f5d746175b4a9b71df57c51ed4bfcc4c4c375`; exact patched winit
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
+  0.12.0.
+- **Boundary:** Multi-row overscan, bounce, device/source heuristics, public
+  physics tuning, presentation feedback, unreleased winit, and additional
+  platform support are outside this contract.
 - **Proof:** `3230c5820c821fd2437dcf0399d2ba921cec2c94`
   - **Environment:** Accepted deterministic checks and retained x86_64 Linux
     native Orbit/Venus dogfood
-  - **Evidence:** Gesture reconciliation, pointer-exclusive selection, exact
-    clipboard text, resize cancellation, reattachment, and client loss; accepted
-    base `04cdd6aaf5cf4f1c74984a5b129d7c61ed9d7536` and native pair
-    `1e6583ec83348617980d400e2cbdf5b1f1a6e3da`
+  - **Evidence:** Existing whole-row gesture reconciliation, pointer-exclusive
+    selection, exact clipboard text, resize cancellation, reattachment, and
+    client loss; accepted base `04cdd6aaf5cf4f1c74984a5b129d7c61ed9d7536`
+    and native pair `1e6583ec83348617980d400e2cbdf5b1f1a6e3da`
+- **Open proof:** Fractional presentation, signed-batch coalescing, kinetic
+  decay, compositor pacing, and real precision/discrete hardware dogfood require
+  one accepted candidate revision.
 
 ## VEN-C8 — Eon workspace presentation
 

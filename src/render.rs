@@ -1,12 +1,12 @@
 use crate::{
-    Color as SceneColor, DrawCursor, DrawStyle, GlyphRun, Scene, SceneRect, WorkspaceFocus,
-    WorkspaceScene,
+    Color as SceneColor, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene, ScenePreview, SceneRect,
+    WorkspaceFocus, WorkspaceScene,
 };
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
     Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
-use orbit_protocol::{CellWidth, CursorShape, Underline};
+use orbit_protocol::{CellWidth, CursorShape, Underline, session::VerticalDirection};
 use std::{
     error::Error,
     fmt,
@@ -153,6 +153,7 @@ struct PlacedText {
 #[derive(Debug, PartialEq)]
 struct ContentKey {
     generation: u64,
+    scroll_offset: f32,
     workspace_focus: WorkspaceFocus,
     blink_visible: bool,
     preedit: String,
@@ -366,6 +367,39 @@ fn valid_rect(rect: SceneRect) -> bool {
         .all(f32::is_finite)
         && rect.width > 0.0
         && rect.height > 0.0
+}
+
+fn shifted(mut rect: SceneRect, vertical: f32) -> SceneRect {
+    rect.top += vertical;
+    rect
+}
+
+fn scene_grid(scene: &Scene, viewport: SceneRect, metrics: CellMetrics) -> SceneRect {
+    SceneRect {
+        left: viewport.left + metrics.padding,
+        top: viewport.top + metrics.padding,
+        width: f32::from(scene.columns) * metrics.width,
+        height: f32::from(scene.rows) * metrics.height,
+    }
+}
+
+fn preview_row<'a>(
+    scene: &Scene,
+    preview: Option<&'a ScenePreview>,
+    metrics: CellMetrics,
+    origin: SceneRect,
+) -> Option<(&'a DrawRow, f32)> {
+    let ScenePreview::Viewport { direction, row, .. } = preview? else {
+        return None;
+    };
+    let row = row.as_ref()?;
+    let top = match direction {
+        VerticalDirection::Up => origin.top + metrics.padding - metrics.height,
+        VerticalDirection::Down => {
+            origin.top + metrics.padding + f32::from(scene.rows) * metrics.height
+        }
+    };
+    Some((row, top))
 }
 
 fn rect_changed(left: SceneRect, right: SceneRect) -> bool {
@@ -619,6 +653,8 @@ impl Renderer {
     pub fn render(
         &mut self,
         scene: Option<&Scene>,
+        scroll_preview: Option<&ScenePreview>,
+        scroll_offset: f32,
         workspace: Option<&WorkspaceScene>,
         workspace_focus: WorkspaceFocus,
         status: &str,
@@ -629,6 +665,8 @@ impl Renderer {
         ensure_device_available(&self.device_lost)?;
         let content_changed = self.rebuild_if_needed(
             scene,
+            scroll_preview,
+            scroll_offset,
             workspace,
             workspace_focus,
             status,
@@ -636,7 +674,11 @@ impl Renderer {
             preedit,
             generation,
         );
-        self.rebuild_dynamic_cursor(scene, workspace, blink_visible);
+        if scroll_offset == 0.0 {
+            self.rebuild_dynamic_cursor(scene, workspace, blink_visible);
+        } else {
+            self.reset_cursor_animation();
+        }
         if content_changed {
             self.viewport.update(
                 &self.queue,
@@ -762,6 +804,7 @@ impl Renderer {
         }
         self.queue.submit(Some(encoder.finish()));
         ensure_device_available(&self.device_lost)?;
+        self.window.pre_present_notify();
         self.queue.present(frame);
         ensure_device_available(&self.device_lost)?;
         self.atlas.trim();
@@ -772,6 +815,8 @@ impl Renderer {
     fn rebuild_if_needed(
         &mut self,
         scene: Option<&Scene>,
+        scroll_preview: Option<&ScenePreview>,
+        scroll_offset: f32,
         workspace: Option<&WorkspaceScene>,
         workspace_focus: WorkspaceFocus,
         status: &str,
@@ -781,6 +826,7 @@ impl Renderer {
     ) -> bool {
         let key = ContentKey {
             generation,
+            scroll_offset,
             workspace_focus,
             blink_visible,
             preedit: preedit.to_owned(),
@@ -806,23 +852,30 @@ impl Renderer {
                     self.background_opacity,
                 );
                 if let Some(scene) = scene {
-                    rectangles.clip = Some(terminal);
-                    self.build_scene_text(scene, blink_visible, workspace.terminal, terminal);
+                    let clip = scene_grid(scene, workspace.terminal, self.metrics)
+                        .intersection(terminal)
+                        .unwrap_or(terminal);
+                    rectangles.clip = Some(clip);
+                    let origin = shifted(workspace.terminal, scroll_offset);
+                    self.build_scene_text(scene, blink_visible, origin, clip);
+                    self.build_preview_text(scene, scroll_preview, blink_visible, origin, clip);
                     cursor_vertex_boundary = build_scene_rectangles(
                         &mut rectangles,
                         scene,
                         blink_visible,
                         self.metrics,
-                        workspace.terminal,
+                        origin,
                         self.cursor_tail.is_none(),
                     );
-                    self.build_preedit(
-                        scene,
-                        preedit,
+                    build_preview_rectangles(
                         &mut rectangles,
-                        workspace.terminal,
-                        terminal,
+                        scene,
+                        scroll_preview,
+                        blink_visible,
+                        self.metrics,
+                        origin,
                     );
+                    self.build_preedit(scene, preedit, &mut rectangles, origin, clip);
                     rectangles.clip = None;
                 }
             }
@@ -857,16 +910,29 @@ impl Renderer {
                 width: self.config.width as f32,
                 height: self.config.height as f32,
             };
-            self.build_scene_text(scene, blink_visible, viewport, viewport);
+            let clip = scene_grid(scene, viewport, self.metrics);
+            rectangles.clip = Some(clip);
+            let origin = shifted(viewport, scroll_offset);
+            self.build_scene_text(scene, blink_visible, origin, clip);
+            self.build_preview_text(scene, scroll_preview, blink_visible, origin, clip);
             cursor_vertex_boundary = build_scene_rectangles(
                 &mut rectangles,
                 scene,
                 blink_visible,
                 self.metrics,
-                viewport,
+                origin,
                 self.cursor_tail.is_none(),
             );
-            self.build_preedit(scene, preedit, &mut rectangles, viewport, viewport);
+            build_preview_rectangles(
+                &mut rectangles,
+                scene,
+                scroll_preview,
+                blink_visible,
+                self.metrics,
+                origin,
+            );
+            self.build_preedit(scene, preedit, &mut rectangles, origin, clip);
+            rectangles.clip = None;
             if !status.is_empty() {
                 self.build_notice(status, &mut rectangles);
             }
@@ -1144,6 +1210,44 @@ impl Renderer {
             let top = origin.top + self.metrics.padding + f32::from(run.row) * self.metrics.height;
             let width = f32::from(run.columns) * self.metrics.width;
             let next = runs.get(index + 1).filter(|next| next.row == run.row);
+            let ink_width = f32::from(cell_ink_right(run, next, scene.columns) - run.column)
+                * self.metrics.width;
+            self.push_text_clipped(
+                &run.text,
+                left,
+                top,
+                width,
+                ink_width,
+                self.metrics.height,
+                run.style.foreground,
+                DrawStyleKind::Cell(run.style),
+                clip,
+            );
+        }
+    }
+
+    fn build_preview_text(
+        &mut self,
+        scene: &Scene,
+        preview: Option<&ScenePreview>,
+        blink_visible: bool,
+        origin: SceneRect,
+        clip: SceneRect,
+    ) {
+        let Some((row, top)) = preview_row(scene, preview, self.metrics, origin) else {
+            return;
+        };
+        let mut runs = Vec::new();
+        row.append_glyph_runs(0, &mut runs);
+        runs.retain(|run| run.style.foreground_visible(blink_visible));
+        for (index, run) in runs.iter().enumerate() {
+            if is_full_block_run(run) {
+                continue;
+            }
+            let left =
+                origin.left + self.metrics.padding + f32::from(run.column) * self.metrics.width;
+            let width = f32::from(run.columns) * self.metrics.width;
+            let next = runs.get(index + 1);
             let ink_width = f32::from(cell_ink_right(run, next, scene.columns) - run.column)
                 * self.metrics.width;
             self.push_text_clipped(
@@ -1752,132 +1856,14 @@ fn build_scene_rectangles(
     draw_cursor: bool,
 ) -> u32 {
     for (row_index, row) in scene.content.iter().enumerate() {
-        let mut start = 0_usize;
-        while start < row.cells.len() {
-            let background = row.cells[start].style.background;
-            let background_is_default = row.cells[start].style.background_is_default;
-            let mut end = start + 1;
-            while end < row.cells.len()
-                && row.cells[end].style.background == background
-                && row.cells[end].style.background_is_default == background_is_default
-            {
-                end += 1;
-            }
-            if !background_is_default {
-                rectangles.push(
-                    viewport.left + metrics.padding + start as f32 * metrics.width,
-                    viewport.top + metrics.padding + row_index as f32 * metrics.height,
-                    (end - start) as f32 * metrics.width,
-                    metrics.height,
-                    background,
-                    1.0,
-                );
-            }
-            start = end;
-        }
-        for (column, cell) in row.cells.iter().enumerate() {
-            if !cell.style.foreground_visible(blink_visible) {
-                continue;
-            }
-            let left = viewport.left + metrics.padding + column as f32 * metrics.width;
-            let top = viewport.top + metrics.padding + row_index as f32 * metrics.height;
-            if cell.is_full_block() {
-                rectangles.push(
-                    left,
-                    top,
-                    metrics.width,
-                    metrics.height,
-                    cell.style.foreground,
-                    f32::from(cell.style.foreground_alpha()) / 255.0,
-                );
-            }
-            let thickness = (metrics.height / 14.0).max(1.0);
-            match cell.style.underline {
-                Underline::None => {}
-                Underline::Single => rectangles.push(
-                    left,
-                    top + metrics.height - thickness * 2.0,
-                    metrics.width,
-                    thickness,
-                    cell.style.underline_color,
-                    1.0,
-                ),
-                Underline::Curly => {
-                    let segment = (metrics.width / 4.0).max(1.0);
-                    for part in 0..4 {
-                        rectangles.push(
-                            left + part as f32 * segment,
-                            top + metrics.height
-                                - thickness * if part % 2 == 0 { 3.0 } else { 1.5 },
-                            segment,
-                            thickness,
-                            cell.style.underline_color,
-                            1.0,
-                        );
-                    }
-                }
-                Underline::Dotted => {
-                    let dot = thickness.max(1.0);
-                    let mut x = left;
-                    while x < left + metrics.width {
-                        rectangles.push(
-                            x,
-                            top + metrics.height - thickness * 2.0,
-                            dot,
-                            thickness,
-                            cell.style.underline_color,
-                            1.0,
-                        );
-                        x += dot * 2.0;
-                    }
-                }
-                Underline::Dashed => {
-                    let dash = (metrics.width / 3.0).max(1.0);
-                    for part in [0.0, 2.0] {
-                        rectangles.push(
-                            left + part * dash,
-                            top + metrics.height - thickness * 2.0,
-                            dash,
-                            thickness,
-                            cell.style.underline_color,
-                            1.0,
-                        );
-                    }
-                }
-                Underline::Double => {
-                    for offset in [2.0, 4.0] {
-                        rectangles.push(
-                            left,
-                            top + metrics.height - thickness * offset,
-                            metrics.width,
-                            thickness,
-                            cell.style.underline_color,
-                            1.0,
-                        );
-                    }
-                }
-            }
-            if cell.style.strikethrough {
-                rectangles.push(
-                    left,
-                    top + metrics.height * 0.52,
-                    metrics.width,
-                    thickness,
-                    cell.style.foreground,
-                    1.0,
-                );
-            }
-            if cell.style.overline {
-                rectangles.push(
-                    left,
-                    top + thickness,
-                    metrics.width,
-                    thickness,
-                    cell.style.foreground,
-                    1.0,
-                );
-            }
-        }
+        build_row_rectangles(
+            rectangles,
+            row,
+            blink_visible,
+            metrics,
+            viewport.left + metrics.padding,
+            viewport.top + metrics.padding + row_index as f32 * metrics.height,
+        );
     }
     if draw_cursor
         && let Some(cursor) = scene
@@ -1888,6 +1874,161 @@ fn build_scene_rectangles(
         push_cursor(rectangles, cursor, bounds, metrics);
     }
     vertex_count(&rectangles.bytes)
+}
+
+fn build_preview_rectangles(
+    rectangles: &mut RectangleBatch,
+    scene: &Scene,
+    preview: Option<&ScenePreview>,
+    blink_visible: bool,
+    metrics: CellMetrics,
+    origin: SceneRect,
+) {
+    if let Some((row, top)) = preview_row(scene, preview, metrics, origin) {
+        build_row_rectangles(
+            rectangles,
+            row,
+            blink_visible,
+            metrics,
+            origin.left + metrics.padding,
+            top,
+        );
+    }
+}
+
+fn build_row_rectangles(
+    rectangles: &mut RectangleBatch,
+    row: &DrawRow,
+    blink_visible: bool,
+    metrics: CellMetrics,
+    row_left: f32,
+    row_top: f32,
+) {
+    let mut start = 0_usize;
+    while start < row.cells.len() {
+        let background = row.cells[start].style.background;
+        let background_is_default = row.cells[start].style.background_is_default;
+        let mut end = start + 1;
+        while end < row.cells.len()
+            && row.cells[end].style.background == background
+            && row.cells[end].style.background_is_default == background_is_default
+        {
+            end += 1;
+        }
+        if !background_is_default {
+            rectangles.push(
+                row_left + start as f32 * metrics.width,
+                row_top,
+                (end - start) as f32 * metrics.width,
+                metrics.height,
+                background,
+                1.0,
+            );
+        }
+        start = end;
+    }
+    for (column, cell) in row.cells.iter().enumerate() {
+        if !cell.style.foreground_visible(blink_visible) {
+            continue;
+        }
+        let left = row_left + column as f32 * metrics.width;
+        let top = row_top;
+        if cell.is_full_block() {
+            rectangles.push(
+                left,
+                top,
+                metrics.width,
+                metrics.height,
+                cell.style.foreground,
+                f32::from(cell.style.foreground_alpha()) / 255.0,
+            );
+        }
+        let thickness = (metrics.height / 14.0).max(1.0);
+        match cell.style.underline {
+            Underline::None => {}
+            Underline::Single => rectangles.push(
+                left,
+                top + metrics.height - thickness * 2.0,
+                metrics.width,
+                thickness,
+                cell.style.underline_color,
+                1.0,
+            ),
+            Underline::Curly => {
+                let segment = (metrics.width / 4.0).max(1.0);
+                for part in 0..4 {
+                    rectangles.push(
+                        left + part as f32 * segment,
+                        top + metrics.height - thickness * if part % 2 == 0 { 3.0 } else { 1.5 },
+                        segment,
+                        thickness,
+                        cell.style.underline_color,
+                        1.0,
+                    );
+                }
+            }
+            Underline::Dotted => {
+                let dot = thickness.max(1.0);
+                let mut x = left;
+                while x < left + metrics.width {
+                    rectangles.push(
+                        x,
+                        top + metrics.height - thickness * 2.0,
+                        dot,
+                        thickness,
+                        cell.style.underline_color,
+                        1.0,
+                    );
+                    x += dot * 2.0;
+                }
+            }
+            Underline::Dashed => {
+                let dash = (metrics.width / 3.0).max(1.0);
+                for part in [0.0, 2.0] {
+                    rectangles.push(
+                        left + part * dash,
+                        top + metrics.height - thickness * 2.0,
+                        dash,
+                        thickness,
+                        cell.style.underline_color,
+                        1.0,
+                    );
+                }
+            }
+            Underline::Double => {
+                for offset in [2.0, 4.0] {
+                    rectangles.push(
+                        left,
+                        top + metrics.height - thickness * offset,
+                        metrics.width,
+                        thickness,
+                        cell.style.underline_color,
+                        1.0,
+                    );
+                }
+            }
+        }
+        if cell.style.strikethrough {
+            rectangles.push(
+                left,
+                top + metrics.height * 0.52,
+                metrics.width,
+                thickness,
+                cell.style.foreground,
+                1.0,
+            );
+        }
+        if cell.style.overline {
+            rectangles.push(
+                left,
+                top + thickness,
+                metrics.width,
+                thickness,
+                cell.style.foreground,
+                1.0,
+            );
+        }
+    }
 }
 
 fn cursor_bounds(
@@ -2117,6 +2258,7 @@ mod tests {
     fn content_cache_separates_generations() {
         let key = |generation| ContentKey {
             generation,
+            scroll_offset: 0.0,
             workspace_focus: WorkspaceFocus::Terminal,
             blink_visible: true,
             preedit: String::new(),
@@ -2124,6 +2266,65 @@ mod tests {
         };
 
         assert_ne!(key(1), key(2));
+    }
+
+    #[test]
+    fn one_adjacent_row_covers_every_fractional_grid_offset() {
+        let metrics = CellMetrics {
+            width: 10.0,
+            height: 20.0,
+            font_size: 16.0,
+            padding: 5.0,
+        };
+        let scene = Scene {
+            revision: 7,
+            columns: 1,
+            rows: 2,
+            screen: Screen::Primary,
+            title: String::new(),
+            working_directory: String::new(),
+            background: DEFAULT_BACKGROUND,
+            foreground: SceneColor::default(),
+            cursor: None,
+            content: Vec::new(),
+        };
+        let row = DrawRow {
+            wrapped: false,
+            wrap_continuation: false,
+            kitty_virtual_placeholder: false,
+            cells: Vec::new(),
+        };
+        let viewport = SceneRect {
+            left: 0.0,
+            top: 0.0,
+            width: 20.0,
+            height: 50.0,
+        };
+        let grid = scene_grid(&scene, viewport, metrics);
+
+        for (direction, offset) in [
+            (VerticalDirection::Up, metrics.height - 0.25),
+            (VerticalDirection::Down, -metrics.height + 0.25),
+        ] {
+            let preview = ScenePreview::Viewport {
+                frame_revision: scene.revision,
+                direction,
+                edge_reached: false,
+                row: Some(row.clone()),
+            };
+            let (_, top) =
+                preview_row(&scene, Some(&preview), metrics, shifted(viewport, offset)).unwrap();
+            assert!(
+                (SceneRect {
+                    left: grid.left,
+                    top,
+                    width: grid.width,
+                    height: metrics.height,
+                })
+                .intersection(grid)
+                .is_some()
+            );
+        }
     }
 
     fn plain_style() -> DrawStyle {

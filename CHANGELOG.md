@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Scale precision retained-history input to twice its native pixel distance,
+  continue phase-complete gestures with bounded elapsed-time momentum, move
+  discrete wheel steps by three rows without synthetic inertia, coalesce crossed
+  rows through one Orbit batch, and pace active redraws through native Wayland
+  compositor callbacks.
 - Accept one bounded caller-owned application ID before native Wayland window
   creation, preserving `eon` as the direct default and keeping terminal titles
   independent from launcher grouping.

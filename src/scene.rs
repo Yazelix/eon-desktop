@@ -1,7 +1,8 @@
 use crate::render::CellMetrics;
 use eon_workspace_protocol::Snapshot;
 use orbit_protocol::{
-    Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Screen, StyleColor, Underline,
+    Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
+    session::VerticalDirection,
 };
 use std::{fmt::Write, path::Path};
 use winit::dpi::PhysicalSize;
@@ -467,6 +468,61 @@ pub struct DrawRow {
     pub cells: Vec<DrawCell>,
 }
 
+impl DrawRow {
+    pub(crate) fn from_protocol(row: &Row, frame: &Frame) -> Self {
+        Self {
+            wrapped: row.wrapped,
+            wrap_continuation: row.wrap_continuation,
+            kitty_virtual_placeholder: row.kitty_virtual_placeholder,
+            cells: row
+                .cells
+                .iter()
+                .map(|cell| DrawCell::from_protocol(cell, frame))
+                .collect(),
+        }
+    }
+
+    pub(crate) fn append_glyph_runs(&self, row: u16, runs: &mut Vec<GlyphRun>) {
+        let mut column = 0_u16;
+        while usize::from(column) < self.cells.len() {
+            let cell = &self.cells[usize::from(column)];
+            let span = match cell.width {
+                CellWidth::Narrow => 1,
+                CellWidth::Wide => 2,
+                CellWidth::SpacerHead | CellWidth::SpacerTail => {
+                    column += 1;
+                    continue;
+                }
+            };
+            if cell.style.foreground_visible(true) && !cell.text.trim_matches(' ').is_empty() {
+                runs.push(GlyphRun {
+                    column,
+                    row,
+                    columns: span,
+                    text: cell.text.clone(),
+                    style: cell.style,
+                });
+            }
+            column = column.saturating_add(span);
+        }
+    }
+}
+
+/// One Orbit-routed row adjacent to an exact accepted scene.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScenePreview {
+    TerminalOwned {
+        frame_revision: u64,
+        direction: VerticalDirection,
+    },
+    Viewport {
+        frame_revision: u64,
+        direction: VerticalDirection,
+        edge_reached: bool,
+        row: Option<DrawRow>,
+    },
+}
+
 /// Renderer-ready cursor state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DrawCursor {
@@ -552,16 +608,7 @@ impl Scene {
         let content = frame
             .rows
             .iter()
-            .map(|row| DrawRow {
-                wrapped: row.wrapped,
-                wrap_continuation: row.wrap_continuation,
-                kitty_virtual_placeholder: row.kitty_virtual_placeholder,
-                cells: row
-                    .cells
-                    .iter()
-                    .map(|cell| DrawCell::from_protocol(cell, frame))
-                    .collect(),
-            })
+            .map(|row| DrawRow::from_protocol(row, frame))
             .collect();
         let cursor = frame.cursor.viewport.map(|cursor| DrawCursor {
             visible: frame.cursor.visible,
@@ -592,29 +639,11 @@ impl Scene {
     #[must_use]
     pub fn glyph_runs(&self) -> Vec<GlyphRun> {
         let mut runs = Vec::new();
-        for (row_index, row) in self.content.iter().enumerate() {
-            let mut column = 0_u16;
-            while usize::from(column) < row.cells.len() {
-                let cell = &row.cells[usize::from(column)];
-                let span = match cell.width {
-                    CellWidth::Narrow => 1,
-                    CellWidth::Wide => 2,
-                    CellWidth::SpacerHead | CellWidth::SpacerTail => {
-                        column += 1;
-                        continue;
-                    }
-                };
-                if cell.style.foreground_visible(true) && !cell.text.trim_matches(' ').is_empty() {
-                    runs.push(GlyphRun {
-                        column,
-                        row: u16::try_from(row_index).expect("frame row count fits u16"),
-                        columns: span,
-                        text: cell.text.clone(),
-                        style: cell.style,
-                    });
-                }
-                column = column.saturating_add(span);
-            }
+        for (index, row) in self.content.iter().enumerate() {
+            row.append_glyph_runs(
+                u16::try_from(index).expect("frame row count fits u16"),
+                &mut runs,
+            );
         }
         runs
     }
