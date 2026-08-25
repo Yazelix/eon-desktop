@@ -1104,7 +1104,7 @@ impl Renderer {
                 }
             }
             self.push_text_clipped(
-                &tab.id,
+                tab.label(),
                 tab.rect.left + self.metrics.padding,
                 tab.rect.top + (tab.rect.height - self.metrics.height) / 2.0,
                 tab.rect.width - self.metrics.padding * 2.0,

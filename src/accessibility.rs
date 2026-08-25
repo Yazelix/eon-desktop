@@ -152,7 +152,7 @@ impl Snapshot {
             nodes.push((TAB_LIST, tab_list));
             for tab in &workspace.tabs {
                 let mut node = Node::new(Role::Tab);
-                node.set_label(tab.id.as_str());
+                node.set_label(tab.accessible_label());
                 node.set_selected(tab.selected);
                 if let Some(bounds) = tab.rect.intersection(workspace.tab_viewport) {
                     node.set_bounds(rect(bounds));
@@ -402,11 +402,12 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use crate::PaneMetadata;
-    use eon_workspace_protocol::{Pane, Snapshot as WorkspaceSnapshot, Tab};
+    use eon_workspace_protocol::v2::{Pane, Snapshot as WorkspaceSnapshot, Tab};
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
         Tab {
             id: id.into(),
+            directory: format!("/tmp/{id}").into_bytes(),
             selected_pane: selected_pane.into(),
             panes: panes
                 .iter()
@@ -610,14 +611,14 @@ mod tests {
     fn workspace_accessibility_uses_visible_intersections() {
         let columns = 4;
         let workspace_snapshot = WorkspaceSnapshot {
-            active_tab: "tab-1".into(),
+            active_tab: "t1".into(),
             tabs: vec![
                 workspace_tab(
-                    "tab-1",
+                    "t1",
                     &["pane-1", "pane-2", "pane-3", "pane-4", "pane-5", "pane-6"],
                     "pane-1",
                 ),
-                workspace_tab("tab-2", &["pane-7"], "pane-7"),
+                workspace_tab("t2", &["pane-7"], "pane-7"),
             ],
         };
         for scale in [1.0, 1.25, 1.5, 2.0] {
@@ -646,7 +647,7 @@ mod tests {
                 ..Snapshot::new(size)
             };
             snapshot.set_workspace(Some(&workspace));
-            let tab = snapshot.tab_ids["tab-1"];
+            let tab = snapshot.tab_ids["t1"];
             let pane = snapshot.pane_ids["pane-1"];
             let update = snapshot.tree();
             assert!(node(&update, TAB_LIST).clips_children());
@@ -714,10 +715,11 @@ mod tests {
         };
         let workspace = WorkspaceScene::from_snapshot_with_metadata(
             &WorkspaceSnapshot {
-                active_tab: "tab-1".into(),
+                active_tab: "t1".into(),
                 tabs: vec![
                     Tab {
-                        id: "tab-1".into(),
+                        id: "t1".into(),
+                        directory: b"/tmp/eon".to_vec(),
                         selected_pane: "p2".into(),
                         panes: vec![
                             Pane {
@@ -735,7 +737,8 @@ mod tests {
                         ],
                     },
                     Tab {
-                        id: "tab-2".into(),
+                        id: "t2".into(),
+                        directory: b"/tmp/nova".to_vec(),
                         selected_pane: "p3".into(),
                         panes: vec![Pane {
                             id: "p3".into(),
@@ -768,8 +771,8 @@ mod tests {
             ..Snapshot::new(PhysicalSize::new(800, 600))
         };
         snapshot.set_workspace(Some(&workspace));
-        let tab_1 = snapshot.tab_ids["tab-1"];
-        let tab_2 = snapshot.tab_ids["tab-2"];
+        let tab_1 = snapshot.tab_ids["t1"];
+        let tab_2 = snapshot.tab_ids["t2"];
         let pane_1 = snapshot.pane_ids["p1"];
         let pane_2 = snapshot.pane_ids["p2"];
         let update = snapshot.tree();
@@ -780,6 +783,8 @@ mod tests {
             &[pane_1, pane_2, CONTENT]
         );
         assert_eq!(node(&update, tab_1).role(), Role::Tab);
+        assert_eq!(node(&update, tab_1).label(), Some("t1  /tmp/eon"));
+        assert_eq!(node(&update, tab_2).label(), Some("t2  /tmp/nova"));
         assert_eq!(node(&update, pane_1).label(), Some("p1 offline"));
         assert_eq!(workspace.panes[1].label(), "p2  /tmp/eon");
         assert_eq!(
@@ -799,34 +804,34 @@ mod tests {
         set_workspace(
             &accessibility,
             workspace_scene(
-                "tab-b",
+                "t2",
                 vec![
-                    workspace_tab("tab-a", &["pane-x"], "pane-x"),
-                    workspace_tab("tab-b", &["pane-a", "pane-b"], "pane-b"),
+                    workspace_tab("t1", &["pane-x"], "pane-x"),
+                    workspace_tab("t2", &["pane-a", "pane-b"], "pane-b"),
                 ],
             ),
             WorkspaceFocus::Panes,
         );
         let first = activation.request_initial_tree().unwrap();
-        let tab_a = tree_node_id(&first, "tab-a");
-        let tab_b = tree_node_id(&first, "tab-b");
+        let tab_a = tree_node_id(&first, "t1  /tmp/t1");
+        let tab_b = tree_node_id(&first, "t2  /tmp/t2");
         let pane_a = tree_node_id(&first, "pane-a unavailable");
         let pane_b = tree_node_id(&first, "pane-b unavailable");
         assert_ne!(tab_a, pane_a);
 
         set_workspace(
             &accessibility,
-            workspace_scene("tab-b", vec![workspace_tab("tab-b", &["pane-b"], "pane-b")]),
+            workspace_scene("t2", vec![workspace_tab("t2", &["pane-b"], "pane-b")]),
             WorkspaceFocus::Panes,
         );
         let second = activation.request_initial_tree().unwrap();
 
-        assert_eq!(tree_node_id(&second, "tab-b"), tab_b);
+        assert_eq!(tree_node_id(&second, "t2  /tmp/t2"), tab_b);
         assert_eq!(tree_node_id(&second, "pane-b unavailable"), pane_b);
         assert_eq!(second.focus, pane_b);
         assert_eq!(
             accessibility.workspace_target(tab_b),
-            Some(AccessibilityTarget::Tab("tab-b".into()))
+            Some(AccessibilityTarget::Tab("t2".into()))
         );
         assert_eq!(
             accessibility.workspace_target(pane_b),
@@ -839,19 +844,19 @@ mod tests {
         set_workspace(
             &accessibility,
             workspace_scene(
-                "tab-b",
+                "t2",
                 vec![
-                    workspace_tab("tab-c", &["pane-z"], "pane-z"),
-                    workspace_tab("tab-b", &["pane-c", "pane-b"], "pane-b"),
+                    workspace_tab("t3", &["pane-z"], "pane-z"),
+                    workspace_tab("t2", &["pane-c", "pane-b"], "pane-b"),
                 ],
             ),
             WorkspaceFocus::Panes,
         );
         let third = activation.request_initial_tree().unwrap();
 
-        assert_eq!(tree_node_id(&third, "tab-b"), tab_b);
+        assert_eq!(tree_node_id(&third, "t2  /tmp/t2"), tab_b);
         assert_eq!(tree_node_id(&third, "pane-b unavailable"), pane_b);
-        assert_ne!(tree_node_id(&third, "tab-c"), tab_a);
+        assert_ne!(tree_node_id(&third, "t3  /tmp/t3"), tab_a);
         assert_ne!(tree_node_id(&third, "pane-c unavailable"), pane_a);
         assert_eq!(third.focus, pane_b);
     }

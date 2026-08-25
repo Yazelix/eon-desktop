@@ -1,5 +1,5 @@
 use crate::scene::{DrawRow, Scene, ScenePreview};
-use eon_workspace_protocol::{Response as WorkspaceResponse, Snapshot};
+use eon_workspace_protocol::v2::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{
     ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
@@ -421,14 +421,15 @@ fn bounded(mut detail: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::{Failure, Pane, Tab};
+    use eon_workspace_protocol::v2::{Failure, Pane, Tab};
 
     #[test]
     fn rejected_workspace_action_preserves_the_last_complete_snapshot() {
         let snapshot = Snapshot {
-            active_tab: "tab-1".into(),
+            active_tab: "t1".into(),
             tabs: vec![Tab {
-                id: "tab-1".into(),
+                id: "t1".into(),
+                directory: b"/tmp/eon".to_vec(),
                 selected_pane: "pane-1".into(),
                 panes: vec![Pane {
                     id: "pane-1".into(),

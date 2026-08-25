@@ -1,7 +1,7 @@
 use crate::{Result, launch::LaunchArguments};
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::{Action as WorkspaceAction, Direction as WorkspaceDirection};
+use eon_workspace_protocol::v2::{Action as WorkspaceAction, Direction as WorkspaceDirection};
 use orbit_protocol::{
     MAX_CELLS,
     session::{
@@ -793,7 +793,7 @@ impl Application {
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
         let received_snapshot = matches!(
             &event,
-            WorkspaceEvent::Response(eon_workspace_protocol::Response::Snapshot(_))
+            WorkspaceEvent::Response(eon_workspace_protocol::v2::Response::Snapshot(_))
         );
         let unavailable = matches!(&event, WorkspaceEvent::Unavailable(_));
         let (view_changed, snapshot_changed) = match event {
@@ -1950,7 +1950,7 @@ fn retry_is_allowed(
 }
 
 fn visible_metadata_endpoints(
-    snapshot: &eon_workspace_protocol::Snapshot,
+    snapshot: &eon_workspace_protocol::v2::Snapshot,
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
@@ -2350,7 +2350,7 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
-    use eon_workspace_protocol::{Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v2::{Pane, Snapshot, Tab};
 
     #[test]
     fn terminal_scroll_keeps_fractional_input_and_elapsed_time_physics() {
@@ -2626,10 +2626,11 @@ mod tests {
     #[test]
     fn metadata_endpoints_are_only_live_panes_in_the_active_tab() {
         let snapshot = Snapshot {
-            active_tab: "tab-1".into(),
+            active_tab: "t1".into(),
             tabs: vec![
                 Tab {
-                    id: "tab-1".into(),
+                    id: "t1".into(),
+                    directory: b"/tmp/eon".to_vec(),
                     selected_pane: "pane-1".into(),
                     panes: vec![
                         Pane {
@@ -2647,7 +2648,8 @@ mod tests {
                     ],
                 },
                 Tab {
-                    id: "tab-2".into(),
+                    id: "t2".into(),
+                    directory: b"/tmp/nova".to_vec(),
                     selected_pane: "pane-3".into(),
                     panes: vec![Pane {
                         id: "pane-3".into(),
@@ -3017,10 +3019,10 @@ mod tests {
     fn published_accessibility_focus_waits_for_eon_queue_admission() {
         for (target, admitted, expected_focus, expected_action) in [
             (
-                AccessibilityTarget::Tab("tab-2".into()),
+                AccessibilityTarget::Tab("t2".into()),
                 true,
                 Some(WorkspaceFocus::Tabs),
-                WorkspaceAction::FocusId("tab-2".into()),
+                WorkspaceAction::FocusId("t2".into()),
             ),
             (
                 AccessibilityTarget::Pane("pane-3".into()),

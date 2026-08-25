@@ -1,4 +1,4 @@
-use eon_workspace_protocol::{Pane, Snapshot, Tab};
+use eon_workspace_protocol::v2::{Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
@@ -16,10 +16,11 @@ use yazelix_venus::{
 #[test]
 fn eon_workspace_becomes_one_bounded_native_accordion() {
     let snapshot = Snapshot {
-        active_tab: "tab-1".into(),
+        active_tab: "t1".into(),
         tabs: vec![
             Tab {
-                id: "tab-1".into(),
+                id: "t1".into(),
+                directory: b"/tmp/eon".to_vec(),
                 selected_pane: "pane-2".into(),
                 panes: vec![
                     Pane {
@@ -37,7 +38,8 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
                 ],
             },
             Tab {
-                id: "tab-2".into(),
+                id: "t2".into(),
+                directory: b"/tmp/nova".to_vec(),
                 selected_pane: "pane-3".into(),
                 panes: vec![Pane {
                     id: "pane-3".into(),
@@ -65,7 +67,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
             .iter()
             .map(|tab| tab.id.as_str())
             .collect::<Vec<_>>(),
-        ["tab-1", "tab-2"]
+        ["t1", "t2"]
     );
     assert_eq!(
         scene
@@ -147,7 +149,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     ));
 
     let mut second_tab = snapshot.clone();
-    second_tab.active_tab = "tab-2".into();
+    second_tab.active_tab = "t2".into();
     let narrow =
         WorkspaceScene::from_snapshot(&second_tab, PhysicalSize::new(100, 600), metrics, 0.0, 0.0);
     let revealed = WorkspaceScene::from_snapshot(
@@ -157,10 +159,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         narrow.active_tab_scroll(),
         narrow.selected_pane_scroll(),
     );
-    assert_eq!(
-        revealed.hit_test(1.0, 1.0),
-        Some(WorkspaceHit::Tab("tab-2"))
-    );
+    assert_eq!(revealed.hit_test(1.0, 1.0), Some(WorkspaceHit::Tab("t2")));
 
     let tiny = WorkspaceScene::from_snapshot(
         &snapshot,

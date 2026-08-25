@@ -1,10 +1,10 @@
 use crate::render::CellMetrics;
-use eon_workspace_protocol::Snapshot;
+use eon_workspace_protocol::v2::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
 };
-use std::{fmt::Write, path::Path};
+use std::{ffi::OsStr, fmt::Write, os::unix::ffi::OsStrExt, path::Path};
 use winit::dpi::PhysicalSize;
 
 /// Physical rectangle shared by workspace drawing, hit testing, and accessibility.
@@ -51,6 +51,18 @@ pub struct WorkspaceTab {
     pub id: String,
     pub selected: bool,
     pub rect: SceneRect,
+    label: String,
+    accessible_label: String,
+}
+
+impl WorkspaceTab {
+    pub(crate) fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub(crate) fn accessible_label(&self) -> &str {
+        &self.accessible_label
+    }
 }
 
 /// One Eon-authored pane header projected into native accordion geometry.
@@ -161,6 +173,25 @@ fn bounded_metadata_field(value: &str) -> String {
     format!("{prefix}{tail}")
 }
 
+fn tab_labels(id: &str, directory: &[u8], home: Option<&Path>) -> (String, String) {
+    let path = Path::new(OsStr::from_bytes(directory));
+    let leaf = if home.is_some_and(|home| path == home) {
+        "~".into()
+    } else if path == Path::new("/") {
+        "/".into()
+    } else {
+        bounded_metadata_field(
+            &path
+                .file_name()
+                .unwrap_or(path.as_os_str())
+                .to_string_lossy(),
+        )
+    };
+    let number = id.strip_prefix('t').unwrap_or(id);
+    let full_path = bounded_metadata_field(&path.as_os_str().to_string_lossy());
+    (format!("{number}  {leaf}"), format!("{id}  {full_path}"))
+}
+
 /// Native workspace target at one physical point.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkspaceHit<'a> {
@@ -267,19 +298,26 @@ impl WorkspaceScene {
         } else {
             0.0
         };
+        let home = std::env::var_os("HOME");
         let tabs = snapshot
             .tabs
             .iter()
             .enumerate()
-            .map(|(index, tab)| WorkspaceTab {
-                id: tab.id.clone(),
-                selected: index == active_tab,
-                rect: SceneRect {
-                    left: index as f32 * tab_width - tab_scroll,
-                    top: 0.0,
-                    width: tab_width,
-                    height: tab_height,
-                },
+            .map(|(index, tab)| {
+                let (label, accessible_label) =
+                    tab_labels(&tab.id, &tab.directory, home.as_deref().map(Path::new));
+                WorkspaceTab {
+                    id: tab.id.clone(),
+                    selected: index == active_tab,
+                    rect: SceneRect {
+                        left: index as f32 * tab_width - tab_scroll,
+                        top: 0.0,
+                        width: tab_width,
+                        height: tab_height,
+                    },
+                    label,
+                    accessible_label,
+                }
             })
             .collect();
         let panes = active
@@ -844,6 +882,31 @@ fn resolve_color(color: StyleColor, default: Rgb, palette: &[Rgb; 256]) -> Color
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_directory_labels_keep_identity_and_bounded_path_context() {
+        assert_eq!(
+            tab_labels("t1", b"/home/alice", Some(Path::new("/home/alice"))),
+            ("1  ~".into(), "t1  /home/alice".into())
+        );
+        assert_eq!(
+            tab_labels("t2", b"/", Some(Path::new("/home/alice"))),
+            ("2  /".into(), "t2  /".into())
+        );
+        assert_eq!(
+            tab_labels("t3", b"/srv/nova", Some(Path::new("/home/alice"))),
+            ("3  nova".into(), "t3  /srv/nova".into())
+        );
+        assert_eq!(
+            tab_labels("t4", b"/tmp/eon-\xff", None),
+            ("4  eon-�".into(), "t4  /tmp/eon-�".into())
+        );
+        let long = format!("/tmp/{}", "eon".repeat(100));
+        let labels = tab_labels("t5", long.as_bytes(), None);
+        assert!(labels.0.ends_with(&"eon".repeat(26)));
+        assert!(labels.0.chars().count() <= 84);
+        assert!(labels.1.chars().count() <= 84);
+    }
 
     #[test]
     fn pane_metadata_label_is_bounded_safe_and_has_honest_fallbacks() {
