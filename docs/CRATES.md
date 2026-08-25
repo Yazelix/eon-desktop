@@ -12,6 +12,9 @@ advances the same canonical session consumer to ORBS v4.
 metadata without another schema or runtime dependency.
 `ven-venus-kinetic-touchpad-scroll-5sl` advances it to ORBS v7 for bounded
 multi-row preview windows and compositor-paced fractional scrolling.
+`ven-venus-native-selection-gestures-d3x` advances it to ORBS v10 for
+Orbit-routed native left-pointer selection, authoritative completion revisions,
+and destination-tagged copy results.
 `ven-venus-linux-wayland-only-ndj` selects native Linux Wayland and Vulkan as
 the sole host and replaces the clipboard adapter's X11 fallback with its
 already-locked Wayland data-control owner.
@@ -19,17 +22,17 @@ already-locked Wayland data-control owner.
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
 | Eon workspace protocol consumer | Exact Git revision `4af395aea06c230ee6b18cf0755ae25915c0b88d` of the dependency-free, publish-false `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v1 values, validation, topology, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. The user authorized Apache-2.0, matching Nova, if Eon needs a public license; the exact Eon revision has no durable license record, so public distribution remains blocked until Eon records it. |
-| Orbit protocol consumer | Exact Git revision `baf8aa28dcaa50484cd221aa7730defedc2356bb` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v7, ORBF v1, semantic values, history, selection, typed wheel outcomes, signed scroll batches, bounded row-window previews, copied text, terminal clipboard effects, read-only pane metadata, bounds, revision reduction, and the accepted lifecycle contracts. Venus keeps no mirror terminal schema or viewport authority; one private kinetic state consumes exact preview and batch outcomes. |
+| Orbit protocol consumer | Exact Git revision `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v10, ORBF v1, semantic values, history, terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied text, terminal clipboard effects, read-only pane metadata, bounds, revision reduction, and the accepted lifecycle contracts. Venus keeps no mirror terminal schema or viewport authority; its native host supplies events and applies clipboard effects. |
 | Native host | winit 0.30.13 with Wayland, dynamic Wayland loading, and raw-window-handle 0.6 only, patched to exact `chiyuki0325/winit-0.30` commit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` | Active on native Linux Wayland | The host owns window and event-loop lifecycle, native input and IME collection, compositor blur protocol selection, resize, surface recovery, socket scheduling, and bounded client failure UX. X11 and Xwayland compatibility are unsupported. Replace the patch with the first accepted stable winit containing upstream `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. |
 | GPU and text | wgpu 30.0.0 with Vulkan and WGSL only; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active on Linux/Vulkan | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
 | Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
 | Native text clipboard | wl-clipboard-rs 0.9.3 with default features disabled | Active on native Linux Wayland | The host reads ordinary clipboard text once after an explicit paste shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects through Wayland data-control. Orbit owns paste encoding and terminal text. Missing data-control remains a visible bounded failure; there is no X11 fallback. |
 
-The ORBS v7 advance keeps one direct package with no transitive, native, build,
+The ORBS v10 advance keeps one direct package with no transitive, native, build,
 feature, or Nix change. Orbit's canonical codec owns bounded metadata values,
-read-only observation, and scroll preview windows; Venus consumes those values
-without a backport, dual decoder, or adapter. Replacement remains one exact pin
-plus exhaustive consumer matches.
+read-only observation, scroll preview windows, and routed left-pointer values;
+Venus consumes them without a backport, dual decoder, or adapter. Replacement
+remains one exact pin plus exhaustive consumer matches.
 The unpublished Orbit source still records no durable license metadata, so this
 internal dependency decision makes no public-distribution claim.
 

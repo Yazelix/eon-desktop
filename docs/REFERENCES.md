@@ -262,6 +262,22 @@ sub-row terminal presentation and precision momentum. Venus reuses no source
 and rejects overshoot, bounce, velocity stacking, fixed-rate timers,
 frame-dependent decay, platform source code, and public tuning.
 
+## Required for native selection gestures
+
+`ven-venus-native-selection-gestures-d3x` consumes Orbit `ORB-C5` and `ORB-C9`
+through exact accepted ORBS v10 source
+`59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`. Orbit chooses terminal mouse
+input or host selection from authoritative terminal state, pins that route for
+the sequence, applies cell, word, and logical-line gestures, freezes copy text,
+tags release copy separately from explicit ordinary copy, and reports the
+authoritative completion revision. Venus supplies native surface position,
+modifiers, event-delivery time, ordered buffering, and clipboard effects.
+
+The accepted reference gate in Bead `ven-venus-native-selection-gestures-d3x`
+compares WezTerm, Kitty, Alacritty, Zellij, and Ghostty and adopts their common
+uncaptured selection plus Shift bypass behavior. Venus adds no click recognizer,
+terminal-state inference, dependency, or unreleased winit API.
+
 ## Required for supervisor-owned native presentation
 
 `eon-cyt` consumes Eon's existing `EON-C11` Present action and exact child-process

@@ -31,10 +31,11 @@ use winit::{
     window::{UserAttentionType, Window, WindowAttributes, WindowId},
 };
 use yazelix_venus::{
-    Accessibility, AccessibilityTarget, CellMetrics, Color, ConnectionState, InputState,
-    LocalNoticeSource, MetadataEvent, MetadataTransport, ModelError, PaneMetadata, PresentOutcome,
-    Renderer, ScenePreview, SessionModel, Transport, TransportEvent, WorkspaceEvent,
-    WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport,
+    Accessibility, AccessibilityTarget, CellMetrics, ClipboardEffect, Color, ConnectionState,
+    InputState, LocalNoticeSource, MetadataEvent, MetadataTransport, ModelError, PaneMetadata,
+    PresentOutcome, Renderer, ScenePreview, SessionModel, Transport, TransportEvent,
+    WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene,
+    WorkspaceTransport,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -43,6 +44,7 @@ const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
 const SCROLL_SAMPLE_WINDOW: Duration = Duration::from_millis(150);
 const MAX_SCROLL_SAMPLES: usize = 256;
+const MAX_DEFERRED_SELECTION_MESSAGES: usize = 256;
 const PRECISION_SCROLL_GAIN: f64 = 2.0;
 const SCROLL_DECAY: f64 = 4.0;
 const MIN_FLING_VELOCITY: f64 = 40.0;
@@ -404,6 +406,33 @@ impl PresentationState {
     }
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+enum SelectionGate {
+    #[default]
+    Ready,
+    AwaitingFinish,
+    AwaitingPresentation(u64),
+}
+
+impl SelectionGate {
+    fn finish_sent(&mut self) {
+        *self = Self::AwaitingFinish;
+    }
+
+    fn finish_received(&mut self, frame_revision: u64) {
+        if matches!(self, Self::AwaitingFinish) {
+            *self = Self::AwaitingPresentation(frame_revision);
+        }
+    }
+
+    fn admits(&mut self, presented_revision: u64) -> bool {
+        if matches!(self, Self::AwaitingPresentation(required) if presented_revision >= *required) {
+            *self = Self::Ready;
+        }
+        matches!(self, Self::Ready)
+    }
+}
+
 #[derive(Debug)]
 enum UserEvent {
     AccessKit(AccessKitEvent),
@@ -450,6 +479,9 @@ struct Application {
     model: SessionModel,
     workspace_model: WorkspaceModel,
     input: InputState,
+    deferred_selection: VecDeque<ClientMessage>,
+    selection_gate: SelectionGate,
+    input_epoch: Instant,
     last_resize: Option<SurfaceSize>,
     presentation: PresentationState,
     render_notice: Option<String>,
@@ -498,6 +530,9 @@ impl Application {
             model: SessionModel::new(),
             workspace_model: WorkspaceModel::default(),
             input: InputState::default(),
+            deferred_selection: VecDeque::new(),
+            selection_gate: SelectionGate::default(),
+            input_epoch: Instant::now(),
             last_resize: None,
             presentation: PresentationState::default(),
             render_notice: None,
@@ -691,6 +726,9 @@ impl Application {
         self.workspace_focus = focus;
         let is_focused = terminal_focused(self.window_focused, self.workspace_focus);
         if was_focused != is_focused {
+            if !is_focused {
+                self.cancel_pointer_sequence();
+            }
             let message = self.input.terminal_focus(is_focused);
             self.send(message);
         }
@@ -699,6 +737,8 @@ impl Application {
 
     fn set_orbit_attachment(&mut self, endpoint: Vec<u8>, live: bool) {
         self.terminal_scroll.reset();
+        self.deferred_selection.clear();
+        self.selection_gate = SelectionGate::Ready;
         if let Some(message) = self.input.retire_orbit_generation() {
             self.send(message);
         }
@@ -970,6 +1010,10 @@ impl Application {
                 );
             }
             TransportEvent::Server(message) => {
+                let selection_finished = match &message {
+                    ServerMessage::SelectionFinished { frame_revision } => Some(*frame_revision),
+                    _ => None,
+                };
                 let preview_response = match &message {
                     ServerMessage::VerticalPreview(preview) => {
                         Some((preview.frame_revision, preview.direction))
@@ -991,7 +1035,7 @@ impl Application {
                     &message,
                     ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { .. })
                 );
-                let scroll_rejected = matches!(&message, ServerMessage::Failure(_));
+                let server_failure = matches!(&message, ServerMessage::Failure(_));
                 let plain_frame = matches!(&message, ServerMessage::Frame(_));
                 if server_failure_suppresses_retry(&message) {
                     self.retry_suppressed = true;
@@ -1019,12 +1063,18 @@ impl Application {
                 let accepted_frame = frame && result.is_ok();
                 let accepted = result.is_ok();
                 match result {
-                    Ok(Some((location, text))) => self.write_clipboard(location, text),
+                    Ok(Some(effect)) => self.write_clipboard(effect),
                     Ok(None) => {}
                     Err(error) => self.model.mark_lost(error.to_string()),
                 }
                 if accepted {
-                    if scroll_rejected {
+                    if let Some(frame_revision) = selection_finished {
+                        self.selection_gate.finish_received(frame_revision);
+                        if let Some(presented_revision) = self.presented_revision() {
+                            self.flush_deferred_selection(presented_revision);
+                        }
+                    }
+                    if server_failure {
                         self.terminal_scroll.reset();
                     } else if let Some((revision, direction)) = preview_response {
                         self.terminal_scroll.preview_arrived(revision, direction);
@@ -1035,20 +1085,21 @@ impl Application {
                         self.terminal_scroll.rebase();
                     }
                 }
+                if server_failure
+                    && (self.has_pointer_sequence()
+                        || !matches!(self.selection_gate, SelectionGate::Ready))
+                {
+                    self.cancel_pointer_sequence();
+                    self.selection_gate = SelectionGate::Ready;
+                }
                 if accepted_frame {
                     self.presentation.invalidate();
-                }
-                if frame
-                    && self
-                        .model
-                        .scene()
-                        .is_some_and(|scene| !scene.has_selected_content())
-                {
-                    self.input.cancel_selection();
                 }
                 if !was_attached && self.model.is_attached() {
                     self.reset_cursor_animation();
                     self.orbit_retry.reset();
+                    self.deferred_selection.clear();
+                    self.selection_gate = SelectionGate::Ready;
                     self.input.retire_orbit_generation();
                     self.send_resize();
                     if let Some(message) = self.input.latest_focus() {
@@ -1073,6 +1124,8 @@ impl Application {
         }
         if retryable_event || self.model.is_terminal() {
             self.terminal_scroll.reset();
+            self.deferred_selection.clear();
+            self.selection_gate = SelectionGate::Ready;
             self.input.retire_orbit_generation();
             self.reset_cursor_animation();
             self.transport = None;
@@ -1170,6 +1223,7 @@ impl Application {
         }
         if let Some(size) = resize {
             self.last_resize = Some(size);
+            self.deferred_selection.clear();
             self.input.cancel_selection();
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
@@ -1181,10 +1235,117 @@ impl Application {
         true
     }
 
-    fn write_clipboard(&mut self, location: ClipboardLocation, text: String) {
-        let result = write_native_clipboard(location, text);
-        self.model
-            .set_venus_notice(LocalNoticeSource::Clipboard, clipboard_notice(result));
+    fn has_pointer_sequence(&self) -> bool {
+        self.input.is_selecting()
+            || self.deferred_selection.iter().any(|message| {
+                matches!(
+                    message,
+                    ClientMessage::Selection(
+                        SelectionAction::Begin { .. }
+                            | SelectionAction::Update { .. }
+                            | SelectionAction::Finish { .. }
+                    )
+                )
+            })
+    }
+
+    fn cancel_pointer_sequence(&mut self) {
+        let cancel_server = pointer_sequence_needs_cancel(
+            &self.selection_gate,
+            self.input.is_selecting(),
+            &self.deferred_selection,
+        );
+        self.deferred_selection.clear();
+        self.input.cancel_selection();
+        if cancel_server {
+            self.send(ClientMessage::Selection(SelectionAction::Cancel));
+        }
+    }
+
+    fn send_selection(&mut self, message: ClientMessage) {
+        if self.send(message.clone()) {
+            self.input.commit_selection(&message);
+            if matches!(
+                message,
+                ClientMessage::Selection(SelectionAction::Finish { .. })
+            ) {
+                self.selection_gate.finish_sent();
+            }
+        } else {
+            self.cancel_pointer_sequence();
+        }
+    }
+
+    fn send_or_defer_selection(&mut self, message: ClientMessage, presentation_current: bool) {
+        if selection_presentation_is_ready(&message, presentation_current)
+            && self.deferred_selection.is_empty()
+            && matches!(self.selection_gate, SelectionGate::Ready)
+        {
+            self.send_selection(message);
+        } else if queue_deferred_selection(&mut self.deferred_selection, message.clone()) {
+            self.input.commit_selection(&message);
+        } else {
+            self.cancel_pointer_sequence();
+            self.model.set_venus_notice(
+                LocalNoticeSource::Input,
+                "Venus selection input exceeded its bounded capacity",
+            );
+            self.refresh_client_view();
+        }
+    }
+
+    fn flush_deferred_selection(&mut self, frame_revision: u64) {
+        if !self.selection_gate.admits(frame_revision) {
+            return;
+        }
+        let batch = take_deferred_selection(&mut self.deferred_selection, frame_revision);
+        let mut server_gesture = matches!(
+            batch.first(),
+            Some(ClientMessage::Selection(
+                SelectionAction::Update { .. } | SelectionAction::Finish { .. }
+            ))
+        );
+        for message in batch {
+            let begins = matches!(
+                message,
+                ClientMessage::Selection(SelectionAction::Begin { .. })
+            );
+            let finished = matches!(
+                message,
+                ClientMessage::Selection(SelectionAction::Finish { .. })
+            );
+            if !self.send(message) {
+                self.deferred_selection.clear();
+                self.input.cancel_selection();
+                if server_gesture {
+                    self.send(ClientMessage::Selection(SelectionAction::Cancel));
+                }
+                return;
+            }
+            if finished {
+                self.selection_gate.finish_sent();
+            }
+            server_gesture |= begins;
+        }
+    }
+
+    fn presented_revision(&self) -> Option<u64> {
+        let workspace = self.workspace_scene();
+        let candidate = self.presentation_candidate(workspace.as_ref());
+        self.presentation.current_revision(candidate)
+    }
+
+    fn write_clipboard(&mut self, effect: ClipboardEffect) {
+        let clipboard = wayland_clipboard_type(&effect);
+        let text = match effect {
+            ClipboardEffect::SelectionCopy { text, .. }
+            | ClipboardEffect::TerminalWrite { text, .. } => text,
+        };
+        let result = write_native_clipboard(clipboard, text);
+        self.model.set_venus_notice(
+            LocalNoticeSource::Clipboard,
+            clipboard_notice(clipboard, result),
+        );
     }
 
     fn paste_clipboard(&mut self) {
@@ -1306,6 +1467,9 @@ impl Application {
                 if kinetic_active {
                     state.window.request_redraw();
                 }
+                if let Some(revision) = candidate.revision {
+                    self.flush_deferred_selection(revision);
+                }
             }
             Ok(PresentOutcome::Deferred) => self.terminal_scroll.stop_gesture(),
             Ok(PresentOutcome::Recovered) => {
@@ -1395,13 +1559,16 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.terminal_scroll.cancel();
                 state.scale_factor = scale_factor;
+                self.cancel_pointer_sequence();
             }
             WindowEvent::Occluded(occluded) => {
                 self.window_occluded = occluded;
                 self.next_animation = None;
                 self.terminal_scroll.cancel();
                 state.renderer.reset_cursor_animation();
-                if !occluded {
+                if occluded {
+                    self.cancel_pointer_sequence();
+                } else {
                     state.window.request_redraw();
                 }
             }
@@ -1431,13 +1598,11 @@ impl ApplicationHandler<UserEvent> for Application {
                     event.state,
                     event.repeat,
                 ) {
-                    if copy_is_ready(
-                        presented_revision.is_some(),
-                        self.input.is_selecting(),
-                        event.state,
-                        event.repeat,
-                    ) {
-                        self.send(ClientMessage::Selection(SelectionAction::Copy));
+                    if copy_is_ready(self.input.is_selecting(), event.state, event.repeat) {
+                        self.send_or_defer_selection(
+                            ClientMessage::Selection(SelectionAction::Copy),
+                            presentation_current,
+                        );
                     }
                 } else if let Some(message) = self.input.key(&event)
                     && (self.send(message) || event.state == ElementState::Released)
@@ -1465,6 +1630,9 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.next_animation = None;
                 self.terminal_scroll.cancel();
                 state.renderer.reset_cursor_animation();
+                if !focused {
+                    self.cancel_pointer_sequence();
+                }
                 let message = self
                     .input
                     .native_focus(focused, terminal_focused(focused, self.workspace_focus));
@@ -1473,29 +1641,29 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = position;
-                if presented_revision.is_none() {
-                    return;
-                }
                 let motion = move_terminal_pointer(&mut self.input, position, workspace.as_ref());
                 if self.input.is_selecting() {
                     let screen = terminal_screen(workspace.as_ref(), state.renderer.size());
                     let size = surface_size(screen, state.renderer.metrics());
-                    if let Some(message) = size.and_then(|size| self.input.selection_motion(size))
-                        && self.send(message.clone())
-                    {
-                        self.input.commit_selection(&message);
+                    if let Some(message) = size.and_then(|size| self.input.selection_motion(size)) {
+                        self.send_or_defer_selection(message, presentation_current);
                     }
-                } else if workspace.as_ref().is_none_or(|workspace| {
-                    matches!(
-                        workspace.hit_test(position.x as f32, position.y as f32),
-                        Some(WorkspaceHit::Terminal)
-                    )
-                }) && let Some(message) = motion
+                } else if presented_revision.is_some()
+                    && workspace.as_ref().is_none_or(|workspace| {
+                        matches!(
+                            workspace.hit_test(position.x as f32, position.y as f32),
+                            Some(WorkspaceHit::Terminal)
+                        )
+                    })
+                    && let Some(message) = motion
                 {
                     self.send(message);
                 }
             }
-            WindowEvent::CursorLeft { .. } => self.cancel_terminal_scroll(),
+            WindowEvent::CursorLeft { .. } => {
+                self.cancel_terminal_scroll();
+                self.cancel_pointer_sequence();
+            }
             WindowEvent::MouseInput {
                 state: button_state,
                 button,
@@ -1537,7 +1705,8 @@ impl ApplicationHandler<UserEvent> for Application {
                     workspace.is_some(),
                     matches!(hit, Some(WorkspaceHit::Terminal)),
                     button_state,
-                    presentation_current,
+                    presentation_current
+                        || button == MouseButton::Left && candidate.revision.is_some(),
                 ) {
                     return;
                 }
@@ -1545,13 +1714,16 @@ impl ApplicationHandler<UserEvent> for Application {
                 let screen = terminal_screen(workspace.as_ref(), renderer_size);
                 let size = surface_size(screen, metrics);
                 let selection = size.and_then(|size| {
-                    self.input
-                        .selection_button(button_state, button, size, presented_revision)
+                    self.input.selection_button(
+                        button_state,
+                        button,
+                        size,
+                        presented_revision.or(candidate.revision),
+                        u64::try_from(self.input_epoch.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                    )
                 });
                 if let Some(message) = selection {
-                    if self.send(message.clone()) {
-                        self.input.commit_selection(&message);
-                    }
+                    self.send_or_defer_selection(message, presentation_current);
                 } else if let Some(message) =
                     self.input
                         .mouse_button(button_state, button, presented_revision.is_some())
@@ -1850,13 +2022,12 @@ fn shortcut_is_ready(state: ElementState, repeat: bool) -> bool {
     state == ElementState::Pressed && !repeat
 }
 
-fn copy_is_ready(
-    presentation_current: bool,
-    selecting: bool,
-    state: ElementState,
-    repeat: bool,
-) -> bool {
-    presentation_current && !selecting && shortcut_is_ready(state, repeat)
+fn copy_is_ready(selecting: bool, state: ElementState, repeat: bool) -> bool {
+    !selecting && shortcut_is_ready(state, repeat)
+}
+
+fn selection_presentation_is_ready(message: &ClientMessage, current: bool) -> bool {
+    current || matches!(message, ClientMessage::Selection(SelectionAction::Copy))
 }
 
 fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
@@ -1964,11 +2135,79 @@ fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repea
     state == ElementState::Pressed && (!repeat || matches!(action, WorkspaceAction::Focus(_)))
 }
 
-fn clipboard_notice<E: std::fmt::Display>(result: std::result::Result<(), E>) -> String {
+fn clipboard_notice<E: std::fmt::Display>(
+    clipboard: wl_clipboard_rs::copy::ClipboardType,
+    result: std::result::Result<(), E>,
+) -> String {
+    use wl_clipboard_rs::copy::ClipboardType;
+
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
-        |()| "Text copied to the native clipboard.".into(),
+        |()| match clipboard {
+            ClipboardType::Regular => "Text copied to the native clipboard.".into(),
+            ClipboardType::Primary => "Text copied to the native primary selection.".into(),
+            ClipboardType::Both => {
+                "Text copied to the native clipboard and primary selection.".into()
+            }
+        },
     )
+}
+
+fn take_deferred_selection(
+    pending: &mut VecDeque<ClientMessage>,
+    frame_revision: u64,
+) -> Vec<ClientMessage> {
+    let mut batch = Vec::new();
+    while let Some(mut message) = pending.pop_front() {
+        if let ClientMessage::Selection(SelectionAction::Begin {
+            frame_revision: revision,
+            ..
+        }) = &mut message
+        {
+            if !batch.is_empty() {
+                pending.push_front(message);
+                break;
+            }
+            *revision = frame_revision;
+        }
+        let finished = matches!(
+            message,
+            ClientMessage::Selection(SelectionAction::Finish { .. } | SelectionAction::Copy)
+        );
+        batch.push(message);
+        if finished {
+            break;
+        }
+    }
+    batch
+}
+
+fn queue_deferred_selection(pending: &mut VecDeque<ClientMessage>, message: ClientMessage) -> bool {
+    if pending.len() >= MAX_DEFERRED_SELECTION_MESSAGES {
+        return false;
+    }
+    pending.push_back(message);
+    true
+}
+
+fn pointer_sequence_needs_cancel(
+    gate: &SelectionGate,
+    selecting: bool,
+    pending: &VecDeque<ClientMessage>,
+) -> bool {
+    if matches!(gate, SelectionGate::AwaitingFinish) {
+        return true;
+    }
+    for message in pending {
+        match message {
+            ClientMessage::Selection(SelectionAction::Begin { .. }) => return false,
+            ClientMessage::Selection(
+                SelectionAction::Update { .. } | SelectionAction::Finish { .. },
+            ) => return true,
+            _ => {}
+        }
+    }
+    selecting
 }
 
 fn clipboard_paste_message(input: impl Read) -> std::result::Result<ClientMessage, String> {
@@ -1995,13 +2234,13 @@ fn clipboard_paste_notice(error: impl std::fmt::Display) -> String {
 }
 
 fn write_native_clipboard(
-    location: ClipboardLocation,
+    clipboard: wl_clipboard_rs::copy::ClipboardType,
     text: String,
 ) -> std::result::Result<(), wl_clipboard_rs::copy::Error> {
     use wl_clipboard_rs::copy::{MimeType, Options, Source};
 
     let mut options = Options::new();
-    options.clipboard(wayland_clipboard_type(location));
+    options.clipboard(clipboard);
     options.copy(Source::Bytes(text.into_bytes().into()), MimeType::Text)
 }
 
@@ -2013,12 +2252,30 @@ fn read_native_clipboard() -> std::result::Result<impl Read, String> {
     Ok(pipe)
 }
 
-fn wayland_clipboard_type(location: ClipboardLocation) -> wl_clipboard_rs::copy::ClipboardType {
+fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::ClipboardType {
     use wl_clipboard_rs::copy::ClipboardType;
 
-    match location {
-        ClipboardLocation::Standard => ClipboardType::Regular,
-        ClipboardLocation::Selection | ClipboardLocation::Primary => ClipboardType::Primary,
+    match effect {
+        ClipboardEffect::SelectionCopy {
+            location: ClipboardLocation::Selection,
+            ..
+        } => ClipboardType::Both,
+        ClipboardEffect::SelectionCopy {
+            location: ClipboardLocation::Standard,
+            ..
+        }
+        | ClipboardEffect::TerminalWrite {
+            location: ClipboardLocation::Standard,
+            ..
+        } => ClipboardType::Regular,
+        ClipboardEffect::SelectionCopy {
+            location: ClipboardLocation::Primary,
+            ..
+        }
+        | ClipboardEffect::TerminalWrite {
+            location: ClipboardLocation::Selection | ClipboardLocation::Primary,
+            ..
+        } => ClipboardType::Primary,
     }
 }
 
@@ -2914,7 +3171,9 @@ mod tests {
         });
         let selection = ClientMessage::Selection(SelectionAction::Begin {
             frame_revision: 7,
-            cell: orbit_protocol::session::ViewportCell { x: 0, y: 0 },
+            position: orbit_protocol::session::SelectionPosition { x: 0.0, y: 0.0 },
+            time_ns: 0,
+            modifiers: orbit_protocol::session::Modifiers::empty(),
         });
 
         assert!(can_follow_implicit_resize(&mouse));
@@ -2922,14 +3181,15 @@ mod tests {
     }
 
     #[test]
-    fn copy_waits_for_current_presentation_and_selection_finish() {
+    fn copy_is_revision_free_but_waits_for_selection_finish() {
         use winit::event::ElementState::{Pressed, Released};
 
-        assert!(!copy_is_ready(false, false, Pressed, false));
-        assert!(!copy_is_ready(true, true, Pressed, false));
-        assert!(copy_is_ready(true, false, Pressed, false));
-        assert!(!copy_is_ready(true, false, Pressed, true));
-        assert!(!copy_is_ready(true, false, Released, false));
+        let copy = ClientMessage::Selection(SelectionAction::Copy);
+        assert!(selection_presentation_is_ready(&copy, false));
+        assert!(!copy_is_ready(true, Pressed, false));
+        assert!(copy_is_ready(false, Pressed, false));
+        assert!(!copy_is_ready(false, Pressed, true));
+        assert!(!copy_is_ready(false, Released, false));
     }
 
     #[test]
@@ -2940,14 +3200,107 @@ mod tests {
 
     #[test]
     fn clipboard_results_are_attributed_without_copying_terminal_cells() {
+        use wl_clipboard_rs::copy::ClipboardType::{Both, Regular};
+
         assert_eq!(
-            clipboard_notice::<&str>(Ok(())),
+            clipboard_notice(Regular, Ok::<(), &str>(())),
             "Text copied to the native clipboard."
         );
         assert_eq!(
-            clipboard_notice(Err("display unavailable")),
+            clipboard_notice(Both, Ok::<(), &str>(())),
+            "Text copied to the native clipboard and primary selection."
+        );
+        assert_eq!(
+            clipboard_notice(Regular, Err("display unavailable")),
             "Venus could not write the native clipboard: display unavailable"
         );
+    }
+
+    #[test]
+    fn deferred_selection_preserves_order_bounds_and_cancel_ownership() {
+        let begin = |revision| {
+            ClientMessage::Selection(SelectionAction::Begin {
+                frame_revision: revision,
+                position: orbit_protocol::session::SelectionPosition { x: 1.0, y: 2.0 },
+                time_ns: 3,
+                modifiers: orbit_protocol::session::Modifiers::empty(),
+            })
+        };
+        let finish = ClientMessage::Selection(SelectionAction::Finish {
+            position: orbit_protocol::session::SelectionPosition { x: 1.0, y: 2.0 },
+            modifiers: orbit_protocol::session::Modifiers::empty(),
+        });
+        let mut pending = VecDeque::from([
+            begin(1),
+            finish.clone(),
+            begin(1),
+            finish.clone(),
+            ClientMessage::Selection(SelectionAction::Copy),
+        ]);
+
+        let first = take_deferred_selection(&mut pending, 7);
+        assert!(matches!(
+            first.as_slice(),
+            [
+                ClientMessage::Selection(SelectionAction::Begin {
+                    frame_revision: 7,
+                    ..
+                }),
+                ClientMessage::Selection(SelectionAction::Finish { .. })
+            ]
+        ));
+        assert!(matches!(
+            pending.front(),
+            Some(ClientMessage::Selection(SelectionAction::Begin { .. }))
+        ));
+
+        assert_eq!(take_deferred_selection(&mut pending, 8).len(), 2);
+        assert_eq!(
+            take_deferred_selection(&mut pending, 9),
+            [ClientMessage::Selection(SelectionAction::Copy)]
+        );
+        assert!(pending.is_empty());
+
+        pending.resize(
+            MAX_DEFERRED_SELECTION_MESSAGES,
+            ClientMessage::Selection(SelectionAction::Copy),
+        );
+        assert!(!queue_deferred_selection(
+            &mut pending,
+            ClientMessage::Selection(SelectionAction::Copy)
+        ));
+
+        let local_begin =
+            VecDeque::from([ClientMessage::Selection(SelectionAction::Copy), begin(1)]);
+        let server_finish = VecDeque::from([finish]);
+        let ready = SelectionGate::Ready;
+        let empty = VecDeque::new();
+        assert!(!pointer_sequence_needs_cancel(&ready, true, &local_begin));
+        assert!(pointer_sequence_needs_cancel(&ready, false, &server_finish));
+        assert!(pointer_sequence_needs_cancel(
+            &SelectionGate::AwaitingFinish,
+            false,
+            &empty
+        ));
+        assert!(pointer_sequence_needs_cancel(&ready, true, &empty));
+        assert!(!pointer_sequence_needs_cancel(&ready, false, &empty));
+    }
+
+    #[test]
+    fn selection_gate_waits_for_finish_and_its_authoritative_presentation() {
+        let mut gate = SelectionGate::Ready;
+
+        assert!(gate.admits(7));
+        gate.finish_sent();
+        assert!(!gate.admits(7));
+
+        gate.finish_received(8);
+        assert!(!gate.admits(7));
+        assert!(gate.admits(8));
+
+        gate.finish_sent();
+        gate.finish_received(8);
+        assert!(gate.admits(9));
     }
 
     #[test]
@@ -2981,19 +3334,28 @@ mod tests {
     }
 
     #[test]
-    fn terminal_clipboard_locations_use_wayland_targets() {
-        use wl_clipboard_rs::copy::ClipboardType::{Primary, Regular};
+    fn clipboard_effects_use_distinct_wayland_targets() {
+        use wl_clipboard_rs::copy::ClipboardType::{Both, Primary, Regular};
 
         assert!(matches!(
-            wayland_clipboard_type(ClipboardLocation::Standard),
+            wayland_clipboard_type(&ClipboardEffect::SelectionCopy {
+                location: ClipboardLocation::Selection,
+                text: String::new(),
+            }),
+            Both
+        ));
+        assert!(matches!(
+            wayland_clipboard_type(&ClipboardEffect::SelectionCopy {
+                location: ClipboardLocation::Standard,
+                text: String::new(),
+            }),
             Regular
         ));
         assert!(matches!(
-            wayland_clipboard_type(ClipboardLocation::Selection),
-            Primary
-        ));
-        assert!(matches!(
-            wayland_clipboard_type(ClipboardLocation::Primary),
+            wayland_clipboard_type(&ClipboardEffect::TerminalWrite {
+                location: ClipboardLocation::Selection,
+                text: String::new(),
+            }),
             Primary
         ));
     }

@@ -9,8 +9,8 @@ use orbit_protocol::{
 };
 use winit::dpi::PhysicalSize;
 use yazelix_venus::{
-    CellMetrics, ConnectionState, LocalNoticeSource, ModelError, ScenePreview, SessionModel,
-    WorkspaceHit, WorkspaceScene,
+    CellMetrics, ClipboardEffect, ConnectionState, LocalNoticeSource, ModelError, ScenePreview,
+    SessionModel, WorkspaceHit, WorkspaceScene,
 };
 
 #[test]
@@ -174,8 +174,8 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
 }
 
 #[test]
-fn canonical_session_revision_is_orbs_v7() {
-    assert_eq!(session::VERSION, 7);
+fn canonical_session_revision_is_orbs_v10() {
+    assert_eq!(session::VERSION, 10);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn ordered_frames_reject_stale_revisions_without_replacing_state() {
 }
 
 #[test]
-fn orbs_v7_scroll_outcomes_reuse_the_existing_result_and_frame_owners() {
+fn canonical_scroll_outcomes_reuse_the_existing_result_and_frame_owners() {
     let mut model = attached_model();
     model
         .apply(ServerMessage::Failure(Failure {
@@ -449,7 +449,10 @@ fn clipboard_text_is_an_attached_one_shot_effect_not_presentation_state() {
     let mut model = SessionModel::new();
     assert_eq!(
         model
-            .apply(ServerMessage::CopiedText("not attached".into()))
+            .apply(ServerMessage::CopiedText {
+                location: ClipboardLocation::Selection,
+                text: "not attached".into(),
+            })
             .unwrap_err(),
         ModelError::UnexpectedMessage
     );
@@ -469,9 +472,15 @@ fn clipboard_text_is_an_attached_one_shot_effect_not_presentation_state() {
         .unwrap();
     assert_eq!(
         model
-            .apply(ServerMessage::CopiedText("e\u{301}界\nsecond".into()))
+            .apply(ServerMessage::CopiedText {
+                location: ClipboardLocation::Selection,
+                text: "e\u{301}界\nsecond".into(),
+            })
             .unwrap(),
-        Some((ClipboardLocation::Standard, "e\u{301}界\nsecond".into()))
+        Some(ClipboardEffect::SelectionCopy {
+            location: ClipboardLocation::Selection,
+            text: "e\u{301}界\nsecond".into(),
+        })
     );
     model
         .apply(ServerMessage::Failure(Failure {
@@ -486,10 +495,19 @@ fn clipboard_text_is_an_attached_one_shot_effect_not_presentation_state() {
                 text: "terminal".into(),
             })
             .unwrap(),
-        Some((ClipboardLocation::Selection, "terminal".into()))
+        Some(ClipboardEffect::TerminalWrite {
+            location: ClipboardLocation::Selection,
+            text: "terminal".into(),
+        })
     );
     assert_eq!(model.notice(), Some("Orbit rejected input: bad key"));
     assert_eq!(model.apply(ServerMessage::Accepted).unwrap(), None);
+    assert_eq!(
+        model
+            .apply(ServerMessage::SelectionFinished { frame_revision: 9 })
+            .unwrap(),
+        None
+    );
     assert_eq!(model.scene().unwrap().revision, 1);
 }
 

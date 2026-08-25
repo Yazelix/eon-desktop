@@ -24,6 +24,19 @@ pub enum ModelError {
     Frame(orbit_protocol::Error),
 }
 
+/// One transient native clipboard effect from Orbit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClipboardEffect {
+    SelectionCopy {
+        location: ClipboardLocation,
+        text: String,
+    },
+    TerminalWrite {
+        location: ClipboardLocation,
+        text: String,
+    },
+}
+
 impl fmt::Display for ModelError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -194,10 +207,7 @@ impl SessionModel {
         )
     }
 
-    pub fn apply(
-        &mut self,
-        message: ServerMessage,
-    ) -> Result<Option<(ClipboardLocation, String)>, ModelError> {
+    pub fn apply(&mut self, message: ServerMessage) -> Result<Option<ClipboardEffect>, ModelError> {
         let connecting = matches!(self.connection, ConnectionState::Connecting);
         let attached = self.is_attached();
         match message {
@@ -252,7 +262,9 @@ impl SessionModel {
                 self.scroll_preview = Some(preview);
                 self.awaiting_current_frame = false;
             }
-            ServerMessage::Accepted | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted)
+            ServerMessage::Accepted
+            | ServerMessage::SelectionFinished { .. }
+            | ServerMessage::WheelOutcome(WheelOutcome::TerminalRouted)
                 if attached =>
             {
                 self.clear_orbit_notice();
@@ -280,12 +292,12 @@ impl SessionModel {
                 self.scroll_preview = None;
                 self.notices.clear();
             }
-            ServerMessage::CopiedText(text) if attached => {
+            ServerMessage::CopiedText { location, text } if attached => {
                 self.clear_orbit_notice();
-                return Ok(Some((ClipboardLocation::Standard, text)));
+                return Ok(Some(ClipboardEffect::SelectionCopy { location, text }));
             }
             ServerMessage::ClipboardWrite { location, text } if attached => {
-                return Ok(Some((location, text)));
+                return Ok(Some(ClipboardEffect::TerminalWrite { location, text }));
             }
             _ => return Err(ModelError::UnexpectedMessage),
         }

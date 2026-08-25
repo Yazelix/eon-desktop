@@ -156,12 +156,12 @@ retains accepted user-visible chronology.
     proof `8e2d22a36ae6f6cab74d3556204a2a537265bff7`, and composed Eon
     acceptance `0bf0b165d06b4a8162be497011070f61f6c2000a`
 
-## VEN-C7 — Authoritative history interaction
+## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proved
+- **Status:** Candidate
 - **Consumer:** One presented Venus terminal surface.
-- **Trigger:** Native wheel or touchpad movement, explicit Shift-drag selection,
-  or copy.
+- **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
+  explicit copy.
 - **Result:**
   - Precision movement translates and clips an accepted complete Orbit frame
     plus its bounded revision-bound row window at two presented pixels per
@@ -172,8 +172,16 @@ retains accepted user-visible chronology.
   - A phase-complete precision gesture may continue with bounded elapsed-time
     exponential decay; discrete wheel input moves three rows per logical step
     without synthetic momentum.
-  - Redraw follows native compositor callbacks. Selection renders only
-    Orbit-authored state, and copy writes only Orbit-returned text.
+  - Redraw follows native compositor callbacks.
+  - Venus sends every left-pointer phase to Orbit. Orbit routes uncaptured
+    input to cell, word, or logical-line selection, preserves terminal mouse
+    capture, and treats Shift as a host-selection override.
+  - Pointer phases and explicit copy that arrive before Orbit completes the
+    preceding sequence retain their order. Venus resumes them only after
+    presenting the authoritative completion revision reported by Orbit.
+  - A successful selection release writes Orbit's frozen text to both the
+    ordinary Wayland clipboard and primary selection. `Ctrl+Shift+C` remains an
+    explicit ordinary-clipboard copy.
 - **Important failures:** Stale presentation, failed gesture admission, resize,
   capture loss, lifecycle or authority change, terminal-owned routing, history
   edge, or Orbit rejection cancels synthetic motion and cannot fabricate cells,
@@ -181,20 +189,23 @@ retains accepted user-visible chronology.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
-- **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v7 at
-  `baf8aa28dcaa50484cd221aa7730defedc2356bb`; exact patched winit
+- **Consumes:** Orbit `ORB-C5`, `ORB-C8`, and `ORB-C9` through canonical ORBS v10
+  at `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`; exact patched winit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** `f13dc7ac2e9a24c5cff5bb7e618436783ec76dbf`
+- **Prior proof:** `f13dc7ac2e9a24c5cff5bb7e618436783ec76dbf`
   - **Environment:** Accepted deterministic checks and retained x86_64 Linux
     native Orbit/Venus dogfood
   - **Evidence:** Complete Rust checks; exact ORBS v7 pin; bounded multi-row
     conversion, clipping, commit, edge, cancellation, selection, clipboard,
     resize, reattachment, and client-loss coverage; native touchpad tracking,
     fling, and reversal accepted by the user against 4,000 retained lines.
+- **Open proof:** Exact ORBS v10 consumption, routed native cell/word/line
+  gestures, terminal mouse capture with Shift override, and separate Wayland
+  primary and ordinary clipboard effects.
 
 ## VEN-C8 — Eon workspace presentation
 

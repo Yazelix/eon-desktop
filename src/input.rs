@@ -1,6 +1,6 @@
 use orbit_protocol::session::{
     ClientMessage, FocusEvent, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton,
-    MouseEvent, PhysicalKey, SelectionAction, SurfaceSize, ViewportCell,
+    MouseEvent, PhysicalKey, SelectionAction, SelectionPosition, SurfaceSize,
 };
 use winit::{
     event::{
@@ -25,7 +25,7 @@ pub struct InputState {
     cursor: (f32, f32),
     pressed_buttons: Vec<WinitMouseButton>,
     scroll: (f64, f64),
-    selection_cell: Option<ViewportCell>,
+    selection_position: Option<SelectionPosition>,
     copy_pressed: bool,
     paste_shortcuts: Vec<WinitPhysicalKey>,
     workspace_shortcuts: Vec<KeyCode>,
@@ -338,24 +338,26 @@ impl InputState {
         button: WinitMouseButton,
         size: SurfaceSize,
         frame_revision: Option<u64>,
+        time_ns: u64,
     ) -> Option<ClientMessage> {
         if button != WinitMouseButton::Left {
             return None;
         }
         match state {
             ElementState::Pressed
-                if self.selection_cell.is_none()
-                    && self.pressed_buttons.is_empty()
-                    && self.modifiers.contains(Modifiers::SHIFT) =>
+                if self.selection_position.is_none() && self.pressed_buttons.is_empty() =>
             {
                 Some(ClientMessage::Selection(SelectionAction::Begin {
                     frame_revision: frame_revision?,
-                    cell: viewport_cell(self.cursor, size, false)?,
+                    position: selection_position(self.cursor, size, false)?,
+                    time_ns,
+                    modifiers: self.modifiers,
                 }))
             }
-            ElementState::Released if self.selection_cell.is_some() => {
+            ElementState::Released if self.selection_position.is_some() => {
                 Some(ClientMessage::Selection(SelectionAction::Finish {
-                    cell: viewport_cell(self.cursor, size, true)?,
+                    position: selection_position(self.cursor, size, true)?,
+                    modifiers: self.modifiers,
                 }))
             }
             _ => None,
@@ -364,27 +366,32 @@ impl InputState {
 
     #[must_use]
     pub fn selection_motion(&self, size: SurfaceSize) -> Option<ClientMessage> {
-        let previous = self.selection_cell?;
-        let cell = viewport_cell(self.cursor, size, true)?;
-        (cell != previous).then_some(ClientMessage::Selection(SelectionAction::Update { cell }))
+        let previous = self.selection_position?;
+        let position = selection_position(self.cursor, size, true)?;
+        (position != previous).then_some(ClientMessage::Selection(SelectionAction::Update {
+            position,
+            modifiers: self.modifiers,
+        }))
     }
 
     pub fn commit_selection(&mut self, message: &ClientMessage) {
-        self.selection_cell = match message {
-            ClientMessage::Selection(SelectionAction::Begin { cell, .. })
-            | ClientMessage::Selection(SelectionAction::Update { cell }) => Some(*cell),
-            ClientMessage::Selection(SelectionAction::Finish { .. }) => None,
-            _ => self.selection_cell,
+        self.selection_position = match message {
+            ClientMessage::Selection(SelectionAction::Begin { position, .. })
+            | ClientMessage::Selection(SelectionAction::Update { position, .. }) => Some(*position),
+            ClientMessage::Selection(SelectionAction::Finish { .. } | SelectionAction::Cancel) => {
+                None
+            }
+            _ => self.selection_position,
         };
     }
 
     pub fn cancel_selection(&mut self) {
-        self.selection_cell = None;
+        self.selection_position = None;
     }
 
     #[must_use]
     pub fn is_selecting(&self) -> bool {
-        self.selection_cell.is_some()
+        self.selection_position.is_some()
     }
 
     #[must_use]
@@ -465,7 +472,11 @@ fn capture_shortcut<T: Copy + Eq>(
     false
 }
 
-fn viewport_cell(cursor: (f32, f32), size: SurfaceSize, clamp: bool) -> Option<ViewportCell> {
+fn selection_position(
+    cursor: (f32, f32),
+    size: SurfaceSize,
+    clamp: bool,
+) -> Option<SelectionPosition> {
     let axis = |coordinate: f32, padding: u32, cell: u32, count: u16| {
         if cell == 0 || count == 0 {
             return None;
@@ -475,15 +486,9 @@ fn viewport_cell(cursor: (f32, f32), size: SurfaceSize, clamp: bool) -> Option<V
         if !clamp && !(start..end).contains(&coordinate) {
             return None;
         }
-        if coordinate < start {
-            Some(0)
-        } else if coordinate >= end {
-            Some(count - 1)
-        } else {
-            u16::try_from(((coordinate - start) / cell as f32) as u32).ok()
-        }
+        Some(coordinate.clamp(start, end - 0.5))
     };
-    Some(ViewportCell {
+    Some(SelectionPosition {
         x: axis(cursor.0, size.padding_left, size.cell_width, size.cols)?,
         y: axis(cursor.1, size.padding_top, size.cell_height, size.rows)?,
     })
@@ -836,7 +841,9 @@ mod tests {
         assert_eq!(input.ime(Ime::Preedit("compose".into(), None)), Ok(None));
         input.commit_selection(&ClientMessage::Selection(SelectionAction::Begin {
             frame_revision: 1,
-            cell: ViewportCell { x: 0, y: 0 },
+            position: SelectionPosition { x: 0.0, y: 0.0 },
+            time_ns: 0,
+            modifiers: Modifiers::empty(),
         }));
         assert!(input.consumes_paste_shortcut(
             &Key::Named(winit::keyboard::NamedKey::Paste),
@@ -1030,7 +1037,7 @@ mod tests {
     }
 
     #[test]
-    fn shift_drag_and_copy_are_explicit_revision_bound_actions() {
+    fn left_drag_and_copy_are_explicit_revision_bound_actions() {
         let mut input = InputState::default();
         let size = SurfaceSize {
             cols: 4,
@@ -1046,32 +1053,40 @@ mod tests {
         };
         let expected_update = |x, y| {
             ClientMessage::Selection(SelectionAction::Update {
-                cell: ViewportCell { x, y },
+                position: SelectionPosition { x, y },
+                modifiers: Modifiers::empty(),
             })
         };
         input.move_pointer(16.0, 26.0).unwrap();
-        assert!(
-            input
-                .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
-                .is_none()
-        );
-
-        input.set_modifiers(ModifiersState::SHIFT);
         input.commit_mouse_button(ElementState::Pressed, WinitMouseButton::Right);
         assert!(
             input
-                .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
+                .selection_button(
+                    ElementState::Pressed,
+                    WinitMouseButton::Left,
+                    size,
+                    Some(9),
+                    123,
+                )
                 .is_none()
         );
         input.commit_mouse_button(ElementState::Released, WinitMouseButton::Right);
         let begin = input
-            .selection_button(ElementState::Pressed, WinitMouseButton::Left, size, Some(9))
+            .selection_button(
+                ElementState::Pressed,
+                WinitMouseButton::Left,
+                size,
+                Some(9),
+                123,
+            )
             .unwrap();
         assert_eq!(
             begin,
             ClientMessage::Selection(SelectionAction::Begin {
                 frame_revision: 9,
-                cell: ViewportCell { x: 1, y: 1 },
+                position: SelectionPosition { x: 16.0, y: 26.0 },
+                time_ns: 123,
+                modifiers: Modifiers::empty(),
             })
         );
         input.commit_selection(&begin);
@@ -1089,25 +1104,47 @@ mod tests {
 
         input.move_pointer(-1.0, -1.0).unwrap();
         let update = input.selection_motion(size).unwrap();
-        assert_eq!(update, expected_update(0, 0));
+        assert_eq!(update, expected_update(5.0, 5.0));
 
         input.move_pointer(36.0, 46.0).unwrap();
         let update = input.selection_motion(size).unwrap();
-        assert_eq!(update, expected_update(3, 2));
+        assert_eq!(update, expected_update(36.0, 46.0));
         input.commit_selection(&update);
         assert!(input.selection_motion(size).is_none());
         let finish = input
-            .selection_button(ElementState::Released, WinitMouseButton::Left, size, None)
+            .selection_button(
+                ElementState::Released,
+                WinitMouseButton::Left,
+                size,
+                None,
+                999,
+            )
             .unwrap();
         assert_eq!(
             finish,
             ClientMessage::Selection(SelectionAction::Finish {
-                cell: ViewportCell { x: 3, y: 2 }
+                position: SelectionPosition { x: 36.0, y: 46.0 },
+                modifiers: Modifiers::empty(),
             })
         );
         assert!(input.is_selecting());
         input.commit_selection(&finish);
         assert!(!input.is_selecting());
+
+        input.set_modifiers(ModifiersState::SHIFT);
+        assert!(matches!(
+            input.selection_button(
+                ElementState::Pressed,
+                WinitMouseButton::Left,
+                size,
+                Some(10),
+                456,
+            ),
+            Some(ClientMessage::Selection(SelectionAction::Begin {
+                modifiers: Modifiers::SHIFT,
+                ..
+            }))
+        ));
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
         assert!(input.consumes_copy_shortcut(

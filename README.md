@@ -28,8 +28,8 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
 `4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
 selection, identities, actions, and pane-to-Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v1, and ORBS v7 at exact Orbit proof
-`baf8aa28dcaa50484cd221aa7730defedc2356bb`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
+`59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -167,8 +167,10 @@ after release. A bounded Orbit-authored row window keeps multi-row movement
 continuous while signed commits are in flight. Discrete wheel steps move three
 retained rows without synthetic momentum. Terminal-owned mouse modes continue to
 receive their canonical Orbit input instead. Hold Shift while dragging the left
-mouse button to select cells, then press Ctrl+Shift+C to copy the exact bounded
-text returned by Orbit.
+mouse button to bypass that capture. Drag to select cells, double-click to
+select words, or triple-click to select logical lines. Releasing writes Orbit's
+exact bounded text to both the ordinary Wayland clipboard and primary
+selection; Ctrl+Shift+C remains an explicit ordinary-clipboard copy.
 Press Ctrl+Shift+V or the native Paste key to read the ordinary clipboard once.
 Orbit applies normal or bracketed paste from its authoritative terminal mode.
 Terminal programs can also request bounded text writes through Orbit. On Linux,
@@ -199,9 +201,10 @@ are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
-`baf8aa28dcaa50484cd221aa7730defedc2356bb` Orbit package revision supplies
-accepted ORBS v7, including bounded row-window previews, signed scroll batches,
-and read-only pane metadata, and resolves from GitHub.
+`59975e9176f5caf8b78dc3273e88d9ecbb75dc3f` Orbit package revision supplies
+accepted ORBS v10, including authoritative selection completion, routed native
+left-pointer gestures, bounded row-window previews, signed scroll batches, and
+read-only pane metadata, and resolves from GitHub.
 
 ## LOC scorecard
 
@@ -212,11 +215,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 222 |
-| Contracts and references | 825 |
-| Crate decisions | 161 |
+| README | 225 |
+| Contracts and references | 852 |
+| Crate decisions | 164 |
 | Changelog | 134 |
-| Rust source, including unit tests | 11,939 |
-| Rust integration tests | 723 |
+| Rust source, including unit tests | 12,352 |
+| Rust integration tests | 741 |
 | Cargo manifest | 23 |
-| **Total** | **14,443** |
+| **Total** | **14,907** |
