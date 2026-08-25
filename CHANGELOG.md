@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Consume EONW v2 tab launch directories, render directory-derived numbered tab
+  labels, retain stable `tN` action targets, and expose bounded full-path context
+  through AccessKit.
 - Scale precision retained-history input to twice its native pixel distance,
   continue phase-complete gestures with bounded elapsed-time momentum, move
   discrete wheel steps by three rows without synthetic inertia, coalesce crossed

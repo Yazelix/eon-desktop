@@ -164,11 +164,11 @@ Within Eon's local-only product boundary, the projection treats a `file://`
 authority as transport decoration and displays only the absolute path. Remote
 working-directory semantics and percent decoding remain outside the contract.
 
-Exact EONW producer proof `4af395aea06c230ee6b18cf0755ae25915c0b88d`
-remains authoritative for active-tab visibility, pane liveness, endpoint
-identity, and selection. Venus therefore starts no hidden or offline observer,
-retires obsolete endpoints directly from each accepted snapshot, and defers the
-selected endpoint's observer until its presentation attachment has completed.
+Exact EONW v2 protocol source `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`
+is authoritative for active-tab visibility, tab launch directory, pane liveness,
+endpoint identity, and selection. Venus therefore starts no hidden or offline
+observer, retires obsolete endpoints directly from each accepted snapshot, and
+defers the selected endpoint's observer until its presentation attachment has completed.
 That deferral preserves Orbit's single pending-negotiation slot without adding
 retry policy or another lifecycle owner.
 
@@ -213,12 +213,15 @@ primary-selection, search, and raw-display clipboard ownership.
 
 ## Required for native Eon workspace materialization
 
-`ven-c87` consumes `EON-C10` and dependency-free EONW v1 from exact Eon proof
-`4af395aea06c230ee6b18cf0755ae25915c0b88d`; proof documentation is recorded at
-`93c3c723e5da95c92882571b2904d4c9a4b9f2ff`. The owner package supplies complete
-ordered snapshots, stable tab, pane, and Session identities, exact opaque Orbit
-endpoints, liveness, structured failures, and pointer or four-direction semantic
-actions. Venus consumes those values directly. The `ven-c87.1` refresh hardening
+`ven-c87` consumes `EON-C10`, `EON-C17`, and dependency-free EONW v2 from exact
+Eon source `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`; prior workspace proof
+documentation is recorded at `93c3c723e5da95c92882571b2904d4c9a4b9f2ff`.
+The owner package supplies complete
+ordered snapshots, stable tab, pane, and Session identities, authoritative raw
+tab launch directories, exact opaque Orbit endpoints, liveness, structured
+failures, and semantic actions. Venus consumes those values directly, derives
+bounded tab labels and accessibility context, and retains `tN` for action routing.
+The `ven-c87.1` refresh hardening
 reuses bounded `Inspect` every 250 ms without adding a protocol message, CLI
 adapter, hidden-state reader, or second workspace schema.
 

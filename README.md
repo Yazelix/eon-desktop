@@ -9,7 +9,9 @@ and sends semantic interaction back to the authoritative session runtime.
 The Venus client implements one native Wayland window on Linux for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
-pane accordion. Visible live pane headers show Eon's opaque pane identity, a
+pane accordion. Tab headers show the numeric part of Eon's stable `tN` identity,
+two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
+directory. Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
 only the selected endpoint receives presentation and input. It
@@ -25,9 +27,10 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v1 through `eon-workspace-protocol` 0.1.0 at exact Eon proof
-`4af395aea06c230ee6b18cf0755ae25915c0b88d`. Eon alone owns workspace order,
-selection, identities, actions, and pane-to-Session mappings. Venus consumes
+Venus consumes EONW v2 through `eon-workspace-protocol` 0.1.0 at exact Eon source
+`7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`. Eon alone owns workspace order,
+selection, identities, tab launch directories, actions, and pane-to-Session
+mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
 `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -153,8 +156,10 @@ replacement or authoritative offline state cancels obsolete retry state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
 and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
-available. Pane headers show pane identity, two spaces, then the home marker at
-exact home, a `~/`-anchored path below home, or an absolute path elsewhere;
+available. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
+directory while hit testing and actions retain `tN`; accessibility pairs `tN`
+with a bounded full path. Pane headers show pane identity, two spaces, then the
+home marker at exact home, a `~/`-anchored path below home, or an absolute path elsewhere;
 unset or empty `HOME` keeps paths absolute. Overlong labels preserve their
 rightmost components. Terminal titles stay in
 the selected native window, and Session mappings remain in Eon diagnostics.
@@ -215,11 +220,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 225 |
-| Contracts and references | 851 |
+| README | 230 |
+| Contracts and references | 862 |
 | Crate decisions | 164 |
-| Changelog | 135 |
-| Rust source, including unit tests | 12,352 |
-| Rust integration tests | 741 |
+| Changelog | 138 |
+| Rust source, including unit tests | 12,425 |
+| Rust integration tests | 740 |
 | Cargo manifest | 23 |
-| **Total** | **14,907** |
+| **Total** | **14,998** |
