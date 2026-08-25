@@ -200,8 +200,8 @@ are outside this slice.
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
 `baf8aa28dcaa50484cd221aa7730defedc2356bb` Orbit package revision supplies
-accepted ORBS v7, including bounded row-window previews, signed scroll batches, and
-read-only pane metadata, and resolves from GitHub.
+accepted ORBS v7, including bounded row-window previews, signed scroll batches,
+and read-only pane metadata, and resolves from GitHub.
 
 ## LOC scorecard
 
@@ -213,10 +213,10 @@ lock files, and other generated artifacts.
 |---|---:|
 | Agent policy | 416 |
 | README | 222 |
-| Contracts and references | 827 |
+| Contracts and references | 825 |
 | Crate decisions | 161 |
-| Changelog | 133 |
+| Changelog | 134 |
 | Rust source, including unit tests | 11,939 |
 | Rust integration tests | 723 |
 | Cargo manifest | 23 |
-| **Total** | **14,444** |
+| **Total** | **14,443** |
