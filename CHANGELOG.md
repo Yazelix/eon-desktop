@@ -118,9 +118,10 @@
   Orbit's coordinate bounds, and keeping held-button pairs coherent across presentation
   and queue recovery while clearing transient input on focus loss without owning the session or PTY.
 - Normalize bounded wheel and trackpad input into Orbit-owned retained-history
-  movement, keep Shift-drag gestures coherent through queue and resize recovery, rejected
-  actions, competing pointer input, and Orbit-authored cancellation, render only
-  authoritative selected presentation, and copy exact text returned by Orbit after the drag.
+  movement; route cell, word, and logical-line gestures through Orbit while
+  preserving terminal mouse capture with Shift override; retain native gesture
+  order through queue and resize recovery; and automatically copy a successful
+  selection to both Wayland clipboard targets.
 - Explain bounded attachment, frame, and connection failures in the client and
   accessibility tree, preserve Orbit's input, protocol, and terminal failure classes,
   distinguish retryable socket failures from terminal invalid messages and resource

@@ -158,7 +158,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Candidate
+- **Status:** Proven
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -196,16 +196,15 @@ retains accepted user-visible chronology.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Prior proof:** `f13dc7ac2e9a24c5cff5bb7e618436783ec76dbf`
+- **Proof:** `1034817bbe2352fb4b1026bce6b1f02eedd67e37`
   - **Environment:** Accepted deterministic checks and retained x86_64 Linux
     native Orbit/Venus dogfood
-  - **Evidence:** Complete Rust checks; exact ORBS v7 pin; bounded multi-row
-    conversion, clipping, commit, edge, cancellation, selection, clipboard,
-    resize, reattachment, and client-loss coverage; native touchpad tracking,
-    fling, and reversal accepted by the user against 4,000 retained lines.
-- **Open proof:** Exact ORBS v10 consumption, routed native cell/word/line
-  gestures, terminal mouse capture with Shift override, and separate Wayland
-  primary and ordinary clipboard effects.
+  - **Evidence:** Complete Rust checks; exact ORBS v10 pin; bounded multi-row
+    conversion, clipping, commit, edge, cancellation, routed cell/word/line
+    gestures, terminal capture with Shift override, separate primary and
+    ordinary clipboard effects, resize, reattachment, and client-loss
+    coverage; native touchpad tracking, fling, reversal, fast multi-click
+    selection, and automatic copy accepted by the user.
 
 ## VEN-C8 — Eon workspace presentation
 
