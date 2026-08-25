@@ -206,11 +206,11 @@ impl TerminalScroll {
             Some(ScenePreview::Viewport {
                 direction,
                 edge_reached,
-                row,
+                rows,
                 ..
             }) if Some(*direction) == self.direction() => {
                 self.terminal_lines = 0.0;
-                if *edge_reached && row.is_none() {
+                if *edge_reached && rows.is_empty() {
                     self.pixels = 0.0;
                     self.stop_gesture();
                 }
@@ -252,20 +252,24 @@ impl TerminalScroll {
             }
             return None;
         }
-        let ScenePreview::Viewport { row: Some(_), .. } = preview? else {
+        let ScenePreview::Viewport { rows, .. } = preview? else {
             return None;
         };
+        let available = i64::try_from(rows.len())
+            .unwrap_or(i64::MAX)
+            .min(i64::from(MAX_SCROLL_ROWS));
+        if available == 0 {
+            return None;
+        }
         let crossed = (self.pixels / cell_height).trunc();
         if crossed == 0.0 {
             return None;
         }
-        let rows = (-(crossed as i64))
-            .clamp(-i64::from(MAX_SCROLL_ROWS), i64::from(MAX_SCROLL_ROWS))
-            as i16;
-        self.in_flight = Some(rows);
+        let requested = (-(crossed as i64)).clamp(-available, available) as i16;
+        self.in_flight = Some(requested);
         Some(ClientMessage::ScrollVertical {
             frame_revision,
-            rows,
+            rows: requested,
         })
     }
 
@@ -292,18 +296,18 @@ impl TerminalScroll {
         let Some(direction) = self.direction() else {
             return 0.0;
         };
-        if !matches!(
-            preview,
-            Some(ScenePreview::Viewport {
-                direction: candidate,
-                row: Some(_),
-                ..
-            }) if *candidate == direction
-        ) {
+        let Some(ScenePreview::Viewport {
+            direction: candidate,
+            rows,
+            ..
+        }) = preview
+        else {
+            return 0.0;
+        };
+        if *candidate != direction || rows.is_empty() {
             return 0.0;
         }
-        let height = cell_height as f32;
-        let limit = f64::from(f32::from_bits(height.to_bits().saturating_sub(1)));
+        let limit = rows.len() as f64 * cell_height;
         self.pixels.clamp(-limit, limit) as f32
     }
 
@@ -2251,7 +2255,7 @@ mod tests {
             frame_revision: 7,
             direction: VerticalDirection::Up,
             edge_reached: false,
-            row: Some(row),
+            rows: vec![row.clone(); 5],
         };
         let mut scroll = TerminalScroll::default();
         scroll.push_pixels(50.0, TouchPhase::Moved, start, 20.0);
@@ -2266,6 +2270,7 @@ mod tests {
         assert_eq!(scroll.next_request(7, None, 20.0), None);
         scroll.preview_arrived(7, VerticalDirection::Up);
         scroll.resolve_preview(Some(&preview));
+        assert_eq!(scroll.offset(Some(&preview), 20.0), 100.0);
         assert_eq!(
             scroll.next_request(7, Some(&preview), 20.0),
             Some(ClientMessage::ScrollVertical {
@@ -2292,6 +2297,26 @@ mod tests {
         assert_eq!(cancelled.next_request(7, Some(&preview), 20.0), None);
         assert!(cancelled.accept_batch(-2, -2, 20.0));
         assert_eq!(cancelled.pixels, 40.0);
+
+        let down_preview = ScenePreview::Viewport {
+            frame_revision: 7,
+            direction: VerticalDirection::Down,
+            edge_reached: true,
+            rows: vec![row; 3],
+        };
+        let mut down = TerminalScroll::default();
+        down.push_pixels(-50.0, TouchPhase::Moved, start, 20.0);
+        down.preview_arrived(7, VerticalDirection::Down);
+        down.resolve_preview(Some(&down_preview));
+        assert_eq!(down.offset(Some(&down_preview), 20.0), -60.0);
+        assert_eq!(
+            down.next_request(7, Some(&down_preview), 20.0),
+            Some(ClientMessage::ScrollVertical {
+                frame_revision: 7,
+                rows: 3,
+            })
+        );
+
         assert_eq!(
             scroll.next_request(8, None, 20.0),
             Some(ClientMessage::PreviewVertical {
@@ -2304,7 +2329,7 @@ mod tests {
             frame_revision: 8,
             direction: VerticalDirection::Up,
             edge_reached: true,
-            row: None,
+            rows: Vec::new(),
         };
         scroll.preview_arrived(8, VerticalDirection::Up);
         scroll.resolve_preview(Some(&edge));

@@ -238,9 +238,9 @@ action mechanisms used by the workspace projection.
 ## Required for pixel and kinetic retained-history scrolling
 
 `ven-venus-kinetic-touchpad-scroll-5sl` consumes Orbit `ORB-C8` and `ORB-C9`
-through exact ORBS v6 source
-`780f5d746175b4a9b71df57c51ed4bfcc4c4c375`. Orbit supplies one
-revision-bound adjacent row and one bounded signed atomic viewport commit;
+through exact ORBS v7 source
+`baf8aa28dcaa50484cd221aa7730defedc2356bb`. Orbit supplies one bounded
+revision-bound nearest-first row window and one signed atomic viewport commit;
 Venus does not infer routing, edges, cells, or revisions.
 
 Patched winit 0.30.13 at

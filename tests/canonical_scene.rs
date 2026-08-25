@@ -174,8 +174,8 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
 }
 
 #[test]
-fn canonical_session_revision_is_orbs_v6() {
-    assert_eq!(session::VERSION, 6);
+fn canonical_session_revision_is_orbs_v7() {
+    assert_eq!(session::VERSION, 7);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn ordered_frames_reject_stale_revisions_without_replacing_state() {
 }
 
 #[test]
-fn orbs_v6_scroll_outcomes_reuse_the_existing_result_and_frame_owners() {
+fn orbs_v7_scroll_outcomes_reuse_the_existing_result_and_frame_owners() {
     let mut model = attached_model();
     model
         .apply(ServerMessage::Failure(Failure {
@@ -496,8 +496,12 @@ fn clipboard_text_is_an_attached_one_shot_effect_not_presentation_state() {
 #[test]
 fn revision_bound_scroll_previews_follow_atomic_frames() {
     let mut model = attached_model();
-    let initial = frame(1, Screen::Primary);
+    let mut initial = frame(1, Screen::Primary);
     let row = initial.rows[0].clone();
+    let mut older = row.clone();
+    older.cells[0].text = "older".into();
+    initial.dimensions.rows = 2;
+    initial.rows.push(row.clone());
     model
         .apply(ServerMessage::Frame(Box::new(initial)))
         .unwrap();
@@ -508,7 +512,7 @@ fn revision_bound_scroll_previews_follow_atomic_frames() {
             outcome: PreviewOutcome::Viewport {
                 cols: 4,
                 edge_reached: false,
-                row: Some(row.clone()),
+                rows: vec![row.clone(), older],
             },
         }))
         .unwrap();
@@ -517,44 +521,51 @@ fn revision_bound_scroll_previews_follow_atomic_frames() {
         Some(ScenePreview::Viewport {
             frame_revision: 1,
             direction: VerticalDirection::Up,
-            row: Some(_),
+            rows,
             ..
-        })
+        }) if rows.len() == 2
+            && rows[0].cells[0].text == "e\u{301}"
+            && rows[1].cells[0].text == "older"
     ));
 
-    assert_eq!(
-        model
-            .apply(ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
-                requested_rows: -1,
-                applied_rows: -1,
-                frame: Box::new(frame(2, Screen::Primary)),
-                next: PreviewOutcome::Viewport {
-                    cols: 3,
-                    edge_reached: false,
-                    row: Some(row.clone()),
-                },
-            }))
-            .unwrap_err(),
-        ModelError::UnexpectedMessage
-    );
-    assert_eq!(model.scene().unwrap().revision, 1);
-    assert!(matches!(
-        model.scroll_preview(),
-        Some(ScenePreview::Viewport {
-            frame_revision: 1,
-            ..
-        })
-    ));
+    let mut next_frame = frame(2, Screen::Primary);
+    next_frame.dimensions.rows = 2;
+    next_frame.rows.push(row.clone());
+    for (cols, rows) in [(3, vec![row.clone()]), (4, vec![row.clone(); 3])] {
+        assert_eq!(
+            model
+                .apply(ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+                    requested_rows: -1,
+                    applied_rows: -1,
+                    frame: Box::new(next_frame.clone()),
+                    next: PreviewOutcome::Viewport {
+                        cols,
+                        edge_reached: false,
+                        rows,
+                    },
+                }))
+                .unwrap_err(),
+            ModelError::UnexpectedMessage
+        );
+        assert_eq!(model.scene().unwrap().revision, 1);
+        assert!(matches!(
+            model.scroll_preview(),
+            Some(ScenePreview::Viewport {
+                frame_revision: 1,
+                ..
+            })
+        ));
+    }
 
     model
         .apply(ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
             requested_rows: -1,
             applied_rows: -1,
-            frame: Box::new(frame(2, Screen::Primary)),
+            frame: Box::new(next_frame),
             next: PreviewOutcome::Viewport {
                 cols: 4,
                 edge_reached: false,
-                row: Some(row),
+                rows: vec![row],
             },
         }))
         .unwrap();
@@ -564,9 +575,9 @@ fn revision_bound_scroll_previews_follow_atomic_frames() {
         Some(ScenePreview::Viewport {
             frame_revision: 2,
             direction: VerticalDirection::Up,
-            row: Some(_),
+            rows,
             ..
-        })
+        }) if rows.len() == 1
     ));
 
     model

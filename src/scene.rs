@@ -508,7 +508,7 @@ impl DrawRow {
     }
 }
 
-/// One Orbit-routed row adjacent to an exact accepted scene.
+/// One Orbit-routed row window adjacent to an exact accepted scene.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScenePreview {
     TerminalOwned {
@@ -519,7 +519,7 @@ pub enum ScenePreview {
         frame_revision: u64,
         direction: VerticalDirection,
         edge_reached: bool,
-        row: Option<DrawRow>,
+        rows: Vec<DrawRow>,
     },
 }
 

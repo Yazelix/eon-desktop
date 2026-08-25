@@ -379,16 +379,19 @@ fn scene_preview(
         PreviewOutcome::Viewport {
             cols,
             edge_reached,
-            row,
+            rows,
         } => {
-            if cols != frame.dimensions.cols {
+            if cols != frame.dimensions.cols || rows.len() > usize::from(frame.dimensions.rows) {
                 return Err(ModelError::UnexpectedMessage);
             }
             ScenePreview::Viewport {
                 frame_revision: frame.revision,
                 direction,
                 edge_reached,
-                row: row.as_ref().map(|row| DrawRow::from_protocol(row, frame)),
+                rows: rows
+                    .iter()
+                    .map(|row| DrawRow::from_protocol(row, frame))
+                    .collect(),
             }
         }
     })

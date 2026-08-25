@@ -164,8 +164,8 @@ retains accepted user-visible chronology.
   or copy.
 - **Result:**
   - Precision movement translates and clips an accepted complete Orbit frame
-    plus its revision-bound adjacent row at two presented pixels per native
-    input pixel.
+    plus its bounded revision-bound row window at two presented pixels per
+    native input pixel.
   - Venus retains a sub-row remainder, commits crossed rows through at most one
     coalesced signed Orbit batch, and installs only its atomic authoritative
     frame and next preview.
@@ -181,13 +181,13 @@ retains accepted user-visible chronology.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
-- **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v6 at
-  `780f5d746175b4a9b71df57c51ed4bfcc4c4c375`; exact patched winit
+- **Consumes:** Orbit `ORB-C8` and `ORB-C9` through canonical ORBS v7 at
+  `baf8aa28dcaa50484cd221aa7730defedc2356bb`; exact patched winit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
   0.12.0.
-- **Boundary:** Multi-row overscan, bounce, device/source heuristics, public
-  physics tuning, presentation feedback, unreleased winit, and additional
-  platform support are outside this contract.
+- **Boundary:** Client-owned history caches, bounce, device/source heuristics,
+  public physics tuning, presentation feedback, unreleased winit, GPU-layer
+  translation, and additional platform support are outside this contract.
 - **Proof:** `3230c5820c821fd2437dcf0399d2ba921cec2c94`
   - **Environment:** Accepted deterministic checks and retained x86_64 Linux
     native Orbit/Venus dogfood
@@ -195,9 +195,8 @@ retains accepted user-visible chronology.
     selection, exact clipboard text, resize cancellation, reattachment, and
     client loss; accepted base `04cdd6aaf5cf4f1c74984a5b129d7c61ed9d7536`
     and native pair `1e6583ec83348617980d400e2cbdf5b1f1a6e3da`
-- **Open proof:** Fractional presentation, signed-batch coalescing, kinetic
-  decay, compositor pacing, and real precision/discrete hardware dogfood require
-  one accepted candidate revision.
+- **Open proof:** Multi-row fractional presentation and fixed-workload native
+  dogfood require one accepted candidate revision.
 
 ## VEN-C8 — Eon workspace presentation
 

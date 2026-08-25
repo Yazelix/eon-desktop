@@ -1310,7 +1310,7 @@ mod tests {
             next: session::PreviewOutcome::Viewport {
                 cols: 0,
                 edge_reached: true,
-                row: None,
+                rows: Vec::new(),
             },
         }))
     }

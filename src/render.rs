@@ -383,23 +383,35 @@ fn scene_grid(scene: &Scene, viewport: SceneRect, metrics: CellMetrics) -> Scene
     }
 }
 
-fn preview_row<'a>(
-    scene: &Scene,
-    preview: Option<&'a ScenePreview>,
-    metrics: CellMetrics,
-    origin: SceneRect,
-) -> Option<(&'a DrawRow, f32)> {
-    let ScenePreview::Viewport { direction, row, .. } = preview? else {
+fn preview_rows(preview: Option<&ScenePreview>) -> Option<(VerticalDirection, &[DrawRow])> {
+    let ScenePreview::Viewport {
+        direction, rows, ..
+    } = preview?
+    else {
         return None;
     };
-    let row = row.as_ref()?;
-    let top = match direction {
-        VerticalDirection::Up => origin.top + metrics.padding - metrics.height,
-        VerticalDirection::Down => {
-            origin.top + metrics.padding + f32::from(scene.rows) * metrics.height
+    Some((*direction, rows))
+}
+
+fn preview_row_top(
+    scene: &Scene,
+    direction: VerticalDirection,
+    index: usize,
+    metrics: CellMetrics,
+    origin: SceneRect,
+) -> f32 {
+    match direction {
+        VerticalDirection::Up => {
+            origin.top + metrics.padding - (index as f32 + 1.0) * metrics.height
         }
-    };
-    Some((row, top))
+        VerticalDirection::Down => {
+            origin.top + metrics.padding + (f32::from(scene.rows) + index as f32) * metrics.height
+        }
+    }
+}
+
+fn row_intersects_clip(top: f32, height: f32, clip: SceneRect) -> bool {
+    top < clip.bottom() && top + height > clip.top
 }
 
 fn rect_changed(left: SceneRect, right: SceneRect) -> bool {
@@ -1234,33 +1246,40 @@ impl Renderer {
         origin: SceneRect,
         clip: SceneRect,
     ) {
-        let Some((row, top)) = preview_row(scene, preview, self.metrics, origin) else {
+        let Some((direction, rows)) = preview_rows(preview) else {
             return;
         };
         let mut runs = Vec::new();
-        row.append_glyph_runs(0, &mut runs);
-        runs.retain(|run| run.style.foreground_visible(blink_visible));
-        for (index, run) in runs.iter().enumerate() {
-            if is_full_block_run(run) {
+        for (row_index, row) in rows.iter().enumerate() {
+            let top = preview_row_top(scene, direction, row_index, self.metrics, origin);
+            if !row_intersects_clip(top, self.metrics.height, clip) {
                 continue;
             }
-            let left =
-                origin.left + self.metrics.padding + f32::from(run.column) * self.metrics.width;
-            let width = f32::from(run.columns) * self.metrics.width;
-            let next = runs.get(index + 1);
-            let ink_width = f32::from(cell_ink_right(run, next, scene.columns) - run.column)
-                * self.metrics.width;
-            self.push_text_clipped(
-                &run.text,
-                left,
-                top,
-                width,
-                ink_width,
-                self.metrics.height,
-                run.style.foreground,
-                DrawStyleKind::Cell(run.style),
-                clip,
-            );
+            runs.clear();
+            row.append_glyph_runs(0, &mut runs);
+            runs.retain(|run| run.style.foreground_visible(blink_visible));
+            for (index, run) in runs.iter().enumerate() {
+                if is_full_block_run(run) {
+                    continue;
+                }
+                let left =
+                    origin.left + self.metrics.padding + f32::from(run.column) * self.metrics.width;
+                let width = f32::from(run.columns) * self.metrics.width;
+                let next = runs.get(index + 1);
+                let ink_width = f32::from(cell_ink_right(run, next, scene.columns) - run.column)
+                    * self.metrics.width;
+                self.push_text_clipped(
+                    &run.text,
+                    left,
+                    top,
+                    width,
+                    ink_width,
+                    self.metrics.height,
+                    run.style.foreground,
+                    DrawStyleKind::Cell(run.style),
+                    clip,
+                );
+            }
         }
     }
 
@@ -1884,15 +1903,24 @@ fn build_preview_rectangles(
     metrics: CellMetrics,
     origin: SceneRect,
 ) {
-    if let Some((row, top)) = preview_row(scene, preview, metrics, origin) {
-        build_row_rectangles(
-            rectangles,
-            row,
-            blink_visible,
-            metrics,
-            origin.left + metrics.padding,
-            top,
-        );
+    if let Some((direction, rows)) = preview_rows(preview) {
+        for (index, row) in rows.iter().enumerate() {
+            let top = preview_row_top(scene, direction, index, metrics, origin);
+            if rectangles
+                .clip
+                .is_some_and(|clip| !row_intersects_clip(top, metrics.height, clip))
+            {
+                continue;
+            }
+            build_row_rectangles(
+                rectangles,
+                row,
+                blink_visible,
+                metrics,
+                origin.left + metrics.padding,
+                top,
+            );
+        }
     }
 }
 
@@ -2269,7 +2297,7 @@ mod tests {
     }
 
     #[test]
-    fn one_adjacent_row_covers_every_fractional_grid_offset() {
+    fn bounded_preview_rows_cover_multi_row_fractional_offsets() {
         let metrics = CellMetrics {
             width: 10.0,
             height: 20.0,
@@ -2301,19 +2329,29 @@ mod tests {
             height: 50.0,
         };
         let grid = scene_grid(&scene, viewport, metrics);
+        assert!(row_intersects_clip(
+            grid.top - metrics.height / 2.0,
+            metrics.height,
+            grid
+        ));
+        assert!(!row_intersects_clip(grid.bottom(), metrics.height, grid));
 
         for (direction, offset) in [
-            (VerticalDirection::Up, metrics.height - 0.25),
-            (VerticalDirection::Down, -metrics.height + 0.25),
+            (VerticalDirection::Up, 3.0 * metrics.height - 0.25),
+            (VerticalDirection::Down, -3.0 * metrics.height + 0.25),
         ] {
             let preview = ScenePreview::Viewport {
                 frame_revision: scene.revision,
                 direction,
                 edge_reached: false,
-                row: Some(row.clone()),
+                rows: vec![row.clone(); 3],
             };
-            let (_, top) =
-                preview_row(&scene, Some(&preview), metrics, shifted(viewport, offset)).unwrap();
+            let (actual_direction, rows) = preview_rows(Some(&preview)).unwrap();
+            assert_eq!(rows.len(), 3);
+            let origin = shifted(viewport, offset);
+            let first = preview_row_top(&scene, actual_direction, 0, metrics, origin);
+            let top = preview_row_top(&scene, actual_direction, 2, metrics, origin);
+            assert_eq!((top - first).abs(), 2.0 * metrics.height);
             assert!(
                 (SceneRect {
                     left: grid.left,
