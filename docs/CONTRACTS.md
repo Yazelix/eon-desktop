@@ -241,7 +241,7 @@ retains accepted user-visible chronology.
 - **Owner:** Venus workspace materialization, bounded metadata observation,
   clipping, and accessibility projection; Eon owns topology and Orbit owns
   terminal metadata and Session lifetime.
-- **Consumes:** Eon `EON-C10`, `EON-C17`, `EON-C18`, EONW v3, and
+- **Consumes:** Eon `EON-C10`, `EON-C17`, EONW v3, and
   `eon-workspace-protocol` 0.1.0 at
   `96119f29ca2e3ec4ad19bbe272708b07d588429a`; Orbit metadata observation in
   ORBS v5 and `orbit-protocol` 0.1.0 at
