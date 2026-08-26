@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot, Tab};
+use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
@@ -21,7 +21,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
             Tab {
                 id: "t1".into(),
                 directory: b"/tmp/eon".to_vec(),
-                selected_pane: "pane-2".into(),
+                selected_pane: Some("pane-2".into()),
                 panes: vec![
                     Pane {
                         id: "pane-1".into(),
@@ -40,7 +40,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
             Tab {
                 id: "t2".into(),
                 directory: b"/tmp/nova".to_vec(),
-                selected_pane: "pane-3".into(),
+                selected_pane: Some("pane-3".into()),
                 panes: vec![Pane {
                     id: "pane-3".into(),
                     session: "session-3".into(),
@@ -126,7 +126,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
             live: true,
         });
     }
-    overflow_snapshot.tabs[0].selected_pane = "pane-32".into();
+    overflow_snapshot.tabs[0].selected_pane = Some("pane-32".into());
     let unscrolled = WorkspaceScene::from_snapshot(&overflow_snapshot, size, metrics, 0.0, 0.0);
     assert!(unscrolled.pane_scroll_limit() > 0.0);
     let revealed = WorkspaceScene::from_snapshot(
@@ -197,6 +197,32 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         size.height as f32 - metrics.height
     );
     assert_eq!(picker.hit_test(0.0, picker.terminal.top), None);
+
+    let pending_picker = WorkspaceScene::from_snapshot(
+        &Snapshot {
+            active_tab: "t2".into(),
+            tabs: vec![
+                snapshot.tabs[0].clone(),
+                Tab {
+                    id: "t2".into(),
+                    directory: b"/tmp/eon".to_vec(),
+                    selected_pane: None,
+                    panes: Vec::new(),
+                },
+            ],
+            directory_picker: Some(DirectoryPicker {
+                tab: "t2".into(),
+                endpoint: b"/run/eon/picker.sock".to_vec(),
+            }),
+        },
+        size,
+        metrics,
+        0.0,
+        0.0,
+    );
+    assert!(pending_picker.tabs[1].selected);
+    assert_eq!(pending_picker.panes, picker.panes);
+    assert_eq!(pending_picker.terminal, picker.terminal);
 
     let tiny_picker = WorkspaceScene::from_snapshot(
         &Snapshot {

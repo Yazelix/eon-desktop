@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v3::{
+use eon_workspace_protocol::v4::{
     self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
     Response as WorkspaceResponse,
 };
@@ -60,7 +60,7 @@ pub enum WorkspaceEvent {
     Unavailable(String),
 }
 
-/// Bounded semantic-action handle for EONW v3.
+/// Bounded semantic-action handle for EONW v4.
 pub struct WorkspaceTransport {
     actions: mpsc::SyncSender<WorkspaceAction>,
     events: Arc<WorkspaceEventQueue>,
@@ -698,7 +698,7 @@ fn protocol_loss(error: session::Error) -> TransportEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
     use orbit_protocol::{
         Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         session::{FocusEvent, Metadata},
@@ -1192,7 +1192,7 @@ mod tests {
         second.tabs.push(Tab {
             id: "t2".into(),
             directory: b"/tmp/nova".to_vec(),
-            selected_pane: "pane-2".into(),
+            selected_pane: Some("pane-2".into()),
             panes: vec![Pane {
                 id: "pane-2".into(),
                 session: "session-2".into(),
@@ -1291,7 +1291,7 @@ mod tests {
             tabs: vec![Tab {
                 id: "t1".into(),
                 directory: b"/tmp/eon".to_vec(),
-                selected_pane: "pane-1".into(),
+                selected_pane: Some("pane-1".into()),
                 panes: vec![Pane {
                     id: "pane-1".into(),
                     session: "session-1".into(),

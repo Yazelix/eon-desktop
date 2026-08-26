@@ -14,9 +14,10 @@ two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
 directory. Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
-only the selected endpoint receives presentation and input. When Eon publishes
-one tab-bound directory-picker endpoint, Venus keeps the tab bar visible and
-replaces the tab body with that terminal inside a one-cell inset. It
+only the selected endpoint receives presentation and input. A fresh workspace
+and every new tab may begin with no pane while Eon publishes one tab-bound
+directory-picker endpoint; Venus keeps the tab bar visible and replaces the tab
+body with that terminal inside a one-cell inset. It
 automatically recovers that attachment after retryable local socket loss, detaches
 without ending any Session, and does not own a PTY, terminal emulator, or
 workspace topology.
@@ -29,10 +30,10 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v3 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`96119f29ca2e3ec4ad19bbe272708b07d588429a`. Eon alone owns workspace order,
-selection, identities, tab launch directories, directory-picker lifecycle,
-actions, and pane-to-Session mappings. Venus consumes
+Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon source
+`aaafc9127c054e683abfceb3c8fcaae201a7a763`. Eon alone owns workspace order,
+optional selection, pending-tab state, identities, tab launch directories,
+directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
 `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -66,16 +67,21 @@ the last coherent scene during recovery and replaces it only with a fresh
 complete frame. Busy, incompatible, exited, invalid protocol or model, resource,
 queue, input, and worker-start failures remain terminal and visible.
 
-For an Eon workspace, pass the initial Orbit socket followed by the EONW socket:
+For an Eon workspace, select workspace mode with only the EONW socket:
 
 ```sh
-cargo run --locked -- /path/to/orbit.sock /path/to/eon.sock
+cargo run --locked -- --workspace /path/to/eon.sock
 ```
 
-Pass `--application-id ID` before the sockets when the caller owns a distinct
-desktop identity. The bounded ASCII token becomes the Wayland app ID before
-window creation and does not replace Orbit-authored window titles. Direct Venus
-launches use `eon`:
+Workspace mode opens the EONW transport first and waits for its accepted
+snapshot before attaching its terminal endpoint. During picker-first startup,
+the first snapshot supplies the picker endpoint; no initial Orbit endpoint,
+durable pane, or placeholder Session is required.
+
+Pass `--application-id ID` before the launch target when the caller owns a
+distinct desktop identity. The bounded ASCII token becomes the Wayland app ID
+before window creation and does not replace Orbit-authored window titles.
+Direct Venus launches use `eon`:
 
 ```sh
 cargo run --locked -- --application-id eonova /path/to/orbit.sock
@@ -85,7 +91,7 @@ Pass `--no-decorations` to request a window without its native title bar. The
 default remains decorated:
 
 ```sh
-cargo run --locked -- --no-decorations /path/to/orbit.sock /path/to/eon.sock
+cargo run --locked -- --no-decorations --workspace /path/to/eon.sock
 ```
 
 Pass `--background-opacity VALUE` with a finite value from `0.0` through `1.0`
@@ -150,16 +156,19 @@ transient Busy while the departing client releases it. Standalone Busy remains
 terminal. Direct focus and unminimize are unavailable through winit on Wayland;
 xdg activation remains compositor-controlled.
 
-The accepted Eon snapshot supplies the authoritative selected Orbit endpoint.
+The accepted Eon snapshot supplies the authoritative terminal endpoint: the
+directory picker when present, otherwise the selected Orbit pane.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
-Recovery continues only while that exact selected pane remains live; endpoint
-replacement or authoritative offline state cancels obsolete retry state.
+Recovery continues only while that exact attachment remains current and live;
+endpoint replacement or authoritative offline state cancels obsolete retry
+state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
-Alt+M creates a pane, Ctrl+T creates a tab, and Alt+Z requests Eon's directory
-picker. While the picker is active, its terminal receives input and the prior
-workspace focus is restored when it closes. Press F6 to cycle terminal, tab, and
-pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
+Alt+M creates a pane, Ctrl+T opens a pending tab in Eon's directory picker, and
+Alt+Z requests that picker for an existing tab. While the picker is active, its
+terminal receives input and the prior workspace focus is restored when it
+closes. Press F6 to cycle terminal, tab, and pane keyboard focus; Left/Right on
+tabs, Up/Down on panes, and Escape remain
 available. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
 directory while hit testing and actions retain `tN`; accessibility pairs `tN`
 with a bounded full path. Pane headers show pane identity, two spaces, then the
@@ -224,11 +233,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 234 |
-| Contracts and references | 908 |
-| Crate decisions | 165 |
+| README | 243 |
+| Contracts and references | 924 |
+| Crate decisions | 167 |
 | Changelog | 142 |
-| Rust source, including unit tests | 12,665 |
-| Rust integration tests | 782 |
+| Rust source, including unit tests | 12,744 |
+| Rust integration tests | 808 |
 | Cargo manifest | 23 |
-| **Total** | **15,335** |
+| **Total** | **15,467** |

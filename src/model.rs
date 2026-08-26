@@ -1,5 +1,5 @@
 use crate::scene::{DrawRow, Scene, ScenePreview};
-use eon_workspace_protocol::v3::{Response as WorkspaceResponse, Snapshot};
+use eon_workspace_protocol::v4::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{
     ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
@@ -142,9 +142,10 @@ impl WorkspaceModel {
             .tabs
             .iter()
             .find(|tab| tab.id == snapshot.active_tab)?;
+        let selected = tab.selected_pane.as_ref()?;
         tab.panes
             .iter()
-            .find(|pane| pane.id == tab.selected_pane)
+            .find(|pane| pane.id == *selected)
             .map(|pane| (pane.endpoint.as_slice(), pane.live))
     }
 
@@ -431,7 +432,7 @@ fn bounded(mut detail: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v3::{DirectoryPicker, Failure, Pane, Tab};
+    use eon_workspace_protocol::v4::{DirectoryPicker, Failure, Pane, Tab};
 
     #[test]
     fn rejected_workspace_action_preserves_the_last_complete_snapshot() {
@@ -440,7 +441,7 @@ mod tests {
             tabs: vec![Tab {
                 id: "t1".into(),
                 directory: b"/tmp/eon".to_vec(),
-                selected_pane: "pane-1".into(),
+                selected_pane: Some("pane-1".into()),
                 panes: vec![Pane {
                     id: "pane-1".into(),
                     session: "session-1".into(),
@@ -498,6 +499,7 @@ mod tests {
             Some((&b"/run/eon/orbit.sock"[..], false))
         );
 
+        let durable = snapshot.clone();
         let mut picker = snapshot;
         picker.directory_picker = Some(DirectoryPicker {
             tab: "t1".into(),
@@ -507,6 +509,30 @@ mod tests {
         assert_eq!(
             model.active_attachment(),
             Some((&b"/run/eon/picker.sock"[..], true))
+        );
+
+        model.apply(WorkspaceResponse::Snapshot(Snapshot {
+            active_tab: "t1".into(),
+            tabs: vec![Tab {
+                id: "t1".into(),
+                directory: b"/tmp/eon".to_vec(),
+                selected_pane: None,
+                panes: Vec::new(),
+            }],
+            directory_picker: Some(DirectoryPicker {
+                tab: "t1".into(),
+                endpoint: b"/run/eon/pending-picker.sock".to_vec(),
+            }),
+        }));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/pending-picker.sock"[..], true))
+        );
+
+        model.apply(WorkspaceResponse::Snapshot(durable));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/orbit.sock"[..], true))
         );
     }
 }

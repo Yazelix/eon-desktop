@@ -10,12 +10,12 @@ const DEFAULT_CURSOR_TAIL: (Color, f32) = (
     },
     1.0,
 );
-const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET [EON_WORKSPACE_SOCKET]]";
+const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
 
 #[derive(Debug)]
 pub(super) struct LaunchArguments {
     pub(super) application_id: String,
-    pub(super) orbit_socket: PathBuf,
+    pub(super) orbit_socket: Option<PathBuf>,
     pub(super) workspace_socket: Option<PathBuf>,
     pub(super) supervised: bool,
     pub(super) decorations: bool,
@@ -103,12 +103,21 @@ pub(super) fn launch_arguments(
             if cursor_trail_duration.is_none() {
                 return Err(USAGE.into());
             }
+        } else if argument == "--workspace" {
+            if workspace_socket.is_some() || orbit_socket.is_some() {
+                return Err(USAGE.into());
+            }
+            workspace_socket = arguments
+                .next()
+                .filter(|value| !value.as_encoded_bytes().starts_with(b"-"))
+                .map(PathBuf::from);
+            if workspace_socket.is_none() {
+                return Err(USAGE.into());
+            }
         } else if argument.as_encoded_bytes().starts_with(b"-") {
             return Err(USAGE.into());
-        } else if orbit_socket.is_none() {
+        } else if orbit_socket.is_none() && workspace_socket.is_none() {
             orbit_socket = Some(PathBuf::from(argument));
-        } else if workspace_socket.is_none() {
-            workspace_socket = Some(PathBuf::from(argument));
         } else {
             return Err(USAGE.into());
         }
@@ -121,9 +130,13 @@ pub(super) fn launch_arguments(
         _ => return Err(USAGE.into()),
     };
 
+    if orbit_socket.is_none() && workspace_socket.is_none() {
+        orbit_socket = Some(default_socket_path()?);
+    }
+
     Ok(LaunchArguments {
         application_id: application_id.unwrap_or_else(|| "eon".into()),
-        orbit_socket: orbit_socket.map_or_else(default_socket_path, Ok)?,
+        orbit_socket,
         workspace_socket,
         supervised: presentation_control == Some(OsString::from("stdin")),
         decorations,
@@ -178,6 +191,7 @@ mod tests {
 
         let default = parse(&[]).unwrap();
         assert_eq!(default.application_id, "eon");
+        assert!(default.orbit_socket.is_some());
         assert!(default.decorations && default.workspace_socket.is_none());
         assert!(!default.supervised);
         assert_eq!(default.background_opacity, 1.0);
@@ -207,14 +221,14 @@ mod tests {
                 "--background-opacity",
                 value,
                 "--background-blur",
-                "orbit.sock",
+                "--workspace",
                 "eon.sock",
             ])
             .unwrap();
             assert!(!parsed.decorations);
             assert_eq!(parsed.background_opacity, value.parse::<f32>().unwrap());
             assert!(parsed.background_blur);
-            assert_eq!(parsed.orbit_socket, PathBuf::from("orbit.sock"));
+            assert_eq!(parsed.orbit_socket, None);
             assert_eq!(parsed.workspace_socket, Some(PathBuf::from("eon.sock")));
         }
 
@@ -239,6 +253,7 @@ mod tests {
                 2.5,
             ))
         );
+        assert_eq!(tail.orbit_socket, Some(PathBuf::from("orbit.sock")));
         assert_eq!(
             parse(&["--cursor-effect-v1", "none"]).unwrap().cursor_tail,
             None
@@ -341,6 +356,10 @@ mod tests {
                 "--cursor-trail-duration-v1",
                 "2",
             ][..],
+            &["orbit.sock", "eon.sock"][..],
+            &["orbit.sock", "--workspace", "eon.sock"][..],
+            &["--workspace"][..],
+            &["--workspace", "one", "--workspace", "two"][..],
         ] {
             assert_eq!(parse(invalid).unwrap_err().to_string(), USAGE);
         }

@@ -1,7 +1,7 @@
 use crate::{Result, launch::LaunchArguments};
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::v3::{Action as WorkspaceAction, Direction as WorkspaceDirection};
+use eon_workspace_protocol::v4::{Action as WorkspaceAction, Direction as WorkspaceDirection};
 use orbit_protocol::{
     MAX_CELLS,
     session::{
@@ -464,7 +464,7 @@ struct MetadataObserver {
 
 struct Application {
     application_id: String,
-    orbit_socket: PathBuf,
+    orbit_socket: Option<PathBuf>,
     workspace_socket: Option<PathBuf>,
     supervised: bool,
     decorations: bool,
@@ -590,7 +590,11 @@ impl Application {
                 let _ = proxy.send_event(UserEvent::Workspace);
             }));
         } else {
-            self.start_orbit(self.orbit_socket.clone());
+            self.start_orbit(
+                self.orbit_socket
+                    .clone()
+                    .expect("standalone launch has an Orbit socket"),
+            );
         }
         self.refresh_client_view();
         Ok(())
@@ -598,7 +602,7 @@ impl Application {
 
     fn start_orbit(&mut self, socket: PathBuf) {
         let proxy = self.proxy.clone();
-        self.orbit_socket = socket.clone();
+        self.orbit_socket = Some(socket.clone());
         self.transport = Some(Transport::start(socket, move || {
             let _ = proxy.send_event(UserEvent::Transport);
         }));
@@ -786,7 +790,11 @@ impl Application {
         self.retry_suppressed = false;
         self.last_resize = None;
         self.presentation.invalidate();
-        self.start_orbit(self.orbit_socket.clone());
+        self.start_orbit(
+            self.orbit_socket
+                .clone()
+                .expect("Orbit retry has an attachment socket"),
+        );
         self.refresh_client_view();
     }
 
@@ -794,7 +802,7 @@ impl Application {
         let picker_was_active = self.workspace_model.directory_picker_active();
         let received_snapshot = matches!(
             &event,
-            WorkspaceEvent::Response(eon_workspace_protocol::v3::Response::Snapshot(_))
+            WorkspaceEvent::Response(eon_workspace_protocol::v4::Response::Snapshot(_))
         );
         let unavailable = matches!(&event, WorkspaceEvent::Unavailable(_));
         let (view_changed, snapshot_changed) = match event {
@@ -1430,7 +1438,13 @@ impl Application {
         }
         match self.model.connection() {
             ConnectionState::Connecting => {
-                format!("Connecting to Orbit at {}", self.orbit_socket.display())
+                format!(
+                    "Connecting to Orbit at {}",
+                    self.orbit_socket
+                        .as_ref()
+                        .expect("connecting Orbit has an attachment socket")
+                        .display()
+                )
             }
             ConnectionState::Attached if self.model.awaiting_current_frame() => {
                 "Attached to Orbit. Waiting for its current frame.".into()
@@ -1996,7 +2010,7 @@ fn retry_is_allowed(
 }
 
 fn visible_metadata_endpoints(
-    snapshot: &eon_workspace_protocol::v3::Snapshot,
+    snapshot: &eon_workspace_protocol::v4::Snapshot,
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
@@ -2418,7 +2432,7 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
-    use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
 
     #[test]
     fn terminal_scroll_keeps_fractional_input_and_elapsed_time_physics() {
@@ -2699,7 +2713,7 @@ mod tests {
                 Tab {
                     id: "t1".into(),
                     directory: b"/tmp/eon".to_vec(),
-                    selected_pane: "pane-1".into(),
+                    selected_pane: Some("pane-1".into()),
                     panes: vec![
                         Pane {
                             id: "pane-1".into(),
@@ -2718,7 +2732,7 @@ mod tests {
                 Tab {
                     id: "t2".into(),
                     directory: b"/tmp/nova".to_vec(),
-                    selected_pane: "pane-3".into(),
+                    selected_pane: Some("pane-3".into()),
                     panes: vec![Pane {
                         id: "pane-3".into(),
                         session: "session-3".into(),
@@ -2814,7 +2828,7 @@ mod tests {
                 "--background-opacity",
                 value,
                 "--background-blur",
-                "orbit.sock",
+                "--workspace",
                 "eon.sock",
             ]);
             let attributes = window_attributes(

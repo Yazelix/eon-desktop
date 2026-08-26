@@ -417,13 +417,13 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use crate::PaneMetadata;
-    use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot as WorkspaceSnapshot, Tab};
+    use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot as WorkspaceSnapshot, Tab};
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
         Tab {
             id: id.into(),
             directory: format!("/tmp/{id}").into_bytes(),
-            selected_pane: selected_pane.into(),
+            selected_pane: Some(selected_pane.into()),
             panes: panes
                 .iter()
                 .map(|id| Pane {
@@ -737,7 +737,7 @@ mod tests {
                     Tab {
                         id: "t1".into(),
                         directory: b"/tmp/eon".to_vec(),
-                        selected_pane: "p2".into(),
+                        selected_pane: Some("p2".into()),
                         panes: vec![
                             Pane {
                                 id: "p1".into(),
@@ -756,7 +756,7 @@ mod tests {
                     Tab {
                         id: "t2".into(),
                         directory: b"/tmp/nova".to_vec(),
-                        selected_pane: "p3".into(),
+                        selected_pane: Some("p3".into()),
                         panes: vec![Pane {
                             id: "p3".into(),
                             session: "session-3".into(),
@@ -821,7 +821,12 @@ mod tests {
         let workspace = WorkspaceScene::from_snapshot(
             &WorkspaceSnapshot {
                 active_tab: "t1".into(),
-                tabs: vec![workspace_tab("t1", &["p1"], "p1")],
+                tabs: vec![Tab {
+                    id: "t1".into(),
+                    directory: b"/tmp/t1".to_vec(),
+                    selected_pane: None,
+                    panes: Vec::new(),
+                }],
                 directory_picker: Some(DirectoryPicker {
                     tab: "t1".into(),
                     endpoint: b"/run/eon/picker.sock".to_vec(),

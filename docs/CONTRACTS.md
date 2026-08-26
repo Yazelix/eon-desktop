@@ -210,8 +210,9 @@ retains accepted user-visible chronology.
 
 - **Status:** Candidate
 - **Consumer:** One Venus surface controlled by an Eon workspace.
-- **Trigger:** Eon supplies topology or a workspace action changes tab, pane,
-  focus, liveness, endpoint, or metadata.
+- **Trigger:** Outside `VEN-C18` picker presentation, Eon supplies durable
+  topology or a workspace action changes tab, pane, focus, liveness, endpoint,
+  or metadata.
 - **Result:**
   - Venus materializes ordered horizontal tabs and every fitting header for the
     active tab around exactly one expanded pane. Each tab shows its numeric
@@ -230,7 +231,7 @@ retains accepted user-visible chronology.
     reinspection exposes accepted external workspace changes without native
     input.
   - Pointer input, Alt+H/L tab traversal, Alt+K/J pane traversal, Alt+M pane
-    creation, Ctrl+T tab creation, focused arrow traversal, and selected-terminal
+    creation, Ctrl+T tab requests, focused arrow traversal, and selected-terminal
     attachment retain their existing owners.
   - Hit testing and actions retain the exact `tN` identity. AccessKit names pair
     that identity with a bounded full launch path, so duplicate leaves remain
@@ -241,16 +242,16 @@ retains accepted user-visible chronology.
 - **Owner:** Venus workspace materialization, bounded metadata observation,
   clipping, and accessibility projection; Eon owns topology and Orbit owns
   terminal metadata and Session lifetime.
-- **Consumes:** Eon `EON-C10`, `EON-C17`, EONW v3, and
+- **Consumes:** Eon `EON-C10`, `EON-C17`, EONW v4, and
   `eon-workspace-protocol` 0.1.0 at
-  `96119f29ca2e3ec4ad19bbe272708b07d588429a`; Orbit metadata observation in
+  `aaafc9127c054e683abfceb3c8fcaae201a7a763`; Orbit metadata observation in
   ORBS v5 and `orbit-protocol` 0.1.0 at
   `69c402737799f03e615473956954a043647a4713`.
 - **Boundary:** Other Linux Wayland compositors remain outside the candidate
   proof.
 - **Proof:** `9b2a527d3581f40569f58e24130cc8f8f1222162`
   - **Environment:** x86_64 Linux deterministic candidate
-  - **Evidence:** Complete locked Rust checks; exact EONW v3 source pin; bounded
+  - **Evidence:** Original complete EONW v3 proof: locked Rust checks; bounded
     home, root, leaf, non-UTF-8, and overlong tab projection; stable action/hit
     identities; AccessKit identity/path parity; and the prior workspace base
     `ee3defea55c77f7acc4559606965d93d39bba8b5`
@@ -451,40 +452,50 @@ retains accepted user-visible chronology.
   - **Evidence:** Locked format/check/test/Clippy and exact live
     `--application-id eonova` grouping without Session duplication
 
-## VEN-C18 — Tab directory picker presentation
+## VEN-C18 — Picker-first tab directory presentation
 
 - **Status:** Candidate
-- **Consumer:** One person using a live full-Eon Venus workspace.
-- **Trigger:** The person presses Alt+Z, or EONW v3 publishes one directory
-  picker bound to the active tab.
-- **Result:** Venus sends one semantic `PickTabDirectory` action on the initial
-  shortcut press. Published picker state selects its endpoint as the only tab-
-  body terminal, keeps the tab bar visible, hides pane headers, and uses one
-  cell of Eon-background inset on every side when a usable terminal grid fits.
-  Picker input, IME, pointer routing, and AccessKit focus become terminal-owned
-  without overwriting the prior workspace focus; removing the state reattaches
-  the selected durable pane and restores that focus.
+- **Consumer:** One person starting or using a live full-Eon Venus workspace.
+- **Trigger:** Venus is launched with `--workspace EON_WORKSPACE_SOCKET` and
+  EONW v4 publishes one directory picker bound to the active tab, including a
+  pending tab with no panes and no selected pane, or the person presses Alt+Z
+  in a durable tab.
+- **Result:** The explicit option starts workspace mode with no Orbit endpoint
+  and establishes the EONW transport before any terminal attachment. The first
+  accepted snapshot selects its picker endpoint as the sole tab-body terminal
+  when present, including during picker-first startup. Venus sends one semantic
+  `PickTabDirectory` action on an Alt+Z press, keeps the tab bar visible, hides
+  pane headers, and uses one cell of Eon-background inset on every side when a
+  usable terminal grid fits. Picker input, IME, pointer routing, and AccessKit
+  focus become terminal-owned without overwriting the prior workspace focus;
+  removing picker state after Eon materializes the tab reattaches its selected
+  durable pane and restores that focus.
 - **Important failures:** Standalone Venus preserves raw Alt+Z. Repeats,
   duplicate invocation, gutter input, unavailable endpoints, and undersized
-  grids create no second picker, inferred state, invalid geometry, or hidden
-  workspace action. EONW rejects wrong-tab and aliased endpoints before Venus.
+  grids create no second picker, inferred pane or selection, invalid geometry,
+  eager attachment, or hidden workspace action. Missing, duplicate, mixed, or
+  obsolete two-positional workspace launch arguments fail before the window or
+  transport starts. EONW rejects invalid pending tabs, wrong-tab pickers, and
+  aliased endpoints before Venus.
 - **Owner:** Venus owns shortcut precedence and modal presentation. Eon owns
   picker creation, command, lifecycle, mutation, validation, and cleanup. Orbit
   owns the picker terminal Session and PTY.
-- **Consumes:** Eon `EON-C18`, EONW v3, and `eon-workspace-protocol` 0.1.0 at
-  `96119f29ca2e3ec4ad19bbe272708b07d588429a`; unchanged Orbit ORBS v10 at
+- **Consumes:** Eon `EON-C18`, EONW v4, and `eon-workspace-protocol` 0.1.0 at
+  `aaafc9127c054e683abfceb3c8fcaae201a7a763`; unchanged Orbit ORBS v10 at
   `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`.
 - **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
   simultaneous terminal composition, configurable geometry, arbitrary command,
-  second schema, Orbit change, Eon runtime producer, or additional platform.
+  application-ID/path inference, compatibility launch form, placeholder pane,
+  selection sentinel, Orbit change, Eon runtime producer, or additional
+  platform.
 - **Proof:** `df88b2867d50c59a316418471abd000da02940bc`
   - **Environment:** x86_64 Linux deterministic candidate
-  - **Evidence:** Complete locked Rust checks; exact EONW v3 pin; one ordered
+  - **Evidence:** Accepted EONW v3 base: complete locked Rust checks; one ordered
     Unix-worker transition from no picker through `PickTabDirectory` to the
     authoritative picker snapshot; focused endpoint, normal and undersized scene
     geometry and hit testing, effective focus, metadata, and AccessKit checks.
-- **Open proof:** Exact Eon runtime production and installed native Wayland and
-  AT-SPI dogfood remain blocked until Eon implements the picker producer.
+- **Open proof:** Accepted EONW v4 source proof, Eon runtime production, and
+  installed native Wayland and AT-SPI picker-first dogfood remain pending.
 
 ## Rules
 

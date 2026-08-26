@@ -1,5 +1,5 @@
 use crate::render::CellMetrics;
-use eon_workspace_protocol::v3::Snapshot;
+use eon_workspace_protocol::v4::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
@@ -265,37 +265,14 @@ impl WorkspaceScene {
             width,
             height: (height - tab_height).max(0.0),
         };
-        let pane_height = (metrics.height * 1.5)
-            .round()
-            .max(1.0)
-            .min(pane_viewport.height);
         let active_tab = snapshot
             .tabs
             .iter()
             .position(|tab| tab.id == snapshot.active_tab)
             .expect("EONW validates the active tab");
-        let active = &snapshot.tabs[active_tab];
-        let selected_pane = active
-            .panes
-            .iter()
-            .position(|pane| pane.id == active.selected_pane)
-            .expect("EONW validates the selected pane");
-        let maximum_terminal_height = (pane_viewport.height - pane_height).max(0.0);
-        let minimum_terminal_height =
-            (metrics.padding * 2.0 + metrics.height).min(maximum_terminal_height);
-        let pane_headers_height = active.panes.len() as f32 * pane_height;
-        let terminal_height = (pane_viewport.height - pane_headers_height)
-            .clamp(minimum_terminal_height, maximum_terminal_height);
         let tab_scroll_limit = (snapshot.tabs.len() as f32 * tab_width - width).max(0.0);
-        let pane_scroll_limit =
-            (pane_headers_height + terminal_height - pane_viewport.height).max(0.0);
         let tab_scroll = if tab_scroll.is_finite() {
             tab_scroll.clamp(0.0, tab_scroll_limit)
-        } else {
-            0.0
-        };
-        let pane_scroll = if pane_scroll.is_finite() {
-            pane_scroll.clamp(0.0, pane_scroll_limit)
         } else {
             0.0
         };
@@ -321,6 +298,70 @@ impl WorkspaceScene {
                 }
             })
             .collect();
+        let active_tab_scroll = (active_tab as f32 * tab_width
+            - (width - tab_width).max(0.0) / 2.0)
+            .clamp(0.0, tab_scroll_limit);
+        if snapshot.directory_picker.is_some() {
+            let horizontal_inset =
+                if pane_viewport.width >= metrics.padding * 2.0 + metrics.width * 3.0 {
+                    metrics.width
+                } else {
+                    0.0
+                };
+            let vertical_inset =
+                if pane_viewport.height >= metrics.padding * 2.0 + metrics.height * 3.0 {
+                    metrics.height
+                } else {
+                    0.0
+                };
+            return Self {
+                tabs,
+                panes: Vec::new(),
+                terminal: SceneRect {
+                    left: horizontal_inset,
+                    top: pane_viewport.top + vertical_inset,
+                    width: (pane_viewport.width - horizontal_inset * 2.0).max(0.0),
+                    height: (pane_viewport.height - vertical_inset * 2.0).max(0.0),
+                },
+                tab_viewport,
+                pane_viewport,
+                tab_scroll,
+                pane_scroll: 0.0,
+                tab_scroll_limit,
+                pane_scroll_limit: 0.0,
+                active_tab_scroll,
+                selected_pane_scroll: 0.0,
+                directory_picker: true,
+            };
+        }
+
+        let active = &snapshot.tabs[active_tab];
+        let pane_height = (metrics.height * 1.5)
+            .round()
+            .max(1.0)
+            .min(pane_viewport.height);
+        let selected = active
+            .selected_pane
+            .as_ref()
+            .expect("EONW validates the selected pane");
+        let selected_pane = active
+            .panes
+            .iter()
+            .position(|pane| pane.id == *selected)
+            .expect("EONW validates the selected pane");
+        let maximum_terminal_height = (pane_viewport.height - pane_height).max(0.0);
+        let minimum_terminal_height =
+            (metrics.padding * 2.0 + metrics.height).min(maximum_terminal_height);
+        let pane_headers_height = active.panes.len() as f32 * pane_height;
+        let terminal_height = (pane_viewport.height - pane_headers_height)
+            .clamp(minimum_terminal_height, maximum_terminal_height);
+        let pane_scroll_limit =
+            (pane_headers_height + terminal_height - pane_viewport.height).max(0.0);
+        let pane_scroll = if pane_scroll.is_finite() {
+            pane_scroll.clamp(0.0, pane_scroll_limit)
+        } else {
+            0.0
+        };
         let panes = active
             .panes
             .iter()
@@ -358,7 +399,7 @@ impl WorkspaceScene {
             height: terminal_height,
         };
 
-        let mut scene = Self {
+        Self {
             tabs,
             panes,
             terminal,
@@ -368,37 +409,11 @@ impl WorkspaceScene {
             pane_scroll,
             tab_scroll_limit,
             pane_scroll_limit,
-            active_tab_scroll: (active_tab as f32 * tab_width - (width - tab_width).max(0.0) / 2.0)
-                .clamp(0.0, tab_scroll_limit),
+            active_tab_scroll,
             selected_pane_scroll: (selected_pane as f32 * pane_height)
                 .clamp(0.0, pane_scroll_limit),
-            directory_picker: snapshot.directory_picker.is_some(),
-        };
-        if scene.directory_picker {
-            let horizontal_inset =
-                if scene.pane_viewport.width >= metrics.padding * 2.0 + metrics.width * 3.0 {
-                    metrics.width
-                } else {
-                    0.0
-                };
-            let vertical_inset =
-                if scene.pane_viewport.height >= metrics.padding * 2.0 + metrics.height * 3.0 {
-                    metrics.height
-                } else {
-                    0.0
-                };
-            scene.panes.clear();
-            scene.terminal = SceneRect {
-                left: horizontal_inset,
-                top: scene.pane_viewport.top + vertical_inset,
-                width: (scene.pane_viewport.width - horizontal_inset * 2.0).max(0.0),
-                height: (scene.pane_viewport.height - vertical_inset * 2.0).max(0.0),
-            };
-            scene.pane_scroll = 0.0;
-            scene.pane_scroll_limit = 0.0;
-            scene.selected_pane_scroll = 0.0;
+            directory_picker: false,
         }
-        scene
     }
 
     #[must_use]
