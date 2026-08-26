@@ -164,7 +164,7 @@ Within Eon's local-only product boundary, the projection treats a `file://`
 authority as transport decoration and displays only the absolute path. Remote
 working-directory semantics and percent decoding remain outside the contract.
 
-Exact EONW v2 protocol source `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`
+Exact EONW v3 protocol source `96119f29ca2e3ec4ad19bbe272708b07d588429a`
 is authoritative for active-tab visibility, tab launch directory, pane liveness,
 endpoint identity, and selection. Venus therefore starts no hidden or offline
 observer, retires obsolete endpoints directly from each accepted snapshot, and
@@ -213,8 +213,9 @@ primary-selection, search, and raw-display clipboard ownership.
 
 ## Required for native Eon workspace materialization
 
-`ven-c87` consumes `EON-C10`, `EON-C17`, and dependency-free EONW v2 from exact
-Eon source `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`; prior workspace proof
+`ven-c87` and `ven-present-tab-directory-picker-a6v` consume `EON-C10`,
+`EON-C17`, `EON-C18`, and dependency-free EONW v3 from exact Eon source
+`96119f29ca2e3ec4ad19bbe272708b07d588429a`; prior workspace proof
 documentation is recorded at `93c3c723e5da95c92882571b2904d4c9a4b9f2ff`.
 The owner package supplies complete
 ordered snapshots, stable tab, pane, and Session identities, authoritative raw
@@ -237,6 +238,16 @@ Venus reuses no Nova source, Zellij configuration, plugin, or pane ownership.
 Exact winit, wgpu, glyphon, and AccessKit versions already selected above own the
 native event, clipping, drawing, tab semantics, expanded state, and accessibility
 action mechanisms used by the workspace projection.
+
+The v3 picker state contributes only an active-tab identity and one validated
+endpoint. Venus reuses its single terminal attachment, scene, renderer, input,
+and AccessKit owners; one physical Alt+Z maps to the semantic action. Nova
+`f1beb34fe6060cfa2c0201d7f8095f6ef707f467`, Zellij
+`910339e219b17f4e2ffd4a2cb6e35cccc7246493`, and Kitty
+`54416498c89e1d07e5079c49d15470dd0d947ce7` remain comparison-only for the
+accepted shortcut, inset, and terminal-backed lifecycle. Venus reuses no source
+and rejects a native picker, inferred modal state, simultaneous terminals, and
+a generic popup or modal API.
 
 ## Required for pixel and kinetic retained-history scrolling
 

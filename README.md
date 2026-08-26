@@ -14,7 +14,9 @@ two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
 directory. Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
-only the selected endpoint receives presentation and input. It
+only the selected endpoint receives presentation and input. When Eon publishes
+one tab-bound directory-picker endpoint, Venus keeps the tab bar visible and
+replaces the tab body with that terminal inside a one-cell inset. It
 automatically recovers that attachment after retryable local socket loss, detaches
 without ending any Session, and does not own a PTY, terminal emulator, or
 workspace topology.
@@ -27,10 +29,10 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v2 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`. Eon alone owns workspace order,
-selection, identities, tab launch directories, actions, and pane-to-Session
-mappings. Venus consumes
+Venus consumes EONW v3 through `eon-workspace-protocol` 0.1.0 at exact Eon source
+`96119f29ca2e3ec4ad19bbe272708b07d588429a`. Eon alone owns workspace order,
+selection, identities, tab launch directories, directory-picker lifecycle,
+actions, and pane-to-Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
 `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -154,8 +156,10 @@ workspace changes from another client appear without a click or restart.
 Recovery continues only while that exact selected pane remains live; endpoint
 replacement or authoritative offline state cancels obsolete retry state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
-Alt+M creates a pane, and Ctrl+T creates a tab. Press F6 to cycle terminal, tab,
-and pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
+Alt+M creates a pane, Ctrl+T creates a tab, and Alt+Z requests Eon's directory
+picker. While the picker is active, its terminal receives input and the prior
+workspace focus is restored when it closes. Press F6 to cycle terminal, tab, and
+pane keyboard focus; Left/Right on tabs, Up/Down on panes, and Escape remain
 available. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
 directory while hit testing and actions retain `tN`; accessibility pairs `tN`
 with a bounded full path. Pane headers show pane identity, two spaces, then the
@@ -220,11 +224,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 230 |
-| Contracts and references | 862 |
-| Crate decisions | 164 |
-| Changelog | 138 |
-| Rust source, including unit tests | 12,425 |
-| Rust integration tests | 740 |
+| README | 234 |
+| Contracts and references | 907 |
+| Crate decisions | 165 |
+| Changelog | 142 |
+| Rust source, including unit tests | 12,656 |
+| Rust integration tests | 782 |
 | Cargo manifest | 23 |
-| **Total** | **14,998** |
+| **Total** | **15,325** |

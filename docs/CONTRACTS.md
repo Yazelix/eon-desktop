@@ -217,7 +217,7 @@ retains accepted user-visible chronology.
     active tab around exactly one expanded pane. Each tab shows its numeric
     `tN` prefix plus the leaf, `~`, or `/` derived from Eon's authoritative
     launch directory.
-  - Every visible live endpoint has one bounded read-only metadata observer.
+  - Every visible live pane endpoint has one bounded read-only metadata observer.
   - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
     and one compact working-directory label.
   - Home displays the packaged home marker; descendants use `~/`; paths outside
@@ -241,16 +241,16 @@ retains accepted user-visible chronology.
 - **Owner:** Venus workspace materialization, bounded metadata observation,
   clipping, and accessibility projection; Eon owns topology and Orbit owns
   terminal metadata and Session lifetime.
-- **Consumes:** Eon `EON-C10`, `EON-C17`, EONW v2, and
+- **Consumes:** Eon `EON-C10`, `EON-C17`, `EON-C18`, EONW v3, and
   `eon-workspace-protocol` 0.1.0 at
-  `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`; Orbit metadata observation in
+  `96119f29ca2e3ec4ad19bbe272708b07d588429a`; Orbit metadata observation in
   ORBS v5 and `orbit-protocol` 0.1.0 at
   `69c402737799f03e615473956954a043647a4713`.
 - **Boundary:** Other Linux Wayland compositors remain outside the candidate
   proof.
-- **Proof:** `19d7d28a2aba09c0afe3173d25bbb76ec3edce49`
+- **Proof:** `9b2a527d3581f40569f58e24130cc8f8f1222162`
   - **Environment:** x86_64 Linux deterministic candidate
-  - **Evidence:** Complete locked Rust checks; exact EONW v2 source pin; bounded
+  - **Evidence:** Complete locked Rust checks; exact EONW v3 source pin; bounded
     home, root, leaf, non-UTF-8, and overlong tab projection; stable action/hit
     identities; AccessKit identity/path parity; and the prior workspace base
     `ee3defea55c77f7acc4559606965d93d39bba8b5`
@@ -314,8 +314,8 @@ retains accepted user-visible chronology.
   presentation.
 - **Owner:** Venus launch policy and renderer surface composition.
 - **Consumes:** Exact winit 0.30.13, wgpu 30.0.0, glyphon 0.12.0, ORBS v4 at
-  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`, and EONW v2 at
-  `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8`.
+  `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`, and EONW v3 at
+  `96119f29ca2e3ec4ad19bbe272708b07d588429a`.
 - **Boundary:** Broader Linux compositor proof remains open.
 - **Proof:** `74ab5a0b661210f0afec94086f5358fe50b01f05`
   - **Environment:** x86_64 Linux deterministic checks with retained COSMIC
@@ -395,7 +395,7 @@ retains accepted user-visible chronology.
 - **Consumes:** Exact patched winit 0.30.13 at
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, backporting upstream
   `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`; unchanged `VEN-C11`, ORBS v4,
-  and EONW v2.
+  and EONW v3.
 - **Boundary:** Stable crates.io winit lacks the mechanism; non-COSMIC Linux
   compositors remain unproved; no API reports capability or compositor
   acceptance or controls strength.
@@ -420,7 +420,7 @@ retains accepted user-visible chronology.
 - **Owner:** Venus native host and dependency feature selection.
 - **Consumes:** User-approved `EON-C7`; exact winit 0.30.13 at
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; wgpu 30.0.0;
-  wl-clipboard-rs 0.9.3; unchanged ORBS v4 and EONW v2.
+  wl-clipboard-rs 0.9.3; unchanged ORBS v4 and EONW v3.
 - **Boundary:** X11, Xwayland, macOS, and other native platforms are unsupported.
 - **Proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
   - **Environment:** x86_64 Linux native Wayland
@@ -450,6 +450,40 @@ retains accepted user-visible chronology.
   - **Environment:** x86_64 Linux Wayland with installed Eonova acceptance
   - **Evidence:** Locked format/check/test/Clippy and exact live
     `--application-id eonova` grouping without Session duplication
+
+## VEN-C18 — Tab directory picker presentation
+
+- **Status:** Candidate
+- **Consumer:** One person using a live full-Eon Venus workspace.
+- **Trigger:** The person presses Alt+Z, or EONW v3 publishes one directory
+  picker bound to the active tab.
+- **Result:** Venus sends one semantic `PickTabDirectory` action on the initial
+  shortcut press. Published picker state selects its endpoint as the only tab-
+  body terminal, keeps the tab bar visible, hides pane headers, and uses one
+  cell of Eon-background inset on every side when a usable terminal grid fits.
+  Picker input, IME, pointer routing, and AccessKit focus become terminal-owned
+  without overwriting the prior workspace focus; removing the state reattaches
+  the selected durable pane and restores that focus.
+- **Important failures:** Standalone Venus preserves raw Alt+Z. Repeats,
+  duplicate invocation, gutter input, unavailable endpoints, and undersized
+  grids create no second picker, inferred state, invalid geometry, or hidden
+  workspace action. EONW rejects wrong-tab and aliased endpoints before Venus.
+- **Owner:** Venus owns shortcut precedence and modal presentation. Eon owns
+  picker creation, command, lifecycle, mutation, validation, and cleanup. Orbit
+  owns the picker terminal Session and PTY.
+- **Consumes:** Eon `EON-C18`, EONW v3, and `eon-workspace-protocol` 0.1.0 at
+  `96119f29ca2e3ec4ad19bbe272708b07d588429a`; unchanged Orbit ORBS v10 at
+  `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`.
+- **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
+  simultaneous terminal composition, configurable geometry, arbitrary command,
+  second schema, Orbit change, Eon runtime producer, or additional platform.
+- **Proof:** `9b2a527d3581f40569f58e24130cc8f8f1222162`
+  - **Environment:** x86_64 Linux deterministic candidate
+  - **Evidence:** Complete locked Rust checks; exact EONW v3 pin; focused action,
+    endpoint, normal and undersized geometry, effective focus, metadata,
+    pointer, renderer, and AccessKit coverage.
+- **Open proof:** Exact Eon runtime production and installed native Wayland and
+  AT-SPI dogfood remain blocked until Eon implements the picker producer.
 
 ## Rules
 

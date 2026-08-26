@@ -10,6 +10,8 @@ without a local protocol mirror. `ven-adopt-orbs-v4-without-interaction-expansio
 advances the same canonical session consumer to ORBS v4.
 `ven-render-live-pane-title-cwd-8c7` advances it to ORBS v5 for read-only pane
 metadata without another schema or runtime dependency.
+`ven-present-tab-directory-picker-a6v` advances the exact Eon consumer to EONW
+v3 for one semantic picker action and one authoritative modal endpoint.
 `ven-venus-kinetic-touchpad-scroll-5sl` advances it to ORBS v7 for bounded
 multi-row preview windows and compositor-paced fractional scrolling.
 `ven-venus-native-selection-gestures-d3x` advances it to ORBS v10 for
@@ -21,7 +23,7 @@ already-locked Wayland data-control owner.
 
 | Boundary | Selected shape | Status | Owner consequence |
 |---|---|---|---|
-| Eon workspace protocol consumer | Exact Git revision `7bb50873ae27e09dfebd8a6ca2f8075bac07afe8` of the dependency-free, publish-false `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v2 values, validation, topology, tab launch directories, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. The user authorized Apache-2.0, matching Nova, if Eon needs a public license; the exact Eon revision has no durable license record, so public distribution remains blocked until Eon records it. |
+| Eon workspace protocol consumer | Exact Git revision `96119f29ca2e3ec4ad19bbe272708b07d588429a` of the dependency-free, publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v3 values, validation, topology, tab launch directories, picker state, selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. |
 | Orbit protocol consumer | Exact Git revision `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v10, ORBF v1, semantic values, history, terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied text, terminal clipboard effects, read-only pane metadata, bounds, revision reduction, and the accepted lifecycle contracts. Venus keeps no mirror terminal schema or viewport authority; its native host supplies events and applies clipboard effects. |
 | Native host | winit 0.30.13 with Wayland, dynamic Wayland loading, and raw-window-handle 0.6 only, patched to exact `chiyuki0325/winit-0.30` commit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` | Active on native Linux Wayland | The host owns window and event-loop lifecycle, native input and IME collection, compositor blur protocol selection, resize, surface recovery, socket scheduling, and bounded client failure UX. X11 and Xwayland compatibility are unsupported. Replace the patch with the first accepted stable winit containing upstream `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. |
 | GPU and text | wgpu 30.0.0 with Vulkan and WGSL only; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active on Linux/Vulkan | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
@@ -127,8 +129,7 @@ clipboard API rather than carrying a native backend across the boundary.
 ## Eon workspace protocol decision
 
 The exact Eon owner package adds one direct lock entry and no transitive, native,
-or build dependency. Its 496 production lines replace no acceptable Venus code:
-copying them would duplicate every EONW tag, bound, identity rule, and snapshot
+or build dependency. Copying it would duplicate every EONW tag, bound, identity rule, and snapshot
 invariant. Parsing Eon CLI output, shelling out, and consuming the older private
 control format remain rejected. Replacement is one source-pin edit if EONW is
 later published unchanged; an adapter or local mirror is not a replacement path.
