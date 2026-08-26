@@ -481,8 +481,8 @@ retains accepted user-visible chronology.
   - **Environment:** x86_64 Linux deterministic candidate
   - **Evidence:** Complete locked Rust checks; exact EONW v3 pin; one ordered
     Unix-worker transition from no picker through `PickTabDirectory` to the
-    authoritative picker snapshot; focused endpoint, normal and undersized
-    geometry, effective focus, metadata, pointer, renderer, and AccessKit coverage.
+    authoritative picker snapshot; focused endpoint, normal and undersized scene
+    geometry and hit testing, effective focus, metadata, and AccessKit checks.
 - **Open proof:** Exact Eon runtime production and installed native Wayland and
   AT-SPI dogfood remain blocked until Eon implements the picker producer.
 
