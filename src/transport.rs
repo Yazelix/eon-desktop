@@ -698,7 +698,7 @@ fn protocol_loss(error: session::Error) -> TransportEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v3::{Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot, Tab};
     use orbit_protocol::{
         Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         session::{FocusEvent, Metadata},
@@ -1124,10 +1124,15 @@ mod tests {
     }
 
     #[test]
-    fn workspace_worker_sends_exact_pointer_and_directional_actions() {
+    fn workspace_worker_carries_exact_actions_and_picker_snapshot() {
         let socket = TestSocket::new();
         let listener = UnixListener::bind(&socket.path).unwrap();
-        let expected = WorkspaceResponse::Snapshot(workspace_snapshot());
+        let mut snapshot = workspace_snapshot();
+        snapshot.directory_picker = Some(DirectoryPicker {
+            tab: "t1".into(),
+            endpoint: b"/run/eon/picker.sock".to_vec(),
+        });
+        let expected = WorkspaceResponse::Snapshot(snapshot);
         let encoded = workspace::encode_response(&expected).unwrap();
         let server = thread::spawn(move || {
             for expected_action in std::iter::once(WorkspaceAction::Inspect).chain([
@@ -1136,6 +1141,7 @@ mod tests {
                 WorkspaceAction::Focus(workspace::Direction::Right),
                 WorkspaceAction::Focus(workspace::Direction::Up),
                 WorkspaceAction::Focus(workspace::Direction::Down),
+                WorkspaceAction::PickTabDirectory,
             ]) {
                 let (mut stream, action) = accept_workspace_action(&listener);
                 assert_eq!(action, expected_action);
@@ -1162,6 +1168,7 @@ mod tests {
             WorkspaceAction::Focus(workspace::Direction::Right),
             WorkspaceAction::Focus(workspace::Direction::Up),
             WorkspaceAction::Focus(workspace::Direction::Down),
+            WorkspaceAction::PickTabDirectory,
         ] {
             transport.send(action).unwrap();
             receiver.recv_timeout(Duration::from_secs(5)).unwrap();
