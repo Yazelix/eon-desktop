@@ -157,17 +157,26 @@ impl Snapshot {
                 if let Some(bounds) = tab.rect.intersection(workspace.tab_viewport) {
                     node.set_bounds(rect(bounds));
                 }
-                node.add_action(Action::Click);
-                node.add_action(Action::Focus);
+                if !workspace.directory_picker() {
+                    node.add_action(Action::Click);
+                    node.add_action(Action::Focus);
+                }
                 nodes.push((self.tab_ids[tab.id.as_str()], node));
             }
 
             let mut panel = Node::new(Role::TabPanel);
-            panel.set_label("Active tab panes");
+            panel.set_label(if workspace.directory_picker() {
+                "Directory picker"
+            } else {
+                "Active tab panes"
+            });
             panel.set_orientation(Orientation::Vertical);
             panel.set_bounds(rect(workspace.pane_viewport));
             panel.set_clips_children();
             let mut children = Vec::with_capacity(workspace.panes.len() + 1);
+            if workspace.directory_picker() {
+                children.push(CONTENT);
+            }
             for pane in &workspace.panes {
                 children.push(self.pane_ids[pane.id.as_str()]);
                 if pane.selected {
@@ -220,6 +229,9 @@ impl Snapshot {
             tree: Some(Tree::new(WINDOW)),
             tree_id: TreeId::ROOT,
             focus: self.workspace.as_ref().map_or(CONTENT, |workspace| {
+                if workspace.directory_picker() {
+                    return CONTENT;
+                }
                 match self.workspace_focus {
                     WorkspaceFocus::Terminal => CONTENT,
                     WorkspaceFocus::Tabs => workspace
@@ -240,9 +252,12 @@ impl Snapshot {
     }
 
     fn workspace_target(&self, target: NodeId) -> Option<AccessibilityTarget> {
-        self.workspace.as_ref()?;
+        let workspace = self.workspace.as_ref()?;
         if target == CONTENT {
             return Some(AccessibilityTarget::Terminal);
+        }
+        if workspace.directory_picker() {
+            return None;
         }
         if let Some((id, _)) = self.tab_ids.iter().find(|(_, node)| **node == target) {
             return Some(AccessibilityTarget::Tab(id.clone()));
@@ -402,7 +417,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use crate::PaneMetadata;
-    use eon_workspace_protocol::v2::{Pane, Snapshot as WorkspaceSnapshot, Tab};
+    use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot as WorkspaceSnapshot, Tab};
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
         Tab {
@@ -426,6 +441,7 @@ mod tests {
             &WorkspaceSnapshot {
                 active_tab: active_tab.into(),
                 tabs,
+                directory_picker: None,
             },
             PhysicalSize::new(800, 600),
             CellMetrics::for_scale(1.0),
@@ -620,6 +636,7 @@ mod tests {
                 ),
                 workspace_tab("t2", &["pane-7"], "pane-7"),
             ],
+            directory_picker: None,
         };
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
@@ -748,6 +765,7 @@ mod tests {
                         }],
                     },
                 ],
+                directory_picker: None,
             },
             PhysicalSize::new(800, 600),
             CellMetrics::for_scale(1.0),
@@ -795,6 +813,51 @@ mod tests {
         assert_eq!(node(&update, pane_2).is_expanded(), Some(true));
         assert_eq!(node(&update, CONTENT).bounds(), Some(terminal_bounds));
         assert_eq!(update.focus, pane_2);
+    }
+
+    #[test]
+    fn directory_picker_is_the_only_actionable_tab_body_content() {
+        let size = PhysicalSize::new(800, 600);
+        let workspace = WorkspaceScene::from_snapshot(
+            &WorkspaceSnapshot {
+                active_tab: "t1".into(),
+                tabs: vec![workspace_tab("t1", &["p1"], "p1")],
+                directory_picker: Some(DirectoryPicker {
+                    tab: "t1".into(),
+                    endpoint: b"/run/eon/picker.sock".to_vec(),
+                }),
+            },
+            size,
+            CellMetrics::for_scale(1.0),
+            0.0,
+            0.0,
+        );
+        let mut snapshot = Snapshot {
+            content: AccessibleText {
+                rows: vec![AccessibleRow {
+                    value: "picker".into(),
+                    character_lengths: vec![1; 6],
+                }],
+                selection: None,
+            },
+            columns: Some(6),
+            workspace_focus: WorkspaceFocus::Panes,
+            ..Snapshot::new(size)
+        };
+        snapshot.set_workspace(Some(&workspace));
+        let tab = snapshot.tab_ids["t1"];
+        let update = snapshot.tree();
+
+        assert_eq!(node(&update, PANE_PANEL).label(), Some("Directory picker"));
+        assert_eq!(node(&update, PANE_PANEL).children(), &[CONTENT]);
+        assert_eq!(update.focus, CONTENT);
+        assert!(!node(&update, tab).supports_action(Action::Click));
+        assert!(!node(&update, tab).supports_action(Action::Focus));
+        assert_eq!(snapshot.workspace_target(tab), None);
+        assert_eq!(
+            snapshot.workspace_target(CONTENT),
+            Some(AccessibilityTarget::Terminal)
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::{Result, launch::LaunchArguments};
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::v2::{Action as WorkspaceAction, Direction as WorkspaceDirection};
+use eon_workspace_protocol::v3::{Action as WorkspaceAction, Direction as WorkspaceDirection};
 use orbit_protocol::{
     MAX_CELLS,
     session::{
@@ -718,7 +718,7 @@ impl Application {
     }
 
     fn set_workspace_focus(&mut self, focus: WorkspaceFocus) {
-        if self.workspace_focus == focus {
+        if self.workspace_model.directory_picker_active() || self.workspace_focus == focus {
             return;
         }
         let was_focused = terminal_focused(self.window_focused, self.workspace_focus);
@@ -791,9 +791,10 @@ impl Application {
     }
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
+        let picker_was_active = self.workspace_model.directory_picker_active();
         let received_snapshot = matches!(
             &event,
-            WorkspaceEvent::Response(eon_workspace_protocol::v2::Response::Snapshot(_))
+            WorkspaceEvent::Response(eon_workspace_protocol::v3::Response::Snapshot(_))
         );
         let unavailable = matches!(&event, WorkspaceEvent::Unavailable(_));
         let (view_changed, snapshot_changed) = match event {
@@ -810,6 +811,21 @@ impl Application {
             self.cancel_terminal_scroll();
             self.reveal_workspace_selection();
             self.presentation.invalidate();
+            let picker_active = self.workspace_model.directory_picker_active();
+            let was_focused = terminal_focused(
+                self.window_focused,
+                effective_workspace_focus(picker_was_active, self.workspace_focus),
+            );
+            let is_focused = terminal_focused(
+                self.window_focused,
+                effective_workspace_focus(picker_active, self.workspace_focus),
+            );
+            if was_focused != is_focused {
+                let message = self.input.terminal_focus(is_focused);
+                if was_focused {
+                    self.send(message);
+                }
+            }
             if let Some((endpoint, live)) = self.workspace_model.active_attachment()
                 && (self.active_endpoint.as_deref() != Some(endpoint)
                     || self.active_endpoint_live != live)
@@ -905,16 +921,17 @@ impl Application {
     }
 
     fn handle_workspace_key(&mut self, event: &winit::event::KeyEvent) -> bool {
-        if self.workspace_model.snapshot().is_none() {
+        let Some(snapshot) = self.workspace_model.snapshot() else {
             return false;
-        }
+        };
+        let picker_active = snapshot.directory_picker.is_some();
         let code = match event.physical_key {
             PhysicalKey::Code(code) => code,
             PhysicalKey::Unidentified(_) => {
-                return self.workspace_focus != WorkspaceFocus::Terminal;
+                return !picker_active && self.workspace_focus != WorkspaceFocus::Terminal;
             }
         };
-        if code == KeyCode::F6 {
+        if code == KeyCode::F6 && !picker_active {
             if event.state == ElementState::Pressed && !event.repeat {
                 let focus = match self.workspace_focus {
                     WorkspaceFocus::Terminal => WorkspaceFocus::Tabs,
@@ -926,22 +943,28 @@ impl Application {
             return true;
         }
         let shortcut = workspace_shortcut(code, self.input.modifiers());
-        let returns_to_terminal =
-            self.workspace_focus != WorkspaceFocus::Terminal && code == KeyCode::Escape;
+        let returns_to_terminal = !picker_active
+            && self.workspace_focus != WorkspaceFocus::Terminal
+            && code == KeyCode::Escape;
         if self.input.consumes_workspace_shortcut(
             code,
             event.state,
             event.repeat,
-            shortcut.is_some() || returns_to_terminal,
+            shortcut.as_ref().is_some_and(|action| {
+                !picker_active || matches!(action, WorkspaceAction::PickTabDirectory)
+            }) || returns_to_terminal,
         ) {
             if returns_to_terminal && event.state == ElementState::Pressed {
                 self.set_workspace_focus(WorkspaceFocus::Terminal);
-            } else if let Some(action) = shortcut
-                .filter(|action| sends_workspace_shortcut(action, event.state, event.repeat))
-            {
+            } else if let Some(action) = shortcut.filter(|action| {
+                sends_workspace_shortcut(action, picker_active, event.state, event.repeat)
+            }) {
                 self.send_workspace(action);
             }
             return true;
+        }
+        if picker_active {
+            return false;
         }
         if self.workspace_focus == WorkspaceFocus::Terminal {
             return false;
@@ -1142,9 +1165,13 @@ impl Application {
     fn refresh_client_view(&mut self) {
         let status = self.status();
         let workspace = self.workspace_scene();
+        let workspace_focus = effective_workspace_focus(
+            self.workspace_model.directory_picker_active(),
+            self.workspace_focus,
+        );
         let ime_allowed = ime_allowed(
             self.window_focused,
-            self.workspace_focus,
+            workspace_focus,
             self.model.is_attached(),
         );
         let Some(state) = &mut self.window else {
@@ -1174,7 +1201,7 @@ impl Application {
             &mut state.adapter,
             self.model.scene(),
             workspace.as_ref(),
-            self.workspace_focus,
+            workspace_focus,
             &status,
             state.renderer.size(),
             state.renderer.metrics(),
@@ -1438,6 +1465,10 @@ impl Application {
         };
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
+        let workspace_focus = effective_workspace_focus(
+            self.workspace_model.directory_picker_active(),
+            self.workspace_focus,
+        );
         let candidate = self.presentation_candidate(workspace.as_ref());
         let scroll_offset = self.window.as_ref().map_or(0.0, |state| {
             self.terminal_scroll.offset(
@@ -1455,7 +1486,7 @@ impl Application {
             self.model.scroll_preview(),
             scroll_offset,
             workspace.as_ref(),
-            self.workspace_focus,
+            workspace_focus,
             status,
             self.blink_visible,
             preedit,
@@ -1489,7 +1520,7 @@ impl Application {
                         &mut state.adapter,
                         self.model.scene(),
                         workspace.as_ref(),
-                        self.workspace_focus,
+                        workspace_focus,
                         notice,
                         state.renderer.size(),
                         state.renderer.metrics(),
@@ -1533,6 +1564,10 @@ impl ApplicationHandler<UserEvent> for Application {
         event: WindowEvent,
     ) {
         let workspace = self.workspace_scene();
+        let workspace_focus = effective_workspace_focus(
+            self.workspace_model.directory_picker_active(),
+            self.workspace_focus,
+        );
         let candidate = self.presentation_candidate(workspace.as_ref());
         let presentation_current = self.presentation.is_current(candidate);
         let presented_revision = self.presentation.current_revision(candidate);
@@ -1614,7 +1649,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.cancel_terminal_scroll();
                 let allowed = ime_allowed(
                     self.window_focused,
-                    self.workspace_focus,
+                    workspace_focus,
                     self.model.is_attached(),
                 );
                 if ime_reaches_terminal(allowed, &event)
@@ -1635,7 +1670,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 let message = self
                     .input
-                    .native_focus(focused, terminal_focused(focused, self.workspace_focus));
+                    .native_focus(focused, terminal_focused(focused, workspace_focus));
                 self.send(message);
                 self.refresh_client_view();
             }
@@ -1680,6 +1715,9 @@ impl ApplicationHandler<UserEvent> for Application {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
                 if presentation_current
+                    && !workspace
+                        .as_ref()
+                        .is_some_and(|scene| scene.directory_picker())
                     && button_state == ElementState::Pressed
                     && button == MouseButton::Left
                 {
@@ -1740,6 +1778,14 @@ impl ApplicationHandler<UserEvent> for Application {
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
+                if workspace
+                    .as_ref()
+                    .is_some_and(|scene| scene.directory_picker())
+                    && !matches!(hit, Some(WorkspaceHit::Terminal))
+                {
+                    self.terminal_scroll.cancel();
+                    return;
+                }
                 if !matches!(hit, Some(WorkspaceHit::Terminal)) && workspace.is_some() {
                     self.terminal_scroll.cancel();
                     state.renderer.reset_cursor_animation();
@@ -1950,10 +1996,13 @@ fn retry_is_allowed(
 }
 
 fn visible_metadata_endpoints(
-    snapshot: &eon_workspace_protocol::v2::Snapshot,
+    snapshot: &eon_workspace_protocol::v3::Snapshot,
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
+    if snapshot.directory_picker.is_some() {
+        return HashSet::new();
+    }
     let mut endpoints = snapshot
         .tabs
         .iter()
@@ -2102,6 +2151,17 @@ fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bo
     window_focused && workspace_focus == WorkspaceFocus::Terminal
 }
 
+fn effective_workspace_focus(
+    directory_picker: bool,
+    workspace_focus: WorkspaceFocus,
+) -> WorkspaceFocus {
+    if directory_picker {
+        WorkspaceFocus::Terminal
+    } else {
+        workspace_focus
+    }
+}
+
 fn accessibility_workspace_focus(
     target: AccessibilityTarget,
     queue: impl FnOnce(WorkspaceAction) -> bool,
@@ -2126,13 +2186,21 @@ fn workspace_shortcut(
         (Modifiers::ALT, KeyCode::KeyK) => Some(WorkspaceAction::Focus(WorkspaceDirection::Up)),
         (Modifiers::ALT, KeyCode::KeyJ) => Some(WorkspaceAction::Focus(WorkspaceDirection::Down)),
         (Modifiers::ALT, KeyCode::KeyM) => Some(WorkspaceAction::CreatePane),
+        (Modifiers::ALT, KeyCode::KeyZ) => Some(WorkspaceAction::PickTabDirectory),
         (Modifiers::CTRL, KeyCode::KeyT) => Some(WorkspaceAction::CreateTab),
         _ => None,
     }
 }
 
-fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repeat: bool) -> bool {
-    state == ElementState::Pressed && (!repeat || matches!(action, WorkspaceAction::Focus(_)))
+fn sends_workspace_shortcut(
+    action: &WorkspaceAction,
+    directory_picker: bool,
+    state: ElementState,
+    repeat: bool,
+) -> bool {
+    !directory_picker
+        && state == ElementState::Pressed
+        && (!repeat || matches!(action, WorkspaceAction::Focus(_)))
 }
 
 fn clipboard_notice<E: std::fmt::Display>(
@@ -2350,7 +2418,7 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
-    use eon_workspace_protocol::v2::{Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot, Tab};
 
     #[test]
     fn terminal_scroll_keeps_fractional_input_and_elapsed_time_physics() {
@@ -2659,6 +2727,7 @@ mod tests {
                     }],
                 },
             ],
+            directory_picker: None,
         };
 
         assert_eq!(
@@ -2668,6 +2737,18 @@ mod tests {
         assert_eq!(
             visible_metadata_endpoints(&snapshot, Some(b"one"), true),
             [b"one".to_vec()].into()
+        );
+
+        let picker = Snapshot {
+            directory_picker: Some(DirectoryPicker {
+                tab: "t1".into(),
+                endpoint: b"picker".to_vec(),
+            }),
+            ..snapshot
+        };
+        assert_eq!(
+            visible_metadata_endpoints(&picker, Some(b"picker"), true),
+            HashSet::new()
         );
     }
 
@@ -3088,6 +3169,11 @@ mod tests {
                 WorkspaceAction::Focus(WorkspaceDirection::Down),
             ),
             (KeyCode::KeyM, Modifiers::ALT, WorkspaceAction::CreatePane),
+            (
+                KeyCode::KeyZ,
+                Modifiers::ALT,
+                WorkspaceAction::PickTabDirectory,
+            ),
             (KeyCode::KeyT, Modifiers::CTRL, WorkspaceAction::CreateTab),
         ] {
             assert_eq!(workspace_shortcut(key, modifiers), Some(action));
@@ -3103,17 +3189,26 @@ mod tests {
     fn creation_shortcuts_ignore_repeat_while_traversal_may_repeat() {
         assert!(!sends_workspace_shortcut(
             &WorkspaceAction::CreateTab,
+            false,
             ElementState::Pressed,
             true
         ));
         assert!(sends_workspace_shortcut(
             &WorkspaceAction::Focus(WorkspaceDirection::Right),
+            false,
             ElementState::Pressed,
             true
         ));
         assert!(!sends_workspace_shortcut(
             &WorkspaceAction::CreatePane,
+            false,
             ElementState::Released,
+            false
+        ));
+        assert!(!sends_workspace_shortcut(
+            &WorkspaceAction::PickTabDirectory,
+            true,
+            ElementState::Pressed,
             false
         ));
     }
@@ -3160,6 +3255,14 @@ mod tests {
         assert!(!terminal_focused(false, WorkspaceFocus::Terminal));
         assert!(!terminal_focused(true, WorkspaceFocus::Tabs));
         assert!(!terminal_focused(true, WorkspaceFocus::Panes));
+        assert_eq!(
+            effective_workspace_focus(true, WorkspaceFocus::Panes),
+            WorkspaceFocus::Terminal
+        );
+        assert_eq!(
+            effective_workspace_focus(false, WorkspaceFocus::Panes),
+            WorkspaceFocus::Panes
+        );
     }
 
     #[test]

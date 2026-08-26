@@ -1,5 +1,5 @@
 use crate::scene::{DrawRow, Scene, ScenePreview};
-use eon_workspace_protocol::v2::{Response as WorkspaceResponse, Snapshot};
+use eon_workspace_protocol::v3::{Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{
     ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
@@ -101,6 +101,13 @@ impl WorkspaceModel {
         self.notice.as_deref()
     }
 
+    #[must_use]
+    pub fn directory_picker_active(&self) -> bool {
+        self.snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.directory_picker.is_some())
+    }
+
     /// Apply a response and report `(view changed, snapshot changed)`.
     pub fn apply(&mut self, response: WorkspaceResponse) -> (bool, bool) {
         match response {
@@ -128,6 +135,9 @@ impl WorkspaceModel {
     #[must_use]
     pub fn active_attachment(&self) -> Option<(&[u8], bool)> {
         let snapshot = self.snapshot.as_ref()?;
+        if let Some(picker) = &snapshot.directory_picker {
+            return Some((&picker.endpoint, true));
+        }
         let tab = snapshot
             .tabs
             .iter()
@@ -421,7 +431,7 @@ fn bounded(mut detail: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v2::{Failure, Pane, Tab};
+    use eon_workspace_protocol::v3::{DirectoryPicker, Failure, Pane, Tab};
 
     #[test]
     fn rejected_workspace_action_preserves_the_last_complete_snapshot() {
@@ -438,6 +448,7 @@ mod tests {
                     live: true,
                 }],
             }],
+            directory_picker: None,
         };
         let mut model = WorkspaceModel::default();
 
@@ -479,12 +490,23 @@ mod tests {
         assert!(model.mark_unavailable("Cannot connect to Eon"));
         assert!(!model.mark_unavailable("Cannot connect to Eon"));
 
-        let mut offline = snapshot;
+        let mut offline = snapshot.clone();
         offline.tabs[0].panes[0].live = false;
         model.apply(WorkspaceResponse::Snapshot(offline));
         assert_eq!(
             model.active_attachment(),
             Some((&b"/run/eon/orbit.sock"[..], false))
+        );
+
+        let mut picker = snapshot;
+        picker.directory_picker = Some(DirectoryPicker {
+            tab: "t1".into(),
+            endpoint: b"/run/eon/picker.sock".to_vec(),
+        });
+        model.apply(WorkspaceResponse::Snapshot(picker));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/picker.sock"[..], true))
         );
     }
 }

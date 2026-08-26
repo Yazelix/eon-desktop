@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v2::{
+use eon_workspace_protocol::v3::{
     self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
     Response as WorkspaceResponse,
 };
@@ -60,7 +60,7 @@ pub enum WorkspaceEvent {
     Unavailable(String),
 }
 
-/// Bounded semantic-action handle for EONW v2.
+/// Bounded semantic-action handle for EONW v3.
 pub struct WorkspaceTransport {
     actions: mpsc::SyncSender<WorkspaceAction>,
     events: Arc<WorkspaceEventQueue>,
@@ -698,7 +698,7 @@ fn protocol_loss(error: session::Error) -> TransportEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v2::{Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v3::{Pane, Snapshot, Tab};
     use orbit_protocol::{
         Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         session::{FocusEvent, Metadata},
@@ -1290,6 +1290,7 @@ mod tests {
                     live: true,
                 }],
             }],
+            directory_picker: None,
         }
     }
 

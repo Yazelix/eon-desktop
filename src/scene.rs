@@ -1,5 +1,5 @@
 use crate::render::CellMetrics;
-use eon_workspace_protocol::v2::Snapshot;
+use eon_workspace_protocol::v3::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
@@ -223,6 +223,7 @@ pub struct WorkspaceScene {
     pane_scroll_limit: f32,
     active_tab_scroll: f32,
     selected_pane_scroll: f32,
+    directory_picker: bool,
 }
 
 impl WorkspaceScene {
@@ -357,7 +358,7 @@ impl WorkspaceScene {
             height: terminal_height,
         };
 
-        Self {
+        let mut scene = Self {
             tabs,
             panes,
             terminal,
@@ -371,7 +372,33 @@ impl WorkspaceScene {
                 .clamp(0.0, tab_scroll_limit),
             selected_pane_scroll: (selected_pane as f32 * pane_height)
                 .clamp(0.0, pane_scroll_limit),
+            directory_picker: snapshot.directory_picker.is_some(),
+        };
+        if scene.directory_picker {
+            let horizontal_inset =
+                if scene.pane_viewport.width >= metrics.padding * 2.0 + metrics.width * 3.0 {
+                    metrics.width
+                } else {
+                    0.0
+                };
+            let vertical_inset =
+                if scene.pane_viewport.height >= metrics.padding * 2.0 + metrics.height * 3.0 {
+                    metrics.height
+                } else {
+                    0.0
+                };
+            scene.panes.clear();
+            scene.terminal = SceneRect {
+                left: horizontal_inset,
+                top: scene.pane_viewport.top + vertical_inset,
+                width: (scene.pane_viewport.width - horizontal_inset * 2.0).max(0.0),
+                height: (scene.pane_viewport.height - vertical_inset * 2.0).max(0.0),
+            };
+            scene.pane_scroll = 0.0;
+            scene.pane_scroll_limit = 0.0;
+            scene.selected_pane_scroll = 0.0;
         }
+        scene
     }
 
     #[must_use]
@@ -402,6 +429,11 @@ impl WorkspaceScene {
     #[must_use]
     pub(crate) fn visible_terminal(&self) -> Option<SceneRect> {
         self.terminal.intersection(self.pane_viewport)
+    }
+
+    #[must_use]
+    pub fn directory_picker(&self) -> bool {
+        self.directory_picker
     }
 
     #[must_use]

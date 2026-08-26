@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v2::{Pane, Snapshot, Tab};
+use eon_workspace_protocol::v3::{DirectoryPicker, Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
@@ -49,6 +49,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
                 }],
             },
         ],
+        directory_picker: None,
     };
     let size = PhysicalSize::new(800, 600);
     let metrics = CellMetrics::for_scale(1.0);
@@ -170,6 +171,47 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     );
     assert_eq!((tiny.tab_scroll(), tiny.pane_scroll()), (0.0, 0.0));
     assert!(tiny.terminal.bottom() <= 1.0);
+
+    let picker = WorkspaceScene::from_snapshot(
+        &Snapshot {
+            directory_picker: Some(DirectoryPicker {
+                tab: "t1".into(),
+                endpoint: b"/run/eon/picker.sock".to_vec(),
+            }),
+            ..snapshot.clone()
+        },
+        size,
+        metrics,
+        0.0,
+        0.0,
+    );
+    assert!(picker.panes.is_empty());
+    assert_eq!(picker.terminal.left, metrics.width);
+    assert_eq!(
+        picker.terminal.top,
+        picker.tab_viewport.bottom() + metrics.height
+    );
+    assert_eq!(picker.terminal.right(), size.width as f32 - metrics.width);
+    assert_eq!(
+        picker.terminal.bottom(),
+        size.height as f32 - metrics.height
+    );
+    assert_eq!(picker.hit_test(0.0, picker.terminal.top), None);
+
+    let tiny_picker = WorkspaceScene::from_snapshot(
+        &Snapshot {
+            directory_picker: Some(DirectoryPicker {
+                tab: "t1".into(),
+                endpoint: b"/run/eon/picker.sock".to_vec(),
+            }),
+            ..snapshot
+        },
+        PhysicalSize::new(1, 1),
+        metrics,
+        0.0,
+        0.0,
+    );
+    assert_eq!(tiny_picker.terminal, tiny_picker.pane_viewport);
 }
 
 #[test]

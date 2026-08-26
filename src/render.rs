@@ -1127,6 +1127,16 @@ impl Renderer {
                 workspace.tab_viewport,
             );
         }
+        if workspace.directory_picker() {
+            rectangles.push(
+                workspace.pane_viewport.left,
+                workspace.pane_viewport.top,
+                workspace.pane_viewport.width,
+                workspace.pane_viewport.height,
+                idle,
+                1.0,
+            );
+        }
         for pane in &workspace.panes {
             let Some(rect) = pane.rect.intersection(workspace.pane_viewport) else {
                 continue;
