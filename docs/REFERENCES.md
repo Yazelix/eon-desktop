@@ -81,19 +81,13 @@ remain separate license and user-approval gates.
   boundary. Venus rejects foot's PTY, terminal, configuration, renderer, and
   test-harness ownership; the reference does not select another compositor or
   terminal dependency.
-- [Monstar](https://github.com/rockorager/monstar/tree/71e4babde8e47e0739abd610f2afe202c8e99c00)
-  at `71e4babde8e47e0739abd610f2afe202c8e99c00` is
-  [MIT-licensed](https://github.com/rockorager/monstar/blob/71e4babde8e47e0739abd610f2afe202c8e99c00/LICENSE)
-  conditional comparison evidence for direct Wayland hosting and Ghostty
-  Zig-module integration. Its exact
-  [`build.zig.zon`](https://github.com/rockorager/monstar/blob/71e4babde8e47e0739abd610f2afe202c8e99c00/build.zig.zon#L8-L11)
-  pins Ghostty `8d6d300cdf0ea95626424f25c82341dfdfb4a802`; its
-  [`build.zig`](https://github.com/rockorager/monstar/blob/71e4babde8e47e0739abd610f2afe202c8e99c00/build.zig#L74-L119)
-  imports `ghostty-vt` and Ghostty terminfo. Route it only for a named question
-  about Wayland protocol lifecycle, native-host boundaries, or packaging those
-  modules. Venus rejects Monstar's PTY and terminal ownership, Zig toolchain,
-  CPU-oriented renderer, direct dependency selection, and central `App.zig`
-  owner; it is not thin-main authority and does not weaken the Orbit/Venus seam.
+- Eon's
+  [central terminal-product comparison route](https://github.com/Yazelix/eon/blob/edge/docs/REFERENCES.md#terminal-product-comparisons)
+  owns Monstar's exact release identity, license, useful mechanisms, and product
+  rejections. A Venus Bead follows that route only for a named native-host,
+  terminal-interaction, or performance question, then records the exact source
+  it inspects. Venus retains Orbit's PTY and terminal authority; this repository
+  keeps no duplicate Monstar pin.
 - [Sugarloaf](https://github.com/raphamorim/rio/tree/main/sugarloaf) is
   conditional on a demonstrated need for its renderer shape.
 - [AccessKit 0.24.1](https://docs.rs/accesskit/0.24.1/accesskit/) and
