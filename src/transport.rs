@@ -1124,28 +1124,35 @@ mod tests {
     }
 
     #[test]
-    fn workspace_worker_carries_exact_actions_and_picker_snapshot() {
+    fn workspace_worker_carries_actions_and_picker_transition() {
+        use WorkspaceAction::{Focus, FocusId, Inspect, PickTabDirectory};
+        use workspace::Direction::{Down, Left, Right, Up};
+
         let socket = TestSocket::new();
         let listener = UnixListener::bind(&socket.path).unwrap();
-        let mut snapshot = workspace_snapshot();
-        snapshot.directory_picker = Some(DirectoryPicker {
+        let snapshot = WorkspaceResponse::Snapshot(workspace_snapshot());
+        let mut picker = workspace_snapshot();
+        picker.directory_picker = Some(DirectoryPicker {
             tab: "t1".into(),
             endpoint: b"/run/eon/picker.sock".to_vec(),
         });
-        let expected = WorkspaceResponse::Snapshot(snapshot);
-        let encoded = workspace::encode_response(&expected).unwrap();
+        let exchanges = [
+            (Inspect, snapshot.clone()),
+            (FocusId("pane-1".into()), snapshot.clone()),
+            (Focus(Left), snapshot.clone()),
+            (Focus(Right), snapshot.clone()),
+            (Focus(Up), snapshot.clone()),
+            (Focus(Down), snapshot),
+            (PickTabDirectory, WorkspaceResponse::Snapshot(picker)),
+        ];
+        let server_exchanges = exchanges.clone();
         let server = thread::spawn(move || {
-            for expected_action in std::iter::once(WorkspaceAction::Inspect).chain([
-                WorkspaceAction::FocusId("pane-1".into()),
-                WorkspaceAction::Focus(workspace::Direction::Left),
-                WorkspaceAction::Focus(workspace::Direction::Right),
-                WorkspaceAction::Focus(workspace::Direction::Up),
-                WorkspaceAction::Focus(workspace::Direction::Down),
-                WorkspaceAction::PickTabDirectory,
-            ]) {
+            for (expected_action, response) in server_exchanges {
                 let (mut stream, action) = accept_workspace_action(&listener);
                 assert_eq!(action, expected_action);
-                stream.write_all(&encoded).unwrap();
+                stream
+                    .write_all(&workspace::encode_response(&response).unwrap())
+                    .unwrap();
             }
         });
         let (wakes, receiver) = mpsc::channel();
@@ -1158,23 +1165,18 @@ mod tests {
         );
 
         receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        let mut exchanges = exchanges.into_iter();
+        let (_, expected) = exchanges.next().unwrap();
         assert_eq!(
             transport.drain_events(),
-            [WorkspaceEvent::Response(expected.clone())]
+            [WorkspaceEvent::Response(expected)]
         );
-        for action in [
-            WorkspaceAction::FocusId("pane-1".into()),
-            WorkspaceAction::Focus(workspace::Direction::Left),
-            WorkspaceAction::Focus(workspace::Direction::Right),
-            WorkspaceAction::Focus(workspace::Direction::Up),
-            WorkspaceAction::Focus(workspace::Direction::Down),
-            WorkspaceAction::PickTabDirectory,
-        ] {
+        for (action, expected) in exchanges {
             transport.send(action).unwrap();
             receiver.recv_timeout(Duration::from_secs(5)).unwrap();
             assert_eq!(
                 transport.drain_events(),
-                [WorkspaceEvent::Response(expected.clone())]
+                [WorkspaceEvent::Response(expected)]
             );
         }
         server.join().unwrap();
