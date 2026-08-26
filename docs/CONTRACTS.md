@@ -477,11 +477,12 @@ retains accepted user-visible chronology.
 - **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
   simultaneous terminal composition, configurable geometry, arbitrary command,
   second schema, Orbit change, Eon runtime producer, or additional platform.
-- **Proof:** `9b2a527d3581f40569f58e24130cc8f8f1222162`
+- **Proof:** `38ee95e78a7ffb2a79925b8fc8062c4142c22bbe`
   - **Environment:** x86_64 Linux deterministic candidate
-  - **Evidence:** Complete locked Rust checks; exact EONW v3 pin; focused action,
-    endpoint, normal and undersized geometry, effective focus, metadata,
-    pointer, renderer, and AccessKit coverage.
+  - **Evidence:** Complete locked Rust checks; exact EONW v3 pin; real Unix
+    worker carriage of the picker action and snapshot; focused endpoint, normal
+    and undersized geometry, effective focus, metadata, pointer, renderer, and
+    AccessKit coverage.
 - **Open proof:** Exact Eon runtime production and installed native Wayland and
   AT-SPI dogfood remain blocked until Eon implements the picker producer.
 
