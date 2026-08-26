@@ -249,12 +249,12 @@ retains accepted user-visible chronology.
   `69c402737799f03e615473956954a043647a4713`.
 - **Boundary:** Other Linux Wayland compositors remain outside the candidate
   proof.
-- **Proof:** `9b2a527d3581f40569f58e24130cc8f8f1222162`
+- **Proof:** `2622c124be5ba8a62037c6de952ebf3928347387`
   - **Environment:** x86_64 Linux deterministic candidate
-  - **Evidence:** Original complete EONW v3 proof: locked Rust checks; bounded
-    home, root, leaf, non-UTF-8, and overlong tab projection; stable action/hit
-    identities; AccessKit identity/path parity; and the prior workspace base
-    `ee3defea55c77f7acc4559606965d93d39bba8b5`
+  - **Evidence:** Complete locked Rust checks against exact EONW v4; bounded
+    durable-tab projection, metadata suppression during picker presentation,
+    stable action/hit identities, and AccessKit parity; prior complete EONW v3
+    proof `9b2a527d3581f40569f58e24130cc8f8f1222162`
 - **Open proof:** Final installed Eon composition, fractional native scale, and
   native AT-SPI remain to be dogfooded.
 
@@ -488,14 +488,14 @@ retains accepted user-visible chronology.
   application-ID/path inference, compatibility launch form, placeholder pane,
   selection sentinel, Orbit change, Eon runtime producer, or additional
   platform.
-- **Proof:** `df88b2867d50c59a316418471abd000da02940bc`
+- **Proof:** `2622c124be5ba8a62037c6de952ebf3928347387`
   - **Environment:** x86_64 Linux deterministic candidate
-  - **Evidence:** Accepted EONW v3 base: complete locked Rust checks; one ordered
-    Unix-worker transition from no picker through `PickTabDirectory` to the
-    authoritative picker snapshot; focused endpoint, normal and undersized scene
-    geometry and hit testing, effective focus, metadata, and AccessKit checks.
-- **Open proof:** Accepted EONW v4 source proof, Eon runtime production, and
-  installed native Wayland and AT-SPI picker-first dogfood remain pending.
+  - **Evidence:** Complete locked Rust checks against exact EONW v4; explicit
+    workspace-only launch admission; pending and durable picker attachment,
+    geometry, hit testing, focus, metadata, and AccessKit checks; prior EONW v3
+    picker proof `df88b2867d50c59a316418471abd000da02940bc`.
+- **Open proof:** Eon runtime production and installed native Wayland and AT-SPI
+  picker-first dogfood remain pending.
 
 ## Rules
 
