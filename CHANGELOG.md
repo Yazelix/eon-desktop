@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Consume accepted Orbit `a65e199e16e97330175e314cacf791fa00f53069`
+  under unchanged ORBS v10 so its bounded output queue reserves one atomic
+  scroll outcome behind a partially transmitted frame. Venus behavior remains
+  unchanged; Eon accepts the exact pair separately.
 - Consume EONW v4, admit workspace-only startup through `--workspace`, and
   project Eon's initial, new-tab, or Alt+Z directory picker as the only tab-body
   terminal with one-cell gutters, modal input, and AccessKit focus while
