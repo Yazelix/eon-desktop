@@ -8,8 +8,10 @@
   unchanged; Eon accepts the exact pair separately.
 - Consume EONW v4, admit workspace-only startup through `--workspace`, and
   project Eon's initial, new-tab, or Alt+Z directory picker as the only tab-body
-  terminal with one-cell gutters, modal input, and AccessKit focus while
-  retaining the tab bar and prior workspace focus.
+  terminal with one-cell gutters, modal input, and AccessKit focus only on its
+  bound active tab. Alt+H/L traverses to durable tabs without ending the picker,
+  and returning restores the same picker while retaining the tab bar and prior
+  workspace focus.
 - Consume EONW v2 tab launch directories, render directory-derived numbered tab
   labels, retain stable `tN` action targets, and expose bounded full-path context
   through AccessKit.

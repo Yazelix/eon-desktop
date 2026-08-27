@@ -158,10 +158,11 @@ Within Eon's local-only product boundary, the projection treats a `file://`
 authority as transport decoration and displays only the absolute path. Remote
 working-directory semantics and percent decoding remain outside the contract.
 
-Exact EONW v4 protocol source `aaafc9127c054e683abfceb3c8fcaae201a7a763`
-is authoritative for active-tab visibility, pending-tab state, tab launch
-directory, pane liveness, endpoint identity, and optional selection. Venus
-therefore starts no hidden or offline observer, retires obsolete endpoints
+Exact EONW v4 protocol source `963bdaf4d9816f27a26c7bdb6ee122855566a222`
+is authoritative for picker lifecycle and tab binding, active-tab identity,
+pending-tab state, tab launch directory, pane liveness, endpoint identity, and
+optional selection. Venus derives picker visibility only when its bound tab is
+active, starts no hidden or offline observer, retires obsolete endpoints
 directly from each accepted snapshot, and defers the selected endpoint's
 observer until its presentation attachment has completed.
 That deferral preserves Orbit's single pending-negotiation slot without adding
@@ -211,7 +212,7 @@ primary-selection, search, and raw-display clipboard ownership.
 `ven-c87`, `ven-present-tab-directory-picker-a6v`, and
 `ven-consume-picker-first-eonw-v4-zd1` consume `EON-C10`, `EON-C17`, `EON-C18`,
 and dependency-free EONW v4 from exact Eon source
-`aaafc9127c054e683abfceb3c8fcaae201a7a763`; prior workspace proof
+`963bdaf4d9816f27a26c7bdb6ee122855566a222`; prior workspace proof
 documentation is recorded at `93c3c723e5da95c92882571b2904d4c9a4b9f2ff`.
 The owner package supplies complete
 ordered snapshots, stable tab, pane, and Session identities, authoritative raw
@@ -235,12 +236,13 @@ Exact winit, wgpu, glyphon, and AccessKit versions already selected above own th
 native event, clipping, drawing, tab semantics, expanded state, and accessibility
 action mechanisms used by the workspace projection.
 
-The v4 picker state contributes only an active-tab identity and one validated
-endpoint; its active pending tab may have no panes or selected pane. Venus
-reuses its single terminal attachment, scene, renderer, input, and AccessKit
-owners. One explicit `--workspace` option selects the existing EONW startup
-path without an initial Orbit endpoint; one physical Alt+Z maps to the semantic
-action. Nova
+The v4 picker state contributes only one live-tab identity and one validated
+endpoint; its bound pending tab may have no panes or selected pane. Venus
+derives visibility from equality with the active tab and reuses its single
+terminal attachment, scene, renderer, input, and AccessKit owners. One explicit
+`--workspace` option selects the existing EONW startup path without an initial
+Orbit endpoint; one physical Alt+Z maps to the semantic action, and existing
+Alt+H/L actions remain Eon-owned traversal. Nova
 `f1beb34fe6060cfa2c0201d7f8095f6ef707f467`, Zellij
 `910339e219b17f4e2ffd4a2cb6e35cccc7246493`, and Kitty
 `54416498c89e1d07e5079c49d15470dd0d947ce7` remain comparison-only for the

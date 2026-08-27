@@ -31,7 +31,7 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 ```
 
 Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`aaafc9127c054e683abfceb3c8fcaae201a7a763`. Eon alone owns workspace order,
+`963bdaf4d9816f27a26c7bdb6ee122855566a222`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
@@ -157,7 +157,8 @@ terminal. Direct focus and unminimize are unavailable through winit on Wayland;
 xdg activation remains compositor-controlled.
 
 The accepted Eon snapshot supplies the authoritative terminal endpoint: the
-directory picker when present, otherwise the selected Orbit pane.
+directory picker when it is bound to the active tab, otherwise that tab's
+selected Orbit pane.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
 Recovery continues only while that exact attachment remains current and live;
@@ -165,9 +166,11 @@ endpoint replacement or authoritative offline state cancels obsolete retry
 state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Alt+M creates a pane, Ctrl+T opens a pending tab in Eon's directory picker, and
-Alt+Z requests that picker for an existing tab. While the picker is active, its
-terminal receives input and the prior workspace focus is restored when it
-closes. Press F6 to cycle terminal, tab, and pane keyboard focus; Left/Right on
+Alt+Z requests that picker for an existing tab. While the picker is visible,
+its terminal receives input and Alt+H/L can traverse to another tab without
+ending it; returning restores the same picker. The prior workspace focus is
+restored while the picker is hidden or after it closes. Press F6 to cycle
+terminal, tab, and pane keyboard focus; Left/Right on
 tabs, Up/Down on panes, and Escape remain
 available. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
 directory while hit testing and actions retain `tN`; accessibility pairs `tN`
@@ -233,11 +236,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 243 |
-| Contracts and references | 948 |
+| README | 246 |
+| Contracts and references | 955 |
 | Crate decisions | 169 |
-| Changelog | 150 |
-| Rust source, including unit tests | 12,775 |
-| Rust integration tests | 879 |
+| Changelog | 152 |
+| Rust source, including unit tests | 12,883 |
+| Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **15,603** |
+| **Total** | **15,742** |

@@ -1,4 +1,4 @@
-use crate::render::CellMetrics;
+use crate::{model::directory_picker_visible, render::CellMetrics};
 use eon_workspace_protocol::v4::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
@@ -301,7 +301,7 @@ impl WorkspaceScene {
         let active_tab_scroll = (active_tab as f32 * tab_width
             - (width - tab_width).max(0.0) / 2.0)
             .clamp(0.0, tab_scroll_limit);
-        if snapshot.directory_picker.is_some() {
+        if directory_picker_visible(snapshot) {
             let horizontal_inset =
                 if pane_viewport.width >= metrics.padding * 2.0 + metrics.width * 3.0 {
                     metrics.width

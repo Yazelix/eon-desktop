@@ -863,6 +863,37 @@ mod tests {
             snapshot.workspace_target(CONTENT),
             Some(AccessibilityTarget::Terminal)
         );
+
+        let inactive_picker = WorkspaceScene::from_snapshot(
+            &WorkspaceSnapshot {
+                active_tab: "t2".into(),
+                tabs: vec![
+                    workspace_tab("t1", &["p1"], "p1"),
+                    workspace_tab("t2", &["p2"], "p2"),
+                ],
+                directory_picker: Some(DirectoryPicker {
+                    tab: "t1".into(),
+                    endpoint: b"/run/eon/picker.sock".to_vec(),
+                }),
+            },
+            size,
+            CellMetrics::for_scale(1.0),
+            0.0,
+            0.0,
+        );
+        snapshot.set_workspace(Some(&inactive_picker));
+        let active_tab = snapshot.tab_ids["t2"];
+        let pane = snapshot.pane_ids["p2"];
+        let update = snapshot.tree();
+
+        assert_eq!(node(&update, PANE_PANEL).label(), Some("Active tab panes"));
+        assert_eq!(node(&update, PANE_PANEL).children(), &[pane, CONTENT]);
+        assert_eq!(update.focus, pane);
+        assert!(node(&update, active_tab).supports_action(Action::Focus));
+        assert_eq!(
+            snapshot.workspace_target(active_tab),
+            Some(AccessibilityTarget::Tab("t2".into()))
+        );
     }
 
     #[test]

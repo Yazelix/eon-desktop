@@ -35,7 +35,7 @@ use yazelix_venus::{
     InputState, LocalNoticeSource, MetadataEvent, MetadataTransport, ModelError, PaneMetadata,
     PresentOutcome, Renderer, ScenePreview, SessionModel, Transport, TransportEvent,
     WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene,
-    WorkspaceTransport,
+    WorkspaceTransport, directory_picker_visible,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -715,7 +715,7 @@ impl Application {
     }
 
     fn set_workspace_focus(&mut self, focus: WorkspaceFocus) {
-        if self.workspace_model.directory_picker_active() || self.workspace_focus == focus {
+        if self.workspace_model.directory_picker_visible() || self.workspace_focus == focus {
             return;
         }
         let was_focused = terminal_focused(self.window_focused, self.workspace_focus);
@@ -792,7 +792,7 @@ impl Application {
     }
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
-        let picker_was_active = self.workspace_model.directory_picker_active();
+        let picker_was_visible = self.workspace_model.directory_picker_visible();
         let received_snapshot = matches!(
             &event,
             WorkspaceEvent::Response(eon_workspace_protocol::v4::Response::Snapshot(_))
@@ -812,14 +812,14 @@ impl Application {
             self.cancel_terminal_scroll();
             self.reveal_workspace_selection();
             self.presentation.invalidate();
-            let picker_active = self.workspace_model.directory_picker_active();
+            let picker_visible = self.workspace_model.directory_picker_visible();
             let was_focused = terminal_focused(
                 self.window_focused,
-                effective_workspace_focus(picker_was_active, self.workspace_focus),
+                effective_workspace_focus(picker_was_visible, self.workspace_focus),
             );
             let is_focused = terminal_focused(
                 self.window_focused,
-                effective_workspace_focus(picker_active, self.workspace_focus),
+                effective_workspace_focus(picker_visible, self.workspace_focus),
             );
             if was_focused != is_focused {
                 let message = self.input.terminal_focus(is_focused);
@@ -925,14 +925,14 @@ impl Application {
         let Some(snapshot) = self.workspace_model.snapshot() else {
             return false;
         };
-        let picker_active = snapshot.directory_picker.is_some();
+        let picker_visible = directory_picker_visible(snapshot);
         let code = match event.physical_key {
             PhysicalKey::Code(code) => code,
             PhysicalKey::Unidentified(_) => {
-                return !picker_active && self.workspace_focus != WorkspaceFocus::Terminal;
+                return !picker_visible && self.workspace_focus != WorkspaceFocus::Terminal;
             }
         };
-        if code == KeyCode::F6 && !picker_active {
+        if code == KeyCode::F6 && !picker_visible {
             if event.state == ElementState::Pressed && !event.repeat {
                 let focus = match self.workspace_focus {
                     WorkspaceFocus::Terminal => WorkspaceFocus::Tabs,
@@ -944,7 +944,7 @@ impl Application {
             return true;
         }
         let shortcut = workspace_shortcut(code, self.input.modifiers());
-        let returns_to_terminal = !picker_active
+        let returns_to_terminal = !picker_visible
             && self.workspace_focus != WorkspaceFocus::Terminal
             && code == KeyCode::Escape;
         if self.input.consumes_workspace_shortcut(
@@ -952,19 +952,20 @@ impl Application {
             event.state,
             event.repeat,
             shortcut.as_ref().is_some_and(|action| {
-                !picker_active || matches!(action, WorkspaceAction::PickTabDirectory)
+                workspace_shortcut_is_sendable(action, picker_visible)
+                    || matches!(action, WorkspaceAction::PickTabDirectory)
             }) || returns_to_terminal,
         ) {
             if returns_to_terminal && event.state == ElementState::Pressed {
                 self.set_workspace_focus(WorkspaceFocus::Terminal);
             } else if let Some(action) = shortcut.filter(|action| {
-                sends_workspace_shortcut(action, picker_active, event.state, event.repeat)
+                sends_workspace_shortcut(action, picker_visible, event.state, event.repeat)
             }) {
                 self.send_workspace(action);
             }
             return true;
         }
-        if picker_active {
+        if picker_visible {
             return false;
         }
         if self.workspace_focus == WorkspaceFocus::Terminal {
@@ -1167,7 +1168,7 @@ impl Application {
         let status = self.status();
         let workspace = self.workspace_scene();
         let workspace_focus = effective_workspace_focus(
-            self.workspace_model.directory_picker_active(),
+            self.workspace_model.directory_picker_visible(),
             self.workspace_focus,
         );
         let ime_allowed = ime_allowed(
@@ -1473,7 +1474,7 @@ impl Application {
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
         let workspace_focus = effective_workspace_focus(
-            self.workspace_model.directory_picker_active(),
+            self.workspace_model.directory_picker_visible(),
             self.workspace_focus,
         );
         let candidate = self.presentation_candidate(workspace.as_ref());
@@ -1572,7 +1573,7 @@ impl ApplicationHandler<UserEvent> for Application {
     ) {
         let workspace = self.workspace_scene();
         let workspace_focus = effective_workspace_focus(
-            self.workspace_model.directory_picker_active(),
+            self.workspace_model.directory_picker_visible(),
             self.workspace_focus,
         );
         let candidate = self.presentation_candidate(workspace.as_ref());
@@ -2007,7 +2008,7 @@ fn visible_metadata_endpoints(
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
-    if snapshot.directory_picker.is_some() {
+    if directory_picker_visible(snapshot) {
         return HashSet::new();
     }
     let mut endpoints = snapshot
@@ -2201,13 +2202,21 @@ fn workspace_shortcut(
 
 fn sends_workspace_shortcut(
     action: &WorkspaceAction,
-    directory_picker: bool,
+    directory_picker_visible: bool,
     state: ElementState,
     repeat: bool,
 ) -> bool {
-    !directory_picker
+    workspace_shortcut_is_sendable(action, directory_picker_visible)
         && state == ElementState::Pressed
         && (!repeat || matches!(action, WorkspaceAction::Focus(_)))
+}
+
+fn workspace_shortcut_is_sendable(action: &WorkspaceAction, picker_visible: bool) -> bool {
+    !picker_visible
+        || matches!(
+            action,
+            WorkspaceAction::Focus(WorkspaceDirection::Left | WorkspaceDirection::Right)
+        )
 }
 
 fn clipboard_notice<E: std::fmt::Display>(
@@ -2777,6 +2786,15 @@ mod tests {
             visible_metadata_endpoints(&picker, Some(b"picker"), true),
             HashSet::new()
         );
+
+        let inactive_picker = Snapshot {
+            active_tab: "t2".into(),
+            ..picker
+        };
+        assert_eq!(
+            visible_metadata_endpoints(&inactive_picker, Some(b"hidden"), true),
+            [b"hidden".to_vec()].into()
+        );
     }
 
     #[test]
@@ -3225,6 +3243,20 @@ mod tests {
             false,
             ElementState::Pressed,
             true
+        ));
+        for direction in [WorkspaceDirection::Left, WorkspaceDirection::Right] {
+            assert!(sends_workspace_shortcut(
+                &WorkspaceAction::Focus(direction),
+                true,
+                ElementState::Pressed,
+                false
+            ));
+        }
+        assert!(!sends_workspace_shortcut(
+            &WorkspaceAction::Focus(WorkspaceDirection::Up),
+            true,
+            ElementState::Pressed,
+            false
         ));
         assert!(!sends_workspace_shortcut(
             &WorkspaceAction::CreatePane,

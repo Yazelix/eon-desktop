@@ -1132,18 +1132,24 @@ mod tests {
         let listener = UnixListener::bind(&socket.path).unwrap();
         let snapshot = WorkspaceResponse::Snapshot(workspace_snapshot());
         let mut picker = workspace_snapshot();
+        picker.tabs.push(second_workspace_tab());
         picker.directory_picker = Some(DirectoryPicker {
             tab: "t1".into(),
             endpoint: b"/run/eon/picker.sock".to_vec(),
         });
+        let mut inactive_picker = picker.clone();
+        inactive_picker.active_tab = "t2".into();
         let exchanges = [
             (Inspect, snapshot.clone()),
             (FocusId("pane-1".into()), snapshot.clone()),
-            (Focus(Left), snapshot.clone()),
-            (Focus(Right), snapshot.clone()),
             (Focus(Up), snapshot.clone()),
             (Focus(Down), snapshot),
-            (PickTabDirectory, WorkspaceResponse::Snapshot(picker)),
+            (
+                PickTabDirectory,
+                WorkspaceResponse::Snapshot(picker.clone()),
+            ),
+            (Focus(Right), WorkspaceResponse::Snapshot(inactive_picker)),
+            (Focus(Left), WorkspaceResponse::Snapshot(picker)),
         ];
         let server_exchanges = exchanges.clone();
         let server = thread::spawn(move || {
@@ -1189,17 +1195,7 @@ mod tests {
         let first = workspace_snapshot();
         let mut second = first.clone();
         second.active_tab = "t2".into();
-        second.tabs.push(Tab {
-            id: "t2".into(),
-            directory: b"/tmp/nova".to_vec(),
-            selected_pane: Some("pane-2".into()),
-            panes: vec![Pane {
-                id: "pane-2".into(),
-                session: "session-2".into(),
-                endpoint: b"/run/eon/session-2.sock".to_vec(),
-                live: true,
-            }],
-        });
+        second.tabs.push(second_workspace_tab());
         let snapshots = [first, second];
         let expected = snapshots.clone();
         let server = thread::spawn(move || {
@@ -1300,6 +1296,20 @@ mod tests {
                 }],
             }],
             directory_picker: None,
+        }
+    }
+
+    fn second_workspace_tab() -> Tab {
+        Tab {
+            id: "t2".into(),
+            directory: b"/tmp/nova".to_vec(),
+            selected_pane: Some("pane-2".into()),
+            panes: vec![Pane {
+                id: "pane-2".into(),
+                session: "session-2".into(),
+                endpoint: b"/run/eon/session-2.sock".to_vec(),
+                live: true,
+            }],
         }
     }
 

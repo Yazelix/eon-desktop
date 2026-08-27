@@ -13,6 +13,7 @@ pub use accessibility::{Accessibility, AccessibilityTarget, Activation};
 pub use input::InputState;
 pub use model::{
     ClipboardEffect, ConnectionState, LocalNoticeSource, ModelError, SessionModel, WorkspaceModel,
+    directory_picker_visible,
 };
 pub use render::{CellMetrics, PresentOutcome, RenderError, Renderer};
 pub use scene::{

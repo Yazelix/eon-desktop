@@ -198,6 +198,25 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     );
     assert_eq!(picker.hit_test(0.0, picker.terminal.top), None);
 
+    let inactive_picker = WorkspaceScene::from_snapshot(
+        &Snapshot {
+            active_tab: "t2".into(),
+            directory_picker: Some(DirectoryPicker {
+                tab: "t1".into(),
+                endpoint: b"/run/eon/picker.sock".to_vec(),
+            }),
+            ..snapshot.clone()
+        },
+        size,
+        metrics,
+        0.0,
+        0.0,
+    );
+    assert!(!inactive_picker.directory_picker());
+    assert_eq!(inactive_picker.panes.len(), 1);
+    assert_eq!(inactive_picker.panes[0].id, "pane-3");
+    assert_eq!(inactive_picker.terminal.left, 0.0);
+
     let pending_picker = WorkspaceScene::from_snapshot(
         &Snapshot {
             active_tab: "t2".into(),
