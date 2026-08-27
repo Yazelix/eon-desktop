@@ -158,7 +158,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proven
+- **Status:** Candidate
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -199,7 +199,7 @@ retains accepted user-visible chronology.
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
 - **Consumes:** Orbit `ORB-C5`, `ORB-C8`, and `ORB-C9` through canonical ORBS v10
-  at `4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea`; exact patched winit
+  at `a65e199e16e97330175e314cacf791fa00f53069`; exact patched winit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
@@ -217,6 +217,8 @@ retains accepted user-visible chronology.
     compatible-frame path; later source changes preserve that exercised path
     and prove incompatible screen, geometry, default-cell-color, and palette
     transitions deterministically.
+- **Open proof:** Accept the exact `a65e199e16e97330175e314cacf791fa00f53069`
+  Orbit pin at one immutable Venus source revision before Eon consumes the pair.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -494,7 +496,7 @@ retains accepted user-visible chronology.
   owns the picker terminal Session and PTY.
 - **Consumes:** Eon `EON-C18`, EONW v4, and `eon-workspace-protocol` 0.1.0 at
   `aaafc9127c054e683abfceb3c8fcaae201a7a763`; unchanged Orbit ORBS v10 at
-  `4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea`.
+  `a65e199e16e97330175e314cacf791fa00f53069`.
 - **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
   simultaneous terminal composition, configurable geometry, arbitrary command,
   application-ID/path inference, compatibility launch form, placeholder pane,

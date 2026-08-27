@@ -294,7 +294,7 @@ terminal-state inference, dependency, or unreleased winit API.
 ## Required for continuous-output scrollback acceptance
 
 `ven-accept-continuous-output-scrollback-a1s` consumes Orbit `ORB-C8` through
-exact accepted source `4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea` under unchanged
+exact accepted source `a65e199e16e97330175e314cacf791fa00f53069` under unchanged
 ORBS v10. Orbit resolves lagging relative preview and signed-scroll requests
 against current terminal authority while future revisions and unrelated stale
 input remain strict. Venus retains one pending preview, one in-flight batch,
