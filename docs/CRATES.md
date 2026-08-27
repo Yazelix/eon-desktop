@@ -25,14 +25,66 @@ under unchanged ORBS v10 so relative scrolling remains usable during output.
 the sole host and replaces the clipboard adapter's X11 fallback with its
 already-locked Wayland data-control owner.
 
-| Boundary | Selected shape | Status | Owner consequence |
-|---|---|---|---|
-| Eon workspace protocol consumer | Exact Git revision `963bdaf4d9816f27a26c7bdb6ee122855566a222` of the dependency-free, publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package | Active for internal development | Eon alone owns EONW v4 values, validation, topology, pending tabs, tab launch directories, picker lifecycle and tab binding, optional selection, actions, and endpoint mappings. Venus owns only the Unix request worker and native projection. |
-| Orbit protocol consumer | Exact Git revision `a65e199e16e97330175e314cacf791fa00f53069` of the dependency-free, publish-false `orbit-protocol` 0.1.0 package | Active | Orbit alone owns ORBS v10, ORBF v1, semantic values, history, terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied text, terminal clipboard effects, read-only pane metadata, bounds, revision reduction, and the accepted lifecycle contracts. Venus keeps no mirror terminal schema or viewport authority; its native host supplies events and applies clipboard effects. |
-| Native host | winit 0.30.13 with Wayland, dynamic Wayland loading, and raw-window-handle 0.6 only, patched to exact `chiyuki0325/winit-0.30` commit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` | Active on native Linux Wayland | The host owns window and event-loop lifecycle, native input and IME collection, compositor blur protocol selection, resize, surface recovery, socket scheduling, and bounded client failure UX. X11 and Xwayland compatibility are unsupported. Replace the patch with the first accepted stable winit containing upstream `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. |
-| GPU and text | wgpu 30.0.0 with Vulkan and WGSL only; glyphon 0.12.0 with its cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization | Active on Linux/Vulkan | Venus owns a small rectangle/decorations pipeline. Glyphon owns shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees transport or terminal state. |
-| Accessibility | AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io adapter | Active | Venus derives native accessibility updates from each accepted immutable scene without creating another presentation model. |
-| Native text clipboard | wl-clipboard-rs 0.9.3 with default features disabled | Active on native Linux Wayland | The host reads ordinary clipboard text once after an explicit paste shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects through Wayland data-control. Orbit owns paste encoding and terminal text. Missing data-control remains a visible bounded failure; there is no X11 fallback. |
+## Current decisions
+
+### Eon workspace protocol consumer
+
+- **Selected shape:** Exact Git revision `963bdaf4d9816f27a26c7bdb6ee122855566a222` of the
+  dependency-free, publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package
+- **Status:** Active for internal development
+- **Owner consequence:** Eon alone owns EONW v4 values, validation, topology, pending tabs,
+  tab launch directories, picker lifecycle and tab binding, optional selection, actions, and
+  endpoint mappings. Venus owns only the Unix request worker and native projection.
+
+### Orbit protocol consumer
+
+- **Selected shape:** Exact Git revision `a65e199e16e97330175e314cacf791fa00f53069` of the
+  dependency-free, publish-false `orbit-protocol` 0.1.0 package
+- **Status:** Active
+- **Owner consequence:** Orbit alone owns ORBS v10, ORBF v1, semantic values, history,
+  terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel
+  outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied
+  text, terminal clipboard effects, read-only pane metadata, bounds, revision reduction, and
+  the accepted lifecycle contracts. Venus keeps no mirror terminal schema or viewport
+  authority; its native host supplies events and applies clipboard effects.
+
+### Native host
+
+- **Selected shape:** winit 0.30.13 with Wayland, dynamic Wayland loading, and
+  raw-window-handle 0.6 only, patched to exact `chiyuki0325/winit-0.30` commit
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`
+- **Status:** Active on native Linux Wayland
+- **Owner consequence:** The host owns window and event-loop lifecycle, native input and IME
+  collection, compositor blur protocol selection, resize, surface recovery, socket
+  scheduling, and bounded client failure UX. X11 and Xwayland compatibility are unsupported.
+  Replace the patch with the first accepted stable winit containing upstream
+  `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`.
+
+### GPU and text
+
+- **Selected shape:** wgpu 30.0.0 with Vulkan and WGSL only; glyphon 0.12.0 with its
+  cosmic-text 0.19.0 re-export; pollster 1.0.1 for bounded initialization
+- **Status:** Active on Linux/Vulkan
+- **Owner consequence:** Venus owns a small rectangle/decorations pipeline. Glyphon owns
+  shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees
+  transport or terminal state.
+
+### Accessibility
+
+- **Selected shape:** AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io
+  adapter
+- **Status:** Active
+- **Owner consequence:** Venus derives native accessibility updates from each accepted
+  immutable scene without creating another presentation model.
+
+### Native text clipboard
+
+- **Selected shape:** wl-clipboard-rs 0.9.3 with default features disabled
+- **Status:** Active on native Linux Wayland
+- **Owner consequence:** The host reads ordinary clipboard text once after an explicit paste
+  shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects through
+  Wayland data-control. Orbit owns paste encoding and terminal text. Missing data-control
+  remains a visible bounded failure; there is no X11 fallback.
 
 The ORBS v10 advance keeps one direct package with no transitive, native, build,
 feature, or Nix change. Orbit's canonical codec owns bounded metadata values,
@@ -53,10 +105,10 @@ normal/build tree has 272 unique lines.
 
 | Complete shape | Exact releases | Lock packages | Linux tree | Disposition |
 |---|---|---:|---:|---|
-| winit + wgpu + glyphon + AccessKit | 0.30.13, 30.0.0, 0.12.0, 0.24.1/0.33.2 | 324 | 267 | Selected. Four packages over the owned-atlas shape remove its highest-risk custom subsystem. |
-| winit + wgpu + cosmic-text + owned atlas | 0.30.13, 30.0.0, 0.19.0 | 320 | 262 | Text fallback only. It adds an estimated 700–1,200 specialized atlas, shader, upload, and cache LOC. |
-| winit + softbuffer + cosmic-text + tiny-skia + AccessKit | 0.30.13, 0.4.8, 0.19.0, 0.12.0 | 297 | 232 | Rejected as the primary renderer. It makes HiDPI composition and full-frame upload CPU work and weakens the intended GPU path. |
-| winit + Vello + Parley + AccessKit | 0.30.13, 0.9.0, 0.11.0 | 336 | 301 | Rejected. It imports general vector/rich-layout policy, ICU and native fontconfig, and uses wgpu 29 rather than 30. |
+| winit + wgpu + glyphon + AccessKit | 0.30.13, 30.0.0, 0.12.0, 0.24.1/0.33.2 | 324 | 267 | Selected: four packages over the owned-atlas shape remove its highest-risk custom subsystem. |
+| winit + wgpu + cosmic-text + owned atlas | 0.30.13, 30.0.0, 0.19.0 | 320 | 262 | Text fallback only; it adds an estimated 700–1,200 specialized atlas, shader, upload, and cache LOC. |
+| winit + softbuffer + cosmic-text + tiny-skia + AccessKit | 0.30.13, 0.4.8, 0.19.0, 0.12.0 | 297 | 232 | Rejected as the primary renderer because it makes HiDPI composition and full-frame upload CPU work and weakens the intended GPU path. |
+| winit + Vello + Parley + AccessKit | 0.30.13, 0.9.0, 0.11.0 | 336 | 301 | Rejected because it imports general vector/rich-layout policy, ICU and native fontconfig, and uses wgpu 29 rather than 30. |
 
 ## Ranked tradeoffs
 
