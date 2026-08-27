@@ -158,7 +158,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Candidate
+- **Status:** Proven
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -200,7 +200,7 @@ retains accepted user-visible chronology.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** `1034817bbe2352fb4b1026bce6b1f02eedd67e37`
+- **Proof:** `4d5cc34dcb1b85270a6a528bdd13ea4b7c217146`
   - **Environment:** Accepted deterministic checks and retained x86_64 Linux
     native Orbit/Venus dogfood
   - **Evidence:** Complete Rust checks; exact ORBS v10 pin; bounded multi-row
@@ -208,9 +208,9 @@ retains accepted user-visible chronology.
     gestures, terminal capture with Shift override, separate primary and
     ordinary clipboard effects, resize, reattachment, and client-loss
     coverage; native touchpad tracking, fling, reversal, fast multi-click
-    selection, and automatic copy accepted by the user.
-- **Open proof:** Compatible continuous-output scrollback consumer acceptance is
-  pending at the exact Orbit source above.
+    selection, and automatic copy accepted by the user; isolated continuous-
+    output dogfood entered history, remained pinned while output advanced, and
+    continued farther without stale notices.
 
 ## VEN-C8 — Eon workspace presentation
 
