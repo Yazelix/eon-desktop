@@ -232,30 +232,23 @@ impl TerminalScroll {
             return None;
         }
         let direction = self.direction()?;
-        let preview_matches = match preview {
-            Some(ScenePreview::TerminalOwned {
-                frame_revision: revision,
-                direction: candidate,
-            }) => *revision == frame_revision && *candidate == direction,
+        let (preview_revision, rows) = match preview {
             Some(ScenePreview::Viewport {
                 frame_revision: revision,
                 direction: candidate,
+                rows,
                 ..
-            }) => *revision == frame_revision && *candidate == direction,
-            None => false,
-        };
-        if !preview_matches {
-            if self.preview_pending != Some((frame_revision, direction)) {
-                self.preview_pending = Some((frame_revision, direction));
-                return Some(ClientMessage::PreviewVertical {
-                    frame_revision,
-                    direction,
-                });
+            }) if *candidate == direction => (*revision, rows),
+            _ => {
+                if self.preview_pending != Some((frame_revision, direction)) {
+                    self.preview_pending = Some((frame_revision, direction));
+                    return Some(ClientMessage::PreviewVertical {
+                        frame_revision,
+                        direction,
+                    });
+                }
+                return None;
             }
-            return None;
-        }
-        let ScenePreview::Viewport { rows, .. } = preview? else {
-            return None;
         };
         let available = i64::try_from(rows.len())
             .unwrap_or(i64::MAX)
@@ -270,7 +263,7 @@ impl TerminalScroll {
         let requested = (-(crossed as i64)).clamp(-available, available) as i16;
         self.in_flight = Some(requested);
         Some(ClientMessage::ScrollVertical {
-            frame_revision,
+            frame_revision: preview_revision,
             rows: requested,
         })
     }
@@ -661,6 +654,9 @@ impl Application {
             && !self.send(message)
         {
             self.terminal_scroll.reset();
+        }
+        if !self.terminal_scroll.active() {
+            self.model.clear_scroll_preview();
         }
     }
 
@@ -2596,6 +2592,16 @@ mod tests {
             edge_reached: false,
             rows: vec![row.clone(); 5],
         };
+        let mut continuous = TerminalScroll::default();
+        continuous.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
+        assert_eq!(
+            continuous.next_request(8, Some(&preview), 20.0),
+            Some(ClientMessage::ScrollVertical {
+                frame_revision: 7,
+                rows: -2,
+            })
+        );
+
         let mut scroll = TerminalScroll::default();
         scroll.push_pixels(50.0, TouchPhase::Moved, start, 20.0);
 

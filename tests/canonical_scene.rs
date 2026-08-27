@@ -672,8 +672,61 @@ fn revision_bound_scroll_previews_follow_atomic_frames() {
             outcome: PreviewOutcome::TerminalRouted,
         }))
         .unwrap();
-    assert!(model.scroll_preview().is_none());
+    assert!(matches!(
+        model.scroll_preview(),
+        Some(ScenePreview::Viewport {
+            frame_revision: 2,
+            direction: VerticalDirection::Up,
+            ..
+        })
+    ));
     assert_eq!(model.scene().unwrap().revision, 2);
+}
+
+#[test]
+fn continuous_frames_keep_only_compatible_scroll_previews() {
+    let mut output = frame(2, Screen::Primary);
+    output.rows[0].cells[0].text = "x".into();
+    let mut resized = frame(2, Screen::Primary);
+    resized.dimensions.rows += 1;
+    resized.rows.push(resized.rows[0].clone());
+    let mut recolored = frame(2, Screen::Primary);
+    recolored.colors.palette[2].r += 1;
+
+    for (next, retained) in [
+        (output, true),
+        (frame(2, Screen::Alternate), false),
+        (resized, false),
+        (recolored, false),
+    ] {
+        let mut model = attached_model();
+        let initial = frame(1, Screen::Primary);
+        let row = initial.rows[0].clone();
+        model
+            .apply(ServerMessage::Frame(Box::new(initial)))
+            .unwrap();
+        model
+            .apply(ServerMessage::VerticalPreview(VerticalPreview {
+                frame_revision: 1,
+                direction: VerticalDirection::Up,
+                outcome: PreviewOutcome::Viewport {
+                    cols: 4,
+                    edge_reached: false,
+                    rows: vec![row],
+                },
+            }))
+            .unwrap();
+        apply_wire(&mut model, ServerMessage::Frame(Box::new(next))).unwrap();
+        let preview = model.scroll_preview().map(|preview| match preview {
+            ScenePreview::Viewport {
+                frame_revision,
+                direction,
+                ..
+            } => (*frame_revision, *direction),
+            ScenePreview::TerminalOwned { .. } => panic!("unexpected terminal-owned preview"),
+        });
+        assert_eq!(preview, retained.then_some((1, VerticalDirection::Up)));
+    }
 }
 
 #[test]

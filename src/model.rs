@@ -185,6 +185,10 @@ impl SessionModel {
         self.scroll_preview.as_ref()
     }
 
+    pub fn clear_scroll_preview(&mut self) {
+        self.scroll_preview = None;
+    }
+
     #[must_use]
     pub fn connection(&self) -> &ConnectionState {
         &self.connection
@@ -226,10 +230,22 @@ impl SessionModel {
                 self.connection = ConnectionState::Attached;
                 self.notices.clear();
             }
-            ServerMessage::Frame(frame)
-            | ServerMessage::WheelOutcome(WheelOutcome::Viewport { frame, .. })
-                if attached =>
-            {
+            ServerMessage::Frame(frame) if attached => {
+                let preview_compatible = self.reducer.current().is_some_and(|current| {
+                    current.dimensions == frame.dimensions
+                        && current.screen == frame.screen
+                        && current.colors.background == frame.colors.background
+                        && current.colors.foreground == frame.colors.foreground
+                        && current.colors.palette == frame.colors.palette
+                });
+                let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
+                self.scene = Some(Scene::from_frame(frame));
+                if !preview_compatible {
+                    self.scroll_preview = None;
+                }
+                self.awaiting_current_frame = false;
+            }
+            ServerMessage::WheelOutcome(WheelOutcome::Viewport { frame, .. }) if attached => {
                 let frame = self.reducer.push(*frame).map_err(ModelError::Frame)?;
                 self.scene = Some(Scene::from_frame(frame));
                 self.scroll_preview = None;
@@ -241,7 +257,6 @@ impl SessionModel {
                     .current()
                     .ok_or(ModelError::UnexpectedMessage)?;
                 if preview.frame_revision != frame.revision {
-                    self.scroll_preview = None;
                     return Ok(None);
                 }
                 self.scroll_preview =
