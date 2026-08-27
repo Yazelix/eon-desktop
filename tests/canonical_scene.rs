@@ -727,6 +727,24 @@ fn continuous_frames_keep_only_compatible_scroll_previews() {
         });
         assert_eq!(preview, retained.then_some((1, VerticalDirection::Up)));
     }
+
+    let mut model = attached_model();
+    model
+        .apply(ServerMessage::Frame(Box::new(frame(1, Screen::Primary))))
+        .unwrap();
+    model
+        .apply(ServerMessage::VerticalPreview(VerticalPreview {
+            frame_revision: 1,
+            direction: VerticalDirection::Up,
+            outcome: PreviewOutcome::TerminalRouted,
+        }))
+        .unwrap();
+    apply_wire(
+        &mut model,
+        ServerMessage::Frame(Box::new(frame(2, Screen::Primary))),
+    )
+    .unwrap();
+    assert!(model.scroll_preview().is_none());
 }
 
 #[test]

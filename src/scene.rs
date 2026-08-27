@@ -593,7 +593,7 @@ impl DrawRow {
     }
 }
 
-/// One Orbit-routed row window adjacent to an exact accepted scene.
+/// One Orbit vertical-preview result for an exact accepted scene.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScenePreview {
     TerminalOwned {

@@ -231,7 +231,10 @@ impl SessionModel {
                 self.notices.clear();
             }
             ServerMessage::Frame(frame) if attached => {
-                let preview_compatible = self.reducer.current().is_some_and(|current| {
+                let preview_compatible = matches!(
+                    self.scroll_preview.as_ref(),
+                    Some(ScenePreview::Viewport { .. })
+                ) && self.reducer.current().is_some_and(|current| {
                     current.dimensions == frame.dimensions
                         && current.screen == frame.screen
                         && current.colors.background == frame.colors.background

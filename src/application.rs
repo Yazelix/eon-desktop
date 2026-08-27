@@ -269,10 +269,7 @@ impl TerminalScroll {
     }
 
     fn accept_batch(&mut self, requested_rows: i16, applied_rows: i16, cell_height: f64) -> bool {
-        let Some(expected_rows) = self.in_flight else {
-            return true;
-        };
-        if expected_rows != requested_rows {
+        if self.in_flight != Some(requested_rows) {
             return false;
         }
         self.in_flight = None;
@@ -2580,6 +2577,7 @@ mod tests {
     #[test]
     fn terminal_scroll_coalesces_one_signed_batch_without_losing_distance() {
         let start = Instant::now();
+        assert!(!TerminalScroll::default().accept_batch(-1, -1, 20.0));
         let row = yazelix_venus::DrawRow {
             wrapped: false,
             wrap_continuation: false,
