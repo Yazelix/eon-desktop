@@ -158,7 +158,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proven
+- **Status:** Candidate
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -169,6 +169,9 @@ retains accepted user-visible chronology.
   - Venus retains a sub-row remainder, commits crossed rows through at most one
     coalesced signed Orbit batch, and installs only its atomic authoritative
     frame and next preview.
+  - Lagging relative preview and commit revisions remain admissible while PTY
+    output advances; after history entry, later output leaves the authoritative
+    viewport pinned and further relative movement remains available.
   - A phase-complete precision gesture may continue with bounded elapsed-time
     exponential decay; discrete wheel input moves three rows per logical step
     without synthetic momentum.
@@ -182,15 +185,16 @@ retains accepted user-visible chronology.
   - A successful selection release writes Orbit's frozen text to both the
     ordinary Wayland clipboard and primary selection. `Ctrl+Shift+C` remains an
     explicit ordinary-clipboard copy.
-- **Important failures:** Stale presentation, failed gesture admission, resize,
-  capture loss, lifecycle or authority change, terminal-owned routing, history
-  edge, or Orbit rejection cancels synthetic motion and cannot fabricate cells,
-  selection, copied text, or viewport state.
+- **Important failures:** Future authority, stale coordinate- or phase-bound
+  input, failed gesture admission, resize, capture loss, lifecycle or authority
+  change, terminal-owned routing, history edge, or Orbit rejection cancels
+  synthetic motion and cannot fabricate cells, selection, copied text, or
+  viewport state.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
 - **Consumes:** Orbit `ORB-C5`, `ORB-C8`, and `ORB-C9` through canonical ORBS v10
-  at `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`; exact patched winit
+  at `4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea`; exact patched winit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
@@ -205,6 +209,8 @@ retains accepted user-visible chronology.
     ordinary clipboard effects, resize, reattachment, and client-loss
     coverage; native touchpad tracking, fling, reversal, fast multi-click
     selection, and automatic copy accepted by the user.
+- **Open proof:** Compatible continuous-output scrollback consumer acceptance is
+  pending at the exact Orbit source above.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -482,7 +488,7 @@ retains accepted user-visible chronology.
   owns the picker terminal Session and PTY.
 - **Consumes:** Eon `EON-C18`, EONW v4, and `eon-workspace-protocol` 0.1.0 at
   `aaafc9127c054e683abfceb3c8fcaae201a7a763`; unchanged Orbit ORBS v10 at
-  `59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`.
+  `4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea`.
 - **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
   simultaneous terminal composition, configurable geometry, arbitrary command,
   application-ID/path inference, compatibility launch form, placeholder pane,

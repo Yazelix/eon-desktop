@@ -2619,7 +2619,8 @@ mod tests {
         );
 
         scroll.push_pixels(40.0, TouchPhase::Moved, start, 20.0);
-        assert_eq!(scroll.next_request(7, Some(&preview), 20.0), None);
+        scroll.rebase();
+        assert_eq!(scroll.next_request(8, None, 20.0), None);
         assert!(!scroll.accept_batch(-4, -4, 20.0));
         assert!(scroll.accept_batch(-5, -5, 20.0));
         assert_eq!(scroll.pixels, 80.0);
@@ -2657,20 +2658,28 @@ mod tests {
         );
 
         assert_eq!(
-            scroll.next_request(8, None, 20.0),
+            scroll.next_request(9, None, 20.0),
             Some(ClientMessage::PreviewVertical {
-                frame_revision: 8,
+                frame_revision: 9,
+                direction: VerticalDirection::Up,
+            })
+        );
+        scroll.rebase();
+        assert_eq!(
+            scroll.next_request(10, None, 20.0),
+            Some(ClientMessage::PreviewVertical {
+                frame_revision: 10,
                 direction: VerticalDirection::Up,
             })
         );
 
         let edge = ScenePreview::Viewport {
-            frame_revision: 8,
+            frame_revision: 10,
             direction: VerticalDirection::Up,
             edge_reached: true,
             rows: Vec::new(),
         };
-        scroll.preview_arrived(8, VerticalDirection::Up);
+        scroll.preview_arrived(10, VerticalDirection::Up);
         scroll.resolve_preview(Some(&edge));
         assert_eq!(scroll.pixels, 0.0);
         assert_eq!(scroll.velocity, 0.0);

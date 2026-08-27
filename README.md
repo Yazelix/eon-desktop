@@ -35,7 +35,7 @@ Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 optional selection, pending-tab state, identities, tab launch directories,
 directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
-`59975e9176f5caf8b78dc3273e88d9ecbb75dc3f`. One reducer turns complete canonical
+`4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -219,7 +219,7 @@ are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
-`59975e9176f5caf8b78dc3273e88d9ecbb75dc3f` Orbit package revision supplies
+`4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea` Orbit package revision supplies
 accepted ORBS v10, including authoritative selection completion, routed native
 left-pointer gestures, bounded row-window previews, signed scroll batches, and
 read-only pane metadata, and resolves from GitHub.
@@ -234,10 +234,10 @@ lock files, and other generated artifacts.
 |---|---:|
 | Agent policy | 416 |
 | README | 243 |
-| Contracts and references | 918 |
-| Crate decisions | 167 |
+| Contracts and references | 934 |
+| Crate decisions | 169 |
 | Changelog | 142 |
-| Rust source, including unit tests | 12,744 |
+| Rust source, including unit tests | 12,753 |
 | Rust integration tests | 808 |
 | Cargo manifest | 23 |
-| **Total** | **15,461** |
+| **Total** | **15,488** |
