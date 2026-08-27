@@ -301,8 +301,10 @@ input remain strict. Venus retains one pending preview, one in-flight batch,
 fractional and kinetic input, canonical frame reduction, and truthful failures.
 While screen, geometry, default cell colors, and palette remain compatible, it
 keeps the last bounded revision-bound row window as presentation input, submits
-crossed rows against that exact lagging revision, and adds no retry,
-failure-string policy, history cache, or revision owner.
+crossed rows against that exact lagging revision, accepts only the matching
+in-flight outcome, and never carries terminal-routing evidence across a plain
+frame. It adds no retry, failure-string policy, history cache, or revision
+owner.
 
 ## Required for supervisor-owned native presentation
 

@@ -173,9 +173,10 @@ retains accepted user-visible chronology.
     output advances; after history entry, later output leaves the authoritative
     viewport pinned and further relative movement remains available.
   - When a later output frame preserves screen, geometry, default cell colors,
-    and palette while fractional movement remains, Venus keeps that bounded
-    revision-bound preview until Orbit supplies its replacement instead of
-    presenting the remainder as zero or freezing finger movement.
+    and palette while fractional movement remains, Venus keeps only that
+    bounded revision-bound preview until Orbit supplies its replacement instead
+    of presenting the remainder as zero or freezing finger movement. Every
+    plain frame retires transient terminal-routing evidence.
   - A phase-complete precision gesture may continue with bounded elapsed-time
     exponential decay; discrete wheel input moves three rows per logical step
     without synthetic momentum.
@@ -194,7 +195,8 @@ retains accepted user-visible chronology.
   terminal-owned routing, history edge, or Orbit rejection cancels synthetic
   motion and cannot fabricate cells, selection, copied text, or viewport state.
   A change to screen, geometry, default cell colors, or palette retires the
-  bounded preview before presentation.
+  bounded preview before presentation. An unsolicited or mismatched scroll
+  outcome is a protocol-order failure.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
@@ -205,18 +207,20 @@ retains accepted user-visible chronology.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** `3ddacb8d75b3d26a7beba60aef168e5ed5de19bc`
+- **Proof:** `bdd8b3628452b1dba8c4d4b2ad9bc2e802659d29`
   - **Environment:** Locked deterministic checks and optimized x86_64 Linux
     native Wayland dogfood
   - **Evidence:** Complete Rust checks; exact ORBS v10 pin; bounded multi-row
-    conversion, clipping, lagging commit, compatible-frame retention,
-    incompatible-frame retirement, edge, cancellation, routed cell/word/line
-    gestures, terminal capture with Shift override, separate primary and
-    ordinary clipboard effects, resize, reattachment, and client-loss
-    coverage. Bead comment 677 records user acceptance of the optimized native
-    compatible-frame path; later source changes preserve that exercised path
-    and prove incompatible screen, geometry, default-cell-color, and palette
-    transitions deterministically.
+    conversion, clipping, lagging commit, compatible viewport retention,
+    terminal-routing and incompatible-frame retirement, exact in-flight outcome
+    admission, edge, cancellation, routed cell/word/line gestures, terminal
+    capture with Shift override, separate primary and ordinary clipboard
+    effects, resize, reattachment, and client-loss coverage. Bead comment 677
+    records user acceptance of the optimized native compatible-frame path;
+    later source changes preserve that exercised path and prove incompatible
+    screen, geometry, default-cell-color, and palette transitions
+    deterministically.
+
 ## VEN-C8 — Eon workspace presentation
 
 - **Status:** Candidate
