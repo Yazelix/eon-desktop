@@ -31,7 +31,7 @@ Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authorit
 ```
 
 Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`963bdaf4d9816f27a26c7bdb6ee122855566a222`. Eon alone owns workspace order,
+`c305453bba4fe50c29f65e829b9cd65af31ced8a`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
@@ -165,10 +165,14 @@ Recovery continues only while that exact attachment remains current and live;
 endpoint replacement or authoritative offline state cancels obsolete retry
 state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
-Alt+M creates a pane, Ctrl+T opens a pending tab in Eon's directory picker, and
-Alt+Z requests that picker for an existing tab. While the picker is visible,
+Ctrl+Alt+H/L moves the active tab, Ctrl+Alt+K/J moves the selected pane,
+Ctrl+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
+Ctrl+T opens a pending tab in Eon's directory picker, and Alt+Z requests that
+picker for an existing tab. While the picker is visible,
 its terminal receives input and Alt+H/L can traverse to another tab without
-ending it; returning restores the same picker. The prior workspace focus is
+ending it; returning restores the same picker. Ctrl+Shift+W may discard the
+active non-final pending tab; other structural shortcuts remain blocked. The
+prior workspace focus is
 restored while the picker is hidden or after it closes. Press F6 to cycle
 terminal, tab, and pane keyboard focus; Left/Right on
 tabs, Up/Down on panes, and Escape remain
@@ -236,11 +240,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 246 |
-| Contracts and references | 958 |
+| README | 250 |
+| Contracts and references | 969 |
 | Crate decisions | 221 |
-| Changelog | 152 |
-| Rust source, including unit tests | 12,877 |
+| Changelog | 156 |
+| Rust source, including unit tests | 12,973 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **15,791** |
+| **Total** | **15,906** |

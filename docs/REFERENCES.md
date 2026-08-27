@@ -158,7 +158,7 @@ Within Eon's local-only product boundary, the projection treats a `file://`
 authority as transport decoration and displays only the absolute path. Remote
 working-directory semantics and percent decoding remain outside the contract.
 
-Exact EONW v4 protocol source `963bdaf4d9816f27a26c7bdb6ee122855566a222`
+Exact EONW v4 protocol source `c305453bba4fe50c29f65e829b9cd65af31ced8a`
 is authoritative for picker lifecycle and tab binding, active-tab identity,
 pending-tab state, tab launch directory, pane liveness, endpoint identity, and
 optional selection. Venus derives picker visibility only when its bound tab is
@@ -212,7 +212,7 @@ primary-selection, search, and raw-display clipboard ownership.
 `ven-c87`, `ven-present-tab-directory-picker-a6v`, and
 `ven-consume-picker-first-eonw-v4-zd1` consume `EON-C10`, `EON-C17`, `EON-C18`,
 and dependency-free EONW v4 from exact Eon source
-`963bdaf4d9816f27a26c7bdb6ee122855566a222`; prior workspace proof
+`c305453bba4fe50c29f65e829b9cd65af31ced8a`; prior workspace proof
 documentation is recorded at `93c3c723e5da95c92882571b2904d4c9a4b9f2ff`.
 The owner package supplies complete
 ordered snapshots, stable tab, pane, and Session identities, authoritative raw

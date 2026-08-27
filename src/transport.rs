@@ -1125,7 +1125,7 @@ mod tests {
 
     #[test]
     fn workspace_worker_carries_actions_and_picker_transition() {
-        use WorkspaceAction::{Focus, FocusId, Inspect, PickTabDirectory};
+        use WorkspaceAction::{CloseTab, Focus, FocusId, Inspect, Move, PickTabDirectory};
         use workspace::Direction::{Down, Left, Right, Up};
 
         let socket = TestSocket::new();
@@ -1144,6 +1144,23 @@ mod tests {
             (FocusId("pane-1".into()), snapshot.clone()),
             (Focus(Up), snapshot.clone()),
             (Focus(Down), snapshot),
+            (
+                Move(Left),
+                WorkspaceResponse::Snapshot(workspace_snapshot()),
+            ),
+            (
+                Move(Right),
+                WorkspaceResponse::Snapshot(workspace_snapshot()),
+            ),
+            (Move(Up), WorkspaceResponse::Snapshot(workspace_snapshot())),
+            (
+                Move(Down),
+                WorkspaceResponse::Snapshot(workspace_snapshot()),
+            ),
+            (
+                CloseTab { tab: "t2".into() },
+                WorkspaceResponse::Snapshot(workspace_snapshot()),
+            ),
             (
                 PickTabDirectory,
                 WorkspaceResponse::Snapshot(picker.clone()),

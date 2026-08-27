@@ -683,7 +683,7 @@ dependencies = [
 [[package]]
 name = "eon-workspace-protocol"
 version = "0.1.0"
-source = "git+https://github.com/Yazelix/eon.git?rev=963bdaf4d9816f27a26c7bdb6ee122855566a222#963bdaf4d9816f27a26c7bdb6ee122855566a222"
+source = "git+https://github.com/Yazelix/eon.git?rev=c305453bba4fe50c29f65e829b9cd65af31ced8a#c305453bba4fe50c29f65e829b9cd65af31ced8a"
 
 [[package]]
 name = "equivalent"

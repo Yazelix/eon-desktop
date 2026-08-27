@@ -943,7 +943,7 @@ impl Application {
             }
             return true;
         }
-        let shortcut = workspace_shortcut(code, self.input.modifiers());
+        let shortcut = workspace_shortcut(code, self.input.modifiers(), &snapshot.active_tab);
         let returns_to_terminal = !picker_visible
             && self.workspace_focus != WorkspaceFocus::Terminal
             && code == KeyCode::Escape;
@@ -953,7 +953,12 @@ impl Application {
             event.repeat,
             shortcut.as_ref().is_some_and(|action| {
                 workspace_shortcut_is_sendable(action, picker_visible)
-                    || matches!(action, WorkspaceAction::PickTabDirectory)
+                    || matches!(
+                        action,
+                        WorkspaceAction::PickTabDirectory
+                            | WorkspaceAction::Move(_)
+                            | WorkspaceAction::CloseTab { .. }
+                    )
             }) || returns_to_terminal,
         ) {
             if returns_to_terminal && event.state == ElementState::Pressed {
@@ -2185,6 +2190,7 @@ fn accessibility_workspace_focus(
 fn workspace_shortcut(
     code: KeyCode,
     modifiers: orbit_protocol::session::Modifiers,
+    active_tab: &str,
 ) -> Option<WorkspaceAction> {
     use orbit_protocol::session::Modifiers;
 
@@ -2196,6 +2202,23 @@ fn workspace_shortcut(
         (Modifiers::ALT, KeyCode::KeyM) => Some(WorkspaceAction::CreatePane),
         (Modifiers::ALT, KeyCode::KeyZ) => Some(WorkspaceAction::PickTabDirectory),
         (Modifiers::CTRL, KeyCode::KeyT) => Some(WorkspaceAction::CreateTab),
+        (modifiers, KeyCode::KeyH) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
+            Some(WorkspaceAction::Move(WorkspaceDirection::Left))
+        }
+        (modifiers, KeyCode::KeyL) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
+            Some(WorkspaceAction::Move(WorkspaceDirection::Right))
+        }
+        (modifiers, KeyCode::KeyK) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
+            Some(WorkspaceAction::Move(WorkspaceDirection::Up))
+        }
+        (modifiers, KeyCode::KeyJ) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
+            Some(WorkspaceAction::Move(WorkspaceDirection::Down))
+        }
+        (modifiers, KeyCode::KeyW) if modifiers == Modifiers::CTRL.union(Modifiers::SHIFT) => {
+            Some(WorkspaceAction::CloseTab {
+                tab: active_tab.into(),
+            })
+        }
         _ => None,
     }
 }
@@ -2216,6 +2239,7 @@ fn workspace_shortcut_is_sendable(action: &WorkspaceAction, picker_visible: bool
         || matches!(
             action,
             WorkspaceAction::Focus(WorkspaceDirection::Left | WorkspaceDirection::Right)
+                | WorkspaceAction::CloseTab { .. }
         )
 }
 
@@ -3189,7 +3213,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_workspace_shortcuts_use_existing_eon_actions() {
+    fn direct_workspace_shortcuts_use_stable_eon_actions() {
         use orbit_protocol::session::Modifiers;
 
         for (key, modifiers, action) in [
@@ -3220,12 +3244,44 @@ mod tests {
                 WorkspaceAction::PickTabDirectory,
             ),
             (KeyCode::KeyT, Modifiers::CTRL, WorkspaceAction::CreateTab),
+            (
+                KeyCode::KeyH,
+                Modifiers::CTRL.union(Modifiers::ALT),
+                WorkspaceAction::Move(WorkspaceDirection::Left),
+            ),
+            (
+                KeyCode::KeyL,
+                Modifiers::CTRL.union(Modifiers::ALT),
+                WorkspaceAction::Move(WorkspaceDirection::Right),
+            ),
+            (
+                KeyCode::KeyK,
+                Modifiers::CTRL.union(Modifiers::ALT),
+                WorkspaceAction::Move(WorkspaceDirection::Up),
+            ),
+            (
+                KeyCode::KeyJ,
+                Modifiers::CTRL.union(Modifiers::ALT),
+                WorkspaceAction::Move(WorkspaceDirection::Down),
+            ),
+            (
+                KeyCode::KeyW,
+                Modifiers::CTRL.union(Modifiers::SHIFT),
+                WorkspaceAction::CloseTab { tab: "t2".into() },
+            ),
         ] {
-            assert_eq!(workspace_shortcut(key, modifiers), Some(action));
+            assert_eq!(workspace_shortcut(key, modifiers, "t2"), Some(action));
         }
-        assert_eq!(workspace_shortcut(KeyCode::KeyT, Modifiers::ALT), None);
         assert_eq!(
-            workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT)),
+            workspace_shortcut(KeyCode::KeyT, Modifiers::ALT, "t2"),
+            None
+        );
+        assert_eq!(
+            workspace_shortcut(KeyCode::KeyW, Modifiers::CTRL, "t2"),
+            None
+        );
+        assert_eq!(
+            workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT), "t2"),
             None
         );
     }
@@ -3266,6 +3322,29 @@ mod tests {
         ));
         assert!(!sends_workspace_shortcut(
             &WorkspaceAction::PickTabDirectory,
+            true,
+            ElementState::Pressed,
+            false
+        ));
+        for action in [
+            WorkspaceAction::Move(WorkspaceDirection::Left),
+            WorkspaceAction::CloseTab { tab: "t2".into() },
+        ] {
+            assert!(!sends_workspace_shortcut(
+                &action,
+                false,
+                ElementState::Pressed,
+                true
+            ));
+        }
+        assert!(!sends_workspace_shortcut(
+            &WorkspaceAction::Move(WorkspaceDirection::Left),
+            true,
+            ElementState::Pressed,
+            false
+        ));
+        assert!(sends_workspace_shortcut(
+            &WorkspaceAction::CloseTab { tab: "t2".into() },
             true,
             ElementState::Pressed,
             false

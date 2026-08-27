@@ -6,6 +6,10 @@
   under unchanged ORBS v10 so its bounded output queue reserves one atomic
   scroll outcome behind a partially transmitted frame. Venus behavior remains
   unchanged; Eon accepts the exact pair separately.
+- Consume Eon's stable-target tab close and workspace movement actions.
+  Ctrl+Shift+W closes the expected active non-final tab, Ctrl+Alt+H/L moves the
+  active tab, and Ctrl+Alt+K/J moves the selected pane without a mode; exact
+  presses and releases remain outside terminal input.
 - Consume EONW v4, admit workspace-only startup through `--workspace`, and
   project Eon's initial, new-tab, or Alt+Z directory picker as the only tab-body
   terminal with one-cell gutters, modal input, and AccessKit focus only on its
