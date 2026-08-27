@@ -298,8 +298,11 @@ exact accepted source `4e03fe280a714c3f3e29d31d0ec6374eaaf4ecea` under unchanged
 ORBS v10. Orbit resolves lagging relative preview and signed-scroll requests
 against current terminal authority while future revisions and unrelated stale
 input remain strict. Venus retains one pending preview, one in-flight batch,
-fractional and kinetic input, canonical frame reduction, and truthful failures;
-it adds no retry, failure-string policy, history cache, or revision owner.
+fractional and kinetic input, canonical frame reduction, and truthful failures.
+While screen, geometry, default cell colors, and palette remain compatible, it
+keeps the last bounded revision-bound row window as presentation input, submits
+crossed rows against that exact lagging revision, and adds no retry,
+failure-string policy, history cache, or revision owner.
 
 ## Required for supervisor-owned native presentation
 
