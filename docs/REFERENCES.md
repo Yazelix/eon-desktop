@@ -236,7 +236,7 @@ Exact winit, wgpu, glyphon, and AccessKit versions already selected above own th
 native event, clipping, drawing, tab semantics, expanded state, and accessibility
 action mechanisms used by the workspace projection.
 
-The v4 picker state contributes only one live-tab identity and one validated
+The v4 picker state contributes only one existing-tab identity and one validated
 endpoint; its bound pending tab may have no panes or selected pane. Venus
 derives visibility from equality with the active tab and reuses its single
 terminal attachment, scene, renderer, input, and AccessKit owners. One explicit
