@@ -158,7 +158,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Candidate
+- **Status:** Proven
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -209,7 +209,7 @@ retains accepted user-visible chronology.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** Baseline `bdd8b3628452b1dba8c4d4b2ad9bc2e802659d29`
+- **Proof:** `d3e63ae6e9fa0b72df426dbfc9bd29a96148577a`
   - **Environment:** Locked deterministic checks and optimized x86_64 Linux
     native Wayland dogfood
   - **Evidence:** Complete Rust checks; exact ORBS v10 pin; bounded multi-row
@@ -217,13 +217,10 @@ retains accepted user-visible chronology.
     terminal-routing and incompatible-frame retirement, exact in-flight outcome
     admission, edge, cancellation, routed cell/word/line gestures, terminal
     capture with Shift override, separate primary and ordinary clipboard
-    effects, resize, reattachment, and client-loss coverage. Bead comment 677
-    records user acceptance of the optimized native compatible-frame path;
-    later source changes preserve that exercised path and prove incompatible
-    screen, geometry, default-cell-color, and palette transitions
-    deterministically.
-- **Open proof:** Immutable Venus revision and optimized native continuous-output
-  acceptance before VEN-C7 returns to Proven.
+    effects, resize, reattachment, and client-loss coverage. Bead comment 711
+    records user acceptance of optimized native continuous-output hard flings on
+    the exact source committed at the proof revision; that revision preserves
+    transient timeout motion while cancelling an occluded surface explicitly.
 
 ## VEN-C8 — Eon workspace presentation
 
