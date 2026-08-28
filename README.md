@@ -219,7 +219,7 @@ cargo clippy --locked --all-targets -- -D warnings
 
 ## Exclusions
 
-Arbitrary split trees, simultaneous expanded panes, reordering, sidebars,
+Arbitrary split trees, simultaneous expanded panes, sidebars,
 popups, persistent Venus configuration, blur strength or live blur changes,
 background images, plugins, remote and web access, packaging, and distribution
 are outside this slice.
@@ -241,10 +241,10 @@ lock files, and other generated artifacts.
 |---|---:|
 | Agent policy | 416 |
 | README | 250 |
-| Contracts and references | 969 |
+| Contracts and references | 968 |
 | Crate decisions | 221 |
 | Changelog | 156 |
 | Rust source, including unit tests | 12,973 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **15,906** |
+| **Total** | **15,905** |

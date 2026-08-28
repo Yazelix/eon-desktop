@@ -223,7 +223,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C8 — Eon workspace presentation
 
-- **Status:** Candidate
+- **Status:** Partially proved
 - **Consumer:** One Venus surface controlled by an Eon workspace.
 - **Trigger:** Outside visible `VEN-C18` picker presentation, Eon supplies
   durable topology or a workspace action changes tab, pane, focus, order,
@@ -271,17 +271,18 @@ retains accepted user-visible chronology.
   `c305453bba4fe50c29f65e829b9cd65af31ced8a`; Orbit metadata observation in
   ORBS v5 and `orbit-protocol` 0.1.0 at
   `69c402737799f03e615473956954a043647a4713`.
-- **Boundary:** Other Linux Wayland compositors remain outside the candidate
+- **Boundary:** Other Linux Wayland compositors remain outside the current
   proof.
-- **Proof:** `a6e6846fe0c6039759b526b936704a3146fcad9c`
-  - **Environment:** x86_64 Linux deterministic checks and native COSMIC Wayland
+- **Proof:** `d2d798099934dcf8037bfad6ab856e40c9b989fe`
+  - **Environment:** x86_64 Linux deterministic checks, native COSMIC Wayland,
+    and installed headless Sway
   - **Evidence:** Complete locked Rust checks against exact EONW v4; bounded
-    active-tab projection, metadata, action, scene, and AccessKit checks while a
-    picker remains bound to another tab; isolated native picker-to-durable-to-
-    picker attachment and AT-SPI projection; prior complete EONW v3 proof
+    active-tab projection, metadata, action, scene, AccessKit, and direct
+    structural-shortcut checks while a picker remains bound to another tab;
+    isolated native picker-to-durable-to-picker attachment, AT-SPI projection,
+    and installed Eon input for all five structural chords; prior complete EONW v3 proof
     `9b2a527d3581f40569f58e24130cc8f8f1222162`
-- **Open proof:** Final installed Eon composition and fractional native scale
-  remain to be dogfooded.
+- **Open proof:** Fractional native scale remains to be dogfooded.
 
 ## VEN-C9 — Optional native decorations
 
@@ -479,7 +480,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C18 — Picker-first tab directory presentation
 
-- **Status:** Candidate
+- **Status:** Proved
 - **Consumer:** One person starting or using a live full-Eon Venus workspace.
 - **Trigger:** Venus is launched with `--workspace EON_WORKSPACE_SOCKET` and
   EONW v4 publishes one directory picker bound to an existing tab, including a
@@ -518,17 +519,16 @@ retains accepted user-visible chronology.
   application-ID/path inference, compatibility launch form, placeholder pane,
   selection sentinel, Orbit change, Eon runtime producer, or additional
   platform.
-- **Proof:** `a6e6846fe0c6039759b526b936704a3146fcad9c`
-  - **Environment:** x86_64 Linux deterministic checks and native COSMIC Wayland
+- **Proof:** `d2d798099934dcf8037bfad6ab856e40c9b989fe`
+  - **Environment:** x86_64 Linux deterministic checks, native COSMIC Wayland,
+    and installed headless Sway
   - **Evidence:** Complete locked Rust checks against exact EONW v4; explicit
     workspace-only launch admission; attachment to the picker while visible and
-    to the active durable pane while inactive; left/right shortcut admission,
-    geometry, focus, metadata, and AccessKit
-    checks; isolated native picker-to-durable-to-identical-picker presentation
-    and AT-SPI projection; prior EONW v3 picker proof
+    to the active durable pane while inactive; traversal and stable-target close
+    admission, geometry, focus, metadata, and AccessKit checks; isolated native
+    picker-to-durable-to-identical-picker presentation, AT-SPI projection, and
+    installed Eon Ctrl+Shift+W pending-tab close; prior EONW v3 picker proof
     `df88b2867d50c59a316418471abd000da02940bc`.
-- **Open proof:** Eon runtime production and installed full-product picker-first
-  dogfood remain pending.
 
 ## Rules
 
