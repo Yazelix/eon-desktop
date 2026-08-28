@@ -220,11 +220,11 @@ authority; Eon owns product orchestration, policy, composition, and distribution
 ## Status
 
 This repository implements the accepted `ven-upt.2` standalone Linux slice and
-the accepted `ven-c87` Eon workspace slice. `VEN-C8` is proved through Venus
-`3612a929402de00d07d582b6547d99f66afe5cad`: base workspace materialization,
-native refresh and shortcuts, fitting pane-header materialization, and
-cache-coherent live title/CWD metadata for every visible pane. Native Linux
-Wayland is the sole platform; broader compositor coverage remains unproved.
+the accepted `ven-c87` Eon workspace slice. `VEN-C8` is partially proved through
+Venus `d2d798099934dcf8037bfad6ab856e40c9b989fe`; its remaining open proof is
+fractional native scale. `VEN-C18` is proved through the same revision. Native
+Linux Wayland is the sole platform; broader compositor coverage remains
+unproved.
 
 ## Product boundary
 
@@ -242,11 +242,11 @@ of compensating in the client.
 The current Linux slice is one native window. It supports either one standalone
 local Orbit session or Eon-authored horizontal tabs and ordered per-active-tab
 vertical accordion pane headers around exactly one expanded Orbit surface. It
-does not include arbitrary split trees, simultaneous expanded panes, reordering,
-sidebars, popups, settings, visual effects, configuration, remote or web access,
-plugins, shell integration, compatibility windows, packaging, or distribution.
-X11, Xwayland, macOS, and other native platforms are unsupported product
-surfaces, not compatibility targets.
+does not include arbitrary split trees, simultaneous expanded panes, sidebars,
+popups, settings, visual effects, configuration, remote or web access, plugins,
+shell integration, compatibility windows, packaging, or distribution. X11,
+Xwayland, macOS, and other native platforms are unsupported product surfaces,
+not compatibility targets.
 
 A new Venus module is product scope, not an implementation detail.
 
