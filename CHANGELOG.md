@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep active precision gesture and kinetic scroll state across a deferred
+  surface presentation, so a transient GPU texture timeout skips one visual
+  sample without truncating momentum during live output.
 - Consume accepted Orbit `a65e199e16e97330175e314cacf791fa00f53069`
   under unchanged ORBS v10 so its bounded output queue reserves one atomic
   scroll outcome behind a partially transmitted frame. Venus behavior remains

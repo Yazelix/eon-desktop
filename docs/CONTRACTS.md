@@ -158,7 +158,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proven
+- **Status:** Candidate
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -180,6 +180,8 @@ retains accepted user-visible chronology.
   - A phase-complete precision gesture may continue with bounded elapsed-time
     exponential decay; discrete wheel input moves three rows per logical step
     without synthetic momentum.
+  - Deferred presentation preserves gesture estimation, kinetic velocity, and
+    distance for the next presentation; reported window occlusion still cancels.
   - Redraw follows native compositor callbacks.
   - Venus sends every left-pointer phase to Orbit. Orbit routes uncaptured
     input to cell, word, or logical-line selection, preserves terminal mouse
@@ -207,7 +209,7 @@ retains accepted user-visible chronology.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** `bdd8b3628452b1dba8c4d4b2ad9bc2e802659d29`
+- **Proof:** Baseline `bdd8b3628452b1dba8c4d4b2ad9bc2e802659d29`
   - **Environment:** Locked deterministic checks and optimized x86_64 Linux
     native Wayland dogfood
   - **Evidence:** Complete Rust checks; exact ORBS v10 pin; bounded multi-row
@@ -220,6 +222,8 @@ retains accepted user-visible chronology.
     later source changes preserve that exercised path and prove incompatible
     screen, geometry, default-cell-color, and palette transitions
     deterministically.
+- **Open proof:** Immutable Venus revision and optimized native continuous-output
+  acceptance before VEN-C7 returns to Proven.
 
 ## VEN-C8 — Eon workspace presentation
 

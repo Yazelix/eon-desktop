@@ -1515,7 +1515,7 @@ impl Application {
                     self.flush_deferred_selection(revision);
                 }
             }
-            Ok(PresentOutcome::Deferred) => self.terminal_scroll.stop_gesture(),
+            Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Recovered) => {
                 self.presentation.unpublish();
                 state.window.request_redraw();
