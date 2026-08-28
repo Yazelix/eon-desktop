@@ -180,8 +180,8 @@ retains accepted user-visible chronology.
   - A phase-complete precision gesture may continue with bounded elapsed-time
     exponential decay; discrete wheel input moves three rows per logical step
     without synthetic momentum.
-  - Deferred presentation preserves gesture estimation, kinetic velocity, and
-    distance for the next presentation; reported window occlusion still cancels.
+  - A transient presentation timeout preserves gesture estimation, kinetic
+    velocity, and distance; an occluded surface still cancels them.
   - Redraw follows native compositor callbacks.
   - Venus sends every left-pointer phase to Orbit. Orbit routes uncaptured
     input to cell, word, or logical-line selection, preserves terminal mouse

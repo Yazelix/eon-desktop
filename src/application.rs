@@ -1516,6 +1516,7 @@ impl Application {
                 }
             }
             Ok(PresentOutcome::Deferred) => {}
+            Ok(PresentOutcome::Occluded) => self.terminal_scroll.cancel(),
             Ok(PresentOutcome::Recovered) => {
                 self.presentation.unpublish();
                 state.window.request_redraw();

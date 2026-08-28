@@ -124,6 +124,7 @@ impl CellMetrics {
 pub enum PresentOutcome {
     Presented,
     Deferred,
+    Occluded,
     Recovered,
 }
 
@@ -737,7 +738,7 @@ impl Renderer {
             }
             CurrentSurfaceTexture::Occluded => {
                 self.reset_cursor_animation();
-                return Ok(PresentOutcome::Deferred);
+                return Ok(PresentOutcome::Occluded);
             }
             CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
