@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Keep scrolling, selection, and tab/pane focus admitted across compatible
+  terminal output while refreshing rendered content. Consume Orbit
+  `91999d79546422b49bdbc124166a65859d0bd872` for nonfuture selection admission;
+  geometry, attachment, and authoritative Finish presentation gates remain.
+
 - Keep active precision gesture and kinetic scroll state across a transient GPU
   texture timeout without weakening occluded-surface cancellation, so the
   skipped visual sample does not truncate momentum during live output.

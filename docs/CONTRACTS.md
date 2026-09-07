@@ -80,10 +80,13 @@ retains accepted user-visible chronology.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces.
-- **Proof:** `c0766532c7669a2ae9dac6a26ae94d467110896b`
+- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
   - **Environment:** Accepted deterministic host coverage plus retained native
     geometry and input evidence
-  - **Evidence:** Shared geometry, resize-settlement, semantic mapping,
+  - **Evidence:** Native Application input-between-frames regression;
+    Sway focus/selection/scroll checks; retained geometry proof
+    `c0766532c7669a2ae9dac6a26ae94d467110896b`. Shared geometry,
+    resize-settlement, semantic mapping,
     preedit, focus cleanup, and fullscreen checks, retaining typography proof
     `846daf8fb7846b0e8dc227e533aa8d51a691f76f`, semantic-input proof
     `a17d100d11d38acf515cf96af34df6bbfef9850b`, and focused geometry proofs
@@ -159,7 +162,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Partially proved
+- **Status:** Proved
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -214,21 +217,28 @@ retains accepted user-visible chronology.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** `d3e63ae6e9fa0b72df426dbfc9bd29a96148577a`
+- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
   - **Environment:** Locked deterministic checks and optimized x86_64 Linux
     native Wayland dogfood
-  - **Evidence:** Complete Rust checks; exact ORBS v10 pin; bounded multi-row
+  - **Evidence:** Complete Rust checks and Nix build; native Application red/green
+    admission regression; standalone cell/word/line drag and repeat-click
+    gestures, both clipboard destinations and explicit copy during output;
+    anchored history with continuing terminal replies under appends, active
+    redraws, and DEC 2026. Native artifacts and exact observations are recorded
+    in `ven-select-during-live-output-752`. Retained scroll proof
+    `d3e63ae6e9fa0b72df426dbfc9bd29a96148577a` covers the exact ORBS v10
+    pin; bounded multi-row
     conversion, clipping, lagging commit, compatible viewport retention,
     terminal-routing and incompatible-frame retirement, exact in-flight outcome
     admission, edge, cancellation, routed cell/word/line gestures, terminal
     capture with Shift override, separate primary and ordinary clipboard
     effects, resize, reattachment, and client-loss coverage. Bead comment 711
     records user acceptance of optimized native continuous-output hard flings on
-    the exact source committed at the proof revision; that revision preserves
+    `d3e63ae6e9fa0b72df426dbfc9bd29a96148577a`; that revision preserves
     transient timeout motion while cancelling an occluded surface explicitly.
-- **Open proof:** The live-output input candidate requires exact source
-  acceptance, the native application regression, and live Orbit selection and
-  history dogfood. Composed Eon installation is a separate acceptance slice.
+- **Open proof:** Adoption into the normal Eon manifest/profile remains a
+  separate acceptance slice. The isolated Eon Input Dogfood launcher selects
+  this exact source without changing that installed product.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -284,10 +294,14 @@ retains accepted user-visible chronology.
   `69c402737799f03e615473956954a043647a4713`.
 - **Boundary:** Other Linux Wayland compositors remain outside the current
   proof.
-- **Proof:** `d2d798099934dcf8037bfad6ab856e40c9b989fe`
-  - **Environment:** x86_64 Linux deterministic checks, native COSMIC Wayland,
-    and installed headless Sway
-  - **Evidence:** Complete locked Rust checks against exact EONW v4; bounded
+- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
+  - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
+    COSMIC observations belong to the retained prior proof.
+  - **Evidence:** Complete locked Rust checks and isolated Nix workspace
+    acceptance: two completed tabs without a picker, native Alt+H/L, F6 and
+    tab/pane arrows, and tab clicks while an attached Session appends. Retained
+    proof `d2d798099934dcf8037bfad6ab856e40c9b989fe` covers exact EONW v4;
+    bounded
     active-tab projection, metadata, action, scene, AccessKit, and direct
     structural-shortcut checks while a picker remains bound to another tab;
     isolated native picker-to-durable-to-picker attachment, AT-SPI projection,
@@ -531,8 +545,8 @@ retains accepted user-visible chronology.
   selection sentinel, Orbit change, Eon runtime producer, or additional
   platform.
 - **Proof:** `d2d798099934dcf8037bfad6ab856e40c9b989fe`
-  - **Environment:** x86_64 Linux deterministic checks, native COSMIC Wayland,
-    and installed headless Sway
+  - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
+    COSMIC observations belong to the retained prior proof.
   - **Evidence:** Complete locked Rust checks against exact EONW v4; explicit
     workspace-only launch admission; attachment to the picker while visible and
     to the active durable pane while inactive; traversal and stable-target close
@@ -540,8 +554,12 @@ retains accepted user-visible chronology.
     picker-to-durable-to-identical-picker presentation, AT-SPI projection, and
     installed Eon Ctrl+Shift+W pending-tab close; prior EONW v3 picker proof
     `df88b2867d50c59a316418471abd000da02940bc`.
-- **Open proof:** The Orbit protocol tree is unchanged, but exact Venus source
-  acceptance remains required for the advanced dependency identity.
+- **Open proof:** The unchanged protocol tree and exact dependency identity
+  are verified at `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`. Fast picker
+  retirement/recreation at the same socket can leave Venus on the prior exited
+  attachment if it misses the intermediate workspace state. The endpoint/live
+  comparison is unchanged by the live-output correction; this observed gap
+  remains outside that slice and prevents widening picker acceptance.
 
 ## Rules
 

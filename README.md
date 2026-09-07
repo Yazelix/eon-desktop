@@ -228,7 +228,7 @@ Vulkan renderer. Point `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY` at that display,
 and `TMPDIR` at disposable proof storage, then run:
 
 ```sh
-cargo test --locked --bin yazelix-venus live_output_keeps_application_input_admitted_before_repaint -- --ignored
+timeout 30s cargo test --locked --bin yazelix-venus live_output_keeps_application_input_admitted_before_repaint -- --ignored
 ```
 
 ## Exclusions
@@ -256,10 +256,10 @@ lock files, and other generated artifacts.
 |---|---:|
 | Agent policy | 416 |
 | README | 265 |
-| Contracts and references | 1,010 |
+| Contracts and references | 1,028 |
 | Crate decisions | 225 |
-| Changelog | 159 |
+| Changelog | 164 |
 | Rust source, including unit tests | 13,351 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **16,347** |
+| **Total** | **16,370** |
