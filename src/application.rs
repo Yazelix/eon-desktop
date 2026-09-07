@@ -2213,7 +2213,9 @@ fn workspace_shortcut(
         (Modifiers::ALT, KeyCode::KeyJ) => Some(WorkspaceAction::Focus(WorkspaceDirection::Down)),
         (Modifiers::ALT, KeyCode::KeyM) => Some(WorkspaceAction::CreatePane),
         (Modifiers::ALT, KeyCode::KeyZ) => Some(WorkspaceAction::PickTabDirectory),
-        (Modifiers::CTRL, KeyCode::KeyT) => Some(WorkspaceAction::CreateTab),
+        (modifiers, KeyCode::KeyT) if modifiers == Modifiers::ALT.union(Modifiers::SHIFT) => {
+            Some(WorkspaceAction::CreateTab)
+        }
         (modifiers, KeyCode::KeyH) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
             Some(WorkspaceAction::Move(WorkspaceDirection::Left))
         }
@@ -2226,7 +2228,7 @@ fn workspace_shortcut(
         (modifiers, KeyCode::KeyJ) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
             Some(WorkspaceAction::Move(WorkspaceDirection::Down))
         }
-        (modifiers, KeyCode::KeyW) if modifiers == Modifiers::CTRL.union(Modifiers::SHIFT) => {
+        (modifiers, KeyCode::KeyW) if modifiers == Modifiers::ALT.union(Modifiers::SHIFT) => {
             Some(WorkspaceAction::CloseTab {
                 tab: active_tab.into(),
             })
@@ -3620,7 +3622,11 @@ mod tests {
                 Modifiers::ALT,
                 WorkspaceAction::PickTabDirectory,
             ),
-            (KeyCode::KeyT, Modifiers::CTRL, WorkspaceAction::CreateTab),
+            (
+                KeyCode::KeyT,
+                Modifiers::ALT.union(Modifiers::SHIFT),
+                WorkspaceAction::CreateTab,
+            ),
             (
                 KeyCode::KeyH,
                 Modifiers::CTRL.union(Modifiers::ALT),
@@ -3643,20 +3649,24 @@ mod tests {
             ),
             (
                 KeyCode::KeyW,
-                Modifiers::CTRL.union(Modifiers::SHIFT),
+                Modifiers::ALT.union(Modifiers::SHIFT),
                 WorkspaceAction::CloseTab { tab: "t2".into() },
             ),
         ] {
             assert_eq!(workspace_shortcut(key, modifiers, "t2"), Some(action));
         }
-        assert_eq!(
-            workspace_shortcut(KeyCode::KeyT, Modifiers::ALT, "t2"),
-            None
-        );
-        assert_eq!(
-            workspace_shortcut(KeyCode::KeyW, Modifiers::CTRL, "t2"),
-            None
-        );
+        for key in [KeyCode::KeyT, KeyCode::KeyW] {
+            for modifiers in [
+                Modifiers::CTRL,
+                Modifiers::ALT,
+                Modifiers::CTRL.union(Modifiers::SHIFT),
+                Modifiers::CTRL
+                    .union(Modifiers::ALT)
+                    .union(Modifiers::SHIFT),
+            ] {
+                assert_eq!(workspace_shortcut(key, modifiers, "t2"), None);
+            }
+        }
         assert_eq!(
             workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT), "t2"),
             None
