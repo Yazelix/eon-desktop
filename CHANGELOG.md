@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use Alt+Shift+T to open a new tab and Alt+Shift+W to close the active
+  non-final tab, matching Nova. Ctrl+T and Ctrl+Shift+W reach terminal programs.
+
 - Keep long workspace directory labels on the visible header line, including
   underscores, instead of wrapping the name below its clip bounds.
 - Keep scrolling, selection, and tab/pane focus admitted across compatible

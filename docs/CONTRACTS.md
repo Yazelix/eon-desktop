@@ -270,16 +270,16 @@ retains accepted user-visible chronology.
     reinspection exposes accepted external workspace changes without native
     input.
   - Pointer input, Alt+H/L tab traversal, Alt+K/J pane traversal, Alt+M pane
-    creation, Ctrl+T tab requests, focused arrow traversal, and selected-terminal
-    attachment retain their existing owners. Alt+H/L remains admitted while a
-    picker is visible, and a picker bound to another tab does not replace the
-    active tab's durable projection.
+    creation, Alt+Shift+T tab requests, focused arrow traversal, and
+    selected-terminal attachment retain their existing owners. Alt+H/L remains
+    admitted while a picker is visible, and a picker bound to another tab does
+    not replace the active tab's durable projection.
   - Ctrl+Alt+H/L sends one non-repeating semantic move for the active tab;
-    Ctrl+Alt+K/J does the same for its selected pane. Ctrl+Shift+W sends one
+    Ctrl+Alt+K/J does the same for its selected pane. Alt+Shift+W sends one
     non-repeating close naming the snapshot's active stable `tN`. Venus consumes
     each exact press and matching release without forwarding either to the
-    selected terminal. Lowercase Ctrl+W remains terminal input, and none of
-    these shortcuts enters a mode.
+    selected terminal. Ctrl+T, Ctrl+Shift+W, and lowercase Ctrl+W remain terminal
+    input, and none of these shortcuts enters a mode.
   - Compatible terminal output does not withdraw tab/pane focus actions or
     presented header hit targets while a repaint is pending.
   - Hit testing and actions retain the exact `tN` identity. AccessKit names pair
@@ -299,7 +299,8 @@ retains accepted user-visible chronology.
   `69c402737799f03e615473956954a043647a4713`.
 - **Boundary:** Other Linux Wayland compositors remain outside the current
   proof.
-- **Proof:** `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
+- **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
+  `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
   - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
     COSMIC observations belong to the retained prior proof.
@@ -318,9 +319,19 @@ retains accepted user-visible chronology.
     multiline failures, complete locked Rust checks, and native Sway 1.12
     scale-1 installed Eon screenshot acceptance of two real Orbit-backed tabs.
     Eon `/nix/store/j4n3j5r9mfj7xpkj6sjnb9cns11ffsly-eon-0.1.0` consumes
-    this exact Venus source with Orbit `91999d79546422b49bdbc124166a65859d0bd872`.
+    the header proof source with Orbit `91999d79546422b49bdbc124166a65859d0bd872`.
     Long labels remain on one horizontally clipped line; this does not extend
     scale proof.
+  - **Tab shortcut evidence:** `ven-yp4` records focused red/green and complete
+    locked Rust checks plus native Sway 1.12 scale-1 composition. Alt+Shift+T
+    opens an inherited-directory pending tab; Alt+Shift+W cancels it or closes
+    an accepted durable tab while preserving the original Session and final-tab
+    protection. Ctrl+T and Ctrl+Shift+W produce exactly `14 17` PTY bytes, with
+    no workspace mutation or new-shortcut leakage. Eon source
+    `fea679260dd81fcdbb907e804156b00244af2324` accepts the same observations
+    through installed `/nix/store/578xxkf17cin8sdn6pb5rr10hxz4yfqg-eon-0.1.0`
+    with unchanged Orbit `91999d79546422b49bdbc124166a65859d0bd872`; both Eon
+    profiles resolve to their current-tree builds. This changes no scale proof.
 - **Open proof:** Fractional native scale remains to be dogfooded.
 
 ## VEN-C9 — Optional native decorations
@@ -537,7 +548,7 @@ retains accepted user-visible chronology.
   only while the picker-owning tab is active, including during picker-first
   startup. Venus admits existing Alt+H/L traversal while the picker is visible;
   another active tab presents its selected durable pane, and returning presents
-  the identical picker. Ctrl+Shift+W names the active stable `tN`; Eon accepts
+  the identical picker. Alt+Shift+W names the active stable `tN`; Eon accepts
   it during a picker only when that picker owns a non-final pending tab. All
   other structural shortcuts remain unavailable while the picker is visible.
   Venus sends one semantic `PickTabDirectory` action on an Alt+Z press, keeps
@@ -546,7 +557,7 @@ retains accepted user-visible chronology.
   Visible picker input, IME, pointer routing, and AccessKit focus become
   terminal-owned without overwriting the prior workspace focus; hiding or
   removing picker state restores ordinary active-tab projection and focus.
-- **Important failures:** Standalone Venus preserves raw Alt+Z and Ctrl+Shift+W.
+- **Important failures:** Standalone Venus preserves raw Alt+Z and Alt+Shift+T/W.
   Repeats, duplicate invocation, gutter input, unavailable endpoints, and
   undersized grids create no second picker, inferred pane or selection, invalid
   geometry, eager attachment, or hidden workspace action. Missing, duplicate,
@@ -564,7 +575,8 @@ retains accepted user-visible chronology.
   application-ID/path inference, compatibility launch form, placeholder pane,
   selection sentinel, Orbit change, Eon runtime producer, or additional
   platform.
-- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
+- **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
+  `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for picker lifecycle
   - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
     COSMIC observations belong to the retained prior proof.
   - **Evidence:** Complete locked Rust checks against exact EONW v4; explicit
@@ -584,6 +596,9 @@ retains accepted user-visible chronology.
     without refocus and preserve durable panes. Older Eon compositions that
     reuse a picker endpoint retain the known missed-transition failure.
     Fractional native scale remains open under VEN-C8.
+  - **Tab shortcut evidence:** `ven-yp4` and VEN-C8 record native Alt+Shift+T
+    pending-tab creation and Alt+Shift+W pending/durable close with unchanged
+    EONW v4, inherited directory, and surviving Session identity.
 
 ## Rules
 

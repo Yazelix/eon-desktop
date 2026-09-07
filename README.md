@@ -167,11 +167,11 @@ endpoint replacement or authoritative offline state cancels obsolete retry
 state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Ctrl+Alt+H/L moves the active tab, Ctrl+Alt+K/J moves the selected pane,
-Ctrl+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
-Ctrl+T opens a pending tab in Eon's directory picker, and Alt+Z requests that
+Alt+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
+Alt+Shift+T opens a pending tab in Eon's directory picker, and Alt+Z requests that
 picker for an existing tab. While the picker is visible,
 its terminal receives input and Alt+H/L can traverse to another tab without
-ending it; returning restores the same picker. Ctrl+Shift+W may discard the
+ending it; returning restores the same picker. Alt+Shift+W may discard the
 active non-final pending tab; other structural shortcuts remain blocked. The
 prior workspace focus is
 restored while the picker is hidden or after it closes. Press F6 to cycle
@@ -257,10 +257,10 @@ Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 | Agent policy inputs | 208 |
 | README | 266 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,052 |
+| Contracts and references | 1,067 |
 | Crate decisions | 225 |
-| Changelog | 173 |
-| Rust source, including unit tests | 13,458 |
+| Changelog | 176 |
+| Rust source, including unit tests | 13,468 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **16,309** |
+| **Total** | **16,337** |
