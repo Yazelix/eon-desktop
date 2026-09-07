@@ -367,11 +367,15 @@ impl PresentationState {
         }
     }
 
-    fn invalidate(&mut self) {
+    fn content_changed(&mut self) {
         self.generation = self
             .generation
             .checked_add(1)
             .expect("presentation generation exhausted");
+    }
+
+    fn invalidate(&mut self) {
+        self.content_changed();
         self.unpublish();
     }
 
@@ -385,14 +389,12 @@ impl PresentationState {
         self.presented = None;
     }
 
-    fn is_current(&self, candidate: PresentationIdentity) -> bool {
-        self.presented == Some(candidate)
+    fn has_presented_geometry(&self) -> bool {
+        self.presented.is_some()
     }
 
-    fn current_revision(&self, candidate: PresentationIdentity) -> Option<u64> {
-        self.is_current(candidate)
-            .then_some(candidate.revision)
-            .flatten()
+    fn presented_revision(&self) -> Option<u64> {
+        self.presented.and_then(|identity| identity.revision)
     }
 }
 
@@ -898,9 +900,7 @@ impl Application {
     }
 
     fn send_workspace(&mut self, action: WorkspaceAction) -> bool {
-        let workspace = self.workspace_scene();
-        let candidate = self.presentation_candidate(workspace.as_ref());
-        self.presentation.is_current(candidate) && self.queue_workspace(action)
+        self.presentation.has_presented_geometry() && self.queue_workspace(action)
     }
 
     fn queue_workspace(&mut self, action: WorkspaceAction) -> bool {
@@ -1071,6 +1071,10 @@ impl Application {
                     self.retry_suppressed = true;
                 }
                 let was_attached = self.model.is_attached();
+                let previous_geometry = self
+                    .model
+                    .scene()
+                    .map(|scene| (scene.columns, scene.rows, scene.screen));
                 let frame = matches!(
                     &message,
                     ServerMessage::Frame(_)
@@ -1123,7 +1127,16 @@ impl Application {
                     self.selection_gate = SelectionGate::Ready;
                 }
                 if accepted_frame {
-                    self.presentation.invalidate();
+                    let geometry = self
+                        .model
+                        .scene()
+                        .map(|scene| (scene.columns, scene.rows, scene.screen));
+                    if plain_frame && geometry == previous_geometry {
+                        // Output dirties the renderer, not the last presented input geometry.
+                        self.presentation.content_changed();
+                    } else {
+                        self.presentation.invalidate();
+                    }
                 }
                 if !was_attached && self.model.is_attached() {
                     self.reset_cursor_animation();
@@ -1364,9 +1377,7 @@ impl Application {
     }
 
     fn presented_revision(&self) -> Option<u64> {
-        let workspace = self.workspace_scene();
-        let candidate = self.presentation_candidate(workspace.as_ref());
-        self.presentation.current_revision(candidate)
+        self.presentation.presented_revision()
     }
 
     fn write_clipboard(&mut self, effect: ClipboardEffect) {
@@ -1583,8 +1594,8 @@ impl ApplicationHandler<UserEvent> for Application {
             self.workspace_focus,
         );
         let candidate = self.presentation_candidate(workspace.as_ref());
-        let presentation_current = self.presentation.is_current(candidate);
-        let presented_revision = self.presentation.current_revision(candidate);
+        let presentation_current = self.presentation.has_presented_geometry();
+        let presented_revision = self.presentation.presented_revision();
         let Some(state) = &mut self.window else {
             return;
         };
@@ -2462,6 +2473,361 @@ mod tests {
     use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
 
     #[test]
+    #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
+    fn live_output_keeps_application_input_admitted_before_repaint() {
+        use eon_workspace_protocol::v4 as workspace;
+        use orbit_protocol::{
+            Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
+        };
+        use std::{
+            os::unix::net::{UnixListener, UnixStream},
+            sync::mpsc,
+        };
+        use winit::{event::DeviceId, platform::wayland::EventLoopBuilderExtWayland};
+
+        fn frame(revision: u64, screen: Screen) -> TransportEvent {
+            TransportEvent::Server(ServerMessage::Frame(Box::new(Frame {
+                revision,
+                dimensions: Dimensions { cols: 0, rows: 0 },
+                screen,
+                title: format!("output {revision}"),
+                working_directory: String::new(),
+                capabilities: Capabilities {
+                    hyperlinks: true,
+                    kitty_graphics: false,
+                },
+                colors: Colors {
+                    background: Rgb::BLACK,
+                    foreground: Rgb::BLACK,
+                    cursor: None,
+                    palette: [Rgb::BLACK; orbit_protocol::PALETTE_LEN],
+                },
+                cursor: Cursor {
+                    visible: false,
+                    blinking: false,
+                    password_input: false,
+                    shape: CursorShape::Block,
+                    viewport: None,
+                },
+                rows: Vec::new(),
+            })))
+        }
+
+        struct Probe {
+            app: Application,
+            listener: UnixListener,
+            stream: Option<UnixStream>,
+            actions: mpsc::Receiver<WorkspaceAction>,
+            checked: bool,
+        }
+        impl ApplicationHandler<UserEvent> for Probe {
+            fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+                self.app.create_window(event_loop).unwrap();
+                self.stream = Some(self.listener.accept().unwrap().0);
+                self.app
+                    .handle_transport(TransportEvent::Server(ServerMessage::Attached));
+                self.app.handle_transport(frame(1, Screen::Primary));
+            }
+
+            fn window_event(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+                id: WindowId,
+                event: WindowEvent,
+            ) {
+                self.app.window_event(event_loop, id, event);
+                if self.checked || self.app.presented_revision() != Some(1) {
+                    return;
+                }
+                let app = &mut self.app;
+                let device_id = DeviceId::dummy();
+                let scene = app.workspace_scene().unwrap();
+                let terminal = PhysicalPosition::new(
+                    f64::from(scene.terminal.left + 30.0),
+                    f64::from(scene.terminal.top + 30.0),
+                );
+                let tab = scene.tabs[1].rect;
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::CursorMoved {
+                        device_id,
+                        position: terminal,
+                    },
+                );
+                let generation = app.presentation.generation;
+                app.handle_transport(frame(2, Screen::Primary));
+                // Exercise the actual handlers in the output-to-presentation gap.
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::MouseWheel {
+                        device_id,
+                        delta: MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 8.0)),
+                        phase: TouchPhase::Started,
+                    },
+                );
+                assert!(
+                    app.terminal_scroll.phase_active,
+                    "first wheel event was dropped after output"
+                );
+                app.handle_transport(frame(3, Screen::Primary));
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::MouseWheel {
+                        device_id,
+                        delta: MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 0.0)),
+                        phase: TouchPhase::Ended,
+                    },
+                );
+                assert!(
+                    !app.terminal_scroll.phase_active,
+                    "gesture End was dropped after output"
+                );
+                assert!(app.send_workspace(WorkspaceAction::Focus(WorkspaceDirection::Right)));
+                assert_eq!(
+                    self.actions.recv_timeout(Duration::from_secs(2)).unwrap(),
+                    WorkspaceAction::Focus(WorkspaceDirection::Right)
+                );
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::CursorMoved {
+                        device_id,
+                        position: PhysicalPosition::new(
+                            f64::from(tab.left + 2.0),
+                            f64::from(tab.top + 2.0),
+                        ),
+                    },
+                );
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Pressed,
+                        button: MouseButton::Left,
+                    },
+                );
+                assert_eq!(
+                    self.actions.recv_timeout(Duration::from_secs(2)).unwrap(),
+                    WorkspaceAction::FocusId("t2".into())
+                );
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::CursorMoved {
+                        device_id,
+                        position: terminal,
+                    },
+                );
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Pressed,
+                        button: MouseButton::Left,
+                    },
+                );
+                app.handle_transport(frame(4, Screen::Primary));
+                assert!(
+                    app.input.is_selecting(),
+                    "selection did not start: {:?}, resize {:?}, terminal {:?}",
+                    app.model.notice(),
+                    app.last_resize,
+                    app.terminal_size()
+                );
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::CursorMoved {
+                        device_id,
+                        position: PhysicalPosition::new(terminal.x + 20.0, terminal.y),
+                    },
+                );
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Released,
+                        button: MouseButton::Left,
+                    },
+                );
+                assert!(
+                    app.deferred_selection.is_empty(),
+                    "live output deferred the gesture"
+                );
+                assert_eq!(app.selection_gate, SelectionGate::AwaitingFinish);
+                assert!(
+                    app.presentation.generation > generation,
+                    "renderer cache must refresh"
+                );
+                assert_eq!(
+                    app.presented_revision(),
+                    Some(1),
+                    "unpainted content is not presented"
+                );
+                app.handle_transport(TransportEvent::Server(ServerMessage::SelectionFinished {
+                    frame_revision: 4,
+                }));
+                assert_eq!(app.selection_gate, SelectionGate::AwaitingPresentation(4));
+                app.render();
+                assert_eq!(app.presented_revision(), Some(4));
+                assert_eq!(app.selection_gate, SelectionGate::Ready);
+
+                let stream = self.stream.as_mut().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .unwrap();
+                let mut messages = Vec::new();
+                loop {
+                    let mut header = [0; session::HEADER_BYTES];
+                    match stream.read_exact(&mut header) {
+                        Ok(()) => {}
+                        Err(error)
+                            if matches!(
+                                error.kind(),
+                                io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                            ) =>
+                        {
+                            break;
+                        }
+                        Err(error) => panic!("input transport failed: {error}"),
+                    }
+                    let mut bytes = Vec::from(header);
+                    bytes.resize(session::client_message_len(&header).unwrap().unwrap(), 0);
+                    stream
+                        .read_exact(&mut bytes[session::HEADER_BYTES..])
+                        .unwrap();
+                    messages.push(session::decode_client_message(&bytes).unwrap());
+                }
+                assert!(
+                    messages
+                        .iter()
+                        .any(|message| matches!(message, ClientMessage::PreviewVertical { .. }))
+                );
+                let selections: Vec<_> = messages
+                    .into_iter()
+                    .filter_map(|message| match message {
+                        ClientMessage::Selection(action) => Some(action),
+                        _ => None,
+                    })
+                    .collect();
+                assert!(
+                    matches!(
+                        selections.as_slice(),
+                        [
+                            SelectionAction::Begin {
+                                frame_revision: 1,
+                                ..
+                            },
+                            SelectionAction::Update { .. },
+                            SelectionAction::Finish { .. },
+                        ]
+                    ),
+                    "unexpected selection wire sequence: {selections:?}"
+                );
+
+                // Geometry and attachment transitions still require a real presentation.
+                app.handle_transport(frame(5, Screen::Alternate));
+                assert_eq!(app.presented_revision(), None);
+                assert!(!app.send_workspace(WorkspaceAction::Focus(WorkspaceDirection::Right)));
+                app.render();
+                assert_eq!(app.presented_revision(), Some(5));
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::Resized(PhysicalSize::new(900, 600)),
+                );
+                assert_eq!(app.presented_revision(), None);
+                app.render();
+                app.set_orbit_attachment(b"replacement".to_vec(), false);
+                assert_eq!(app.presented_revision(), None);
+                self.checked = true;
+                event_loop.exit();
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!("venus-live-input-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let orbit_socket = root.join("orbit.sock");
+        let workspace_socket = root.join("workspace.sock");
+        let listener = UnixListener::bind(&orbit_socket).unwrap();
+        let workspace_listener = UnixListener::bind(&workspace_socket).unwrap();
+        let snapshot = Snapshot {
+            active_tab: "t1".into(),
+            directory_picker: None,
+            tabs: (1..=2)
+                .map(|index| Tab {
+                    id: format!("t{index}"),
+                    directory: b"/tmp".to_vec(),
+                    selected_pane: Some(format!("p{index}")),
+                    panes: vec![Pane {
+                        id: format!("p{index}"),
+                        session: format!("s{index}"),
+                        endpoint: root
+                            .join(format!("pane-{index}.sock"))
+                            .into_os_string()
+                            .into_vec(),
+                        live: true,
+                    }],
+                })
+                .collect(),
+        };
+        let response = workspace::Response::Snapshot(snapshot.clone());
+        let (sender, actions) = mpsc::channel();
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                loop {
+                    let (mut stream, _) = workspace_listener.accept().unwrap();
+                    let mut header = [0; workspace::HEADER_BYTES];
+                    stream.read_exact(&mut header).unwrap();
+                    let mut bytes = Vec::from(header);
+                    bytes.resize(workspace::declared_message_len(&header).unwrap(), 0);
+                    stream
+                        .read_exact(&mut bytes[workspace::HEADER_BYTES..])
+                        .unwrap();
+                    let action = workspace::decode_request(&bytes).unwrap().action;
+                    stream
+                        .write_all(&workspace::encode_response(&response).unwrap())
+                        .unwrap();
+                    if action != WorkspaceAction::Inspect {
+                        sender.send(action).unwrap();
+                        break;
+                    }
+                }
+            }
+        });
+        let event_loop = EventLoop::<UserEvent>::with_user_event()
+            .with_wayland()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let mut app = Application::new(
+            launch::launch_arguments([orbit_socket.into_os_string()], None).unwrap(),
+            event_loop.create_proxy(),
+        );
+        app.workspace_model
+            .apply(workspace::Response::Snapshot(snapshot));
+        app.workspace_transport = Some(WorkspaceTransport::start(workspace_socket, || {}));
+        let mut probe = Probe {
+            app,
+            listener,
+            stream: None,
+            actions,
+            checked: false,
+        };
+        event_loop.run_app(&mut probe).unwrap();
+        assert!(probe.checked);
+        drop(probe);
+        server.join().unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn terminal_scroll_keeps_fractional_input_and_elapsed_time_physics() {
         let start = Instant::now();
         let mut scroll = TerminalScroll::default();
@@ -2847,7 +3213,7 @@ mod tests {
         }
 
         let failure = "Venus renderer failure: the Venus glyph atlas is full";
-        assert!(!presentation.is_current(candidate));
+        assert!(!presentation.has_presented_geometry());
         assert_eq!(titles, [failure]);
         assert_eq!(diagnostics, [format!("venus: {failure}")]);
         assert_eq!(alerts, 1);
@@ -3133,37 +3499,47 @@ mod tests {
         let mut presentation = PresentationState::default();
         let attachment_a = presentation.candidate(Some(1));
         presentation.publish(attachment_a);
-        assert_eq!(presentation.current_revision(attachment_a), Some(1));
+        assert_eq!(presentation.presented_revision(), Some(1));
 
         presentation.invalidate();
         let attachment_b = presentation.candidate(Some(1));
         assert_ne!(attachment_b, attachment_a);
-        assert_eq!(presentation.current_revision(attachment_b), None);
+        assert_eq!(presentation.presented_revision(), None);
 
         presentation.publish(attachment_b);
-        assert_eq!(presentation.current_revision(attachment_b), Some(1));
+        assert_eq!(presentation.presented_revision(), Some(1));
     }
 
     #[test]
-    fn workspace_generation_is_not_current_until_presented() {
+    fn output_keeps_presented_geometry_until_a_structural_transition() {
         let mut presentation = PresentationState::default();
         let workspace_a = presentation.candidate(Some(7));
         presentation.publish(workspace_a);
-        assert!(presentation.is_current(workspace_a));
+        assert!(presentation.has_presented_geometry());
+
+        presentation.content_changed();
+        let output = presentation.candidate(Some(8));
+        assert!(output.generation > workspace_a.generation);
+        assert!(presentation.has_presented_geometry());
+        assert_eq!(presentation.presented_revision(), Some(7));
+        presentation.publish(workspace_a);
+        assert_eq!(presentation.presented_revision(), Some(7));
+        presentation.publish(output);
+        assert_eq!(presentation.presented_revision(), Some(8));
 
         presentation.invalidate();
         let workspace_b = presentation.candidate(Some(7));
-        assert!(!presentation.is_current(workspace_b));
+        assert!(!presentation.has_presented_geometry());
         presentation.publish(workspace_a);
-        assert!(!presentation.is_current(workspace_b));
+        assert!(!presentation.has_presented_geometry());
 
         presentation.publish(workspace_b);
-        assert!(presentation.is_current(workspace_b));
+        assert!(presentation.has_presented_geometry());
         presentation.unpublish();
-        assert!(!presentation.is_current(workspace_b));
+        assert!(!presentation.has_presented_geometry());
 
         presentation.publish(workspace_b);
-        assert!(presentation.is_current(workspace_b));
+        assert!(presentation.has_presented_geometry());
     }
 
     #[test]

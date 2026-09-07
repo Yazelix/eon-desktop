@@ -35,7 +35,7 @@ Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 optional selection, pending-tab state, identities, tab launch directories,
 directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
-`a65e199e16e97330175e314cacf791fa00f53069`. One reducer turns complete canonical
+`91999d79546422b49bdbc124166a65859d0bd872`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -186,6 +186,12 @@ the selected native window, and Session mappings remain in Eon diagnostics.
 Wheel over the tab strip or a pane header to reach clipped headers without
 scrolling the terminal. In standalone mode these keys remain Orbit input.
 
+Compatible terminal output keeps scrolling, selection, and tab/pane focus usable
+between repaints. Venus retains the last presented input geometry while
+refreshing content; Orbit continues parsing output and owns the anchored
+history viewport. Resize, screen, workspace, and attachment changes still
+require fresh presentation.
+
 Precision touchpad movement tracks Orbit-owned retained history at twice its
 native pixel distance, and a complete gesture may continue with bounded momentum
 after release. A bounded Orbit-authored row window keeps multi-row movement
@@ -217,6 +223,14 @@ cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
+The application regression also needs an isolated native Wayland display and
+Vulkan renderer. Point `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY` at that display,
+and `TMPDIR` at disposable proof storage, then run:
+
+```sh
+cargo test --locked --bin yazelix-venus live_output_keeps_application_input_admitted_before_repaint -- --ignored
+```
+
 ## Exclusions
 
 Arbitrary split trees, simultaneous expanded panes, sidebars,
@@ -226,10 +240,11 @@ are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
-`a65e199e16e97330175e314cacf791fa00f53069` Orbit package revision supplies
+`91999d79546422b49bdbc124166a65859d0bd872` Orbit package revision supplies
 accepted ORBS v10, including authoritative selection completion, routed native
-left-pointer gestures, bounded row-window previews, signed scroll batches, and
-read-only pane metadata, and resolves from GitHub.
+left-pointer gestures that survive compatible live output, bounded row-window
+previews, signed scroll batches, and read-only pane metadata. The exact source
+revision must be available in the Git checkout cache or published to GitHub.
 
 ## LOC scorecard
 
@@ -240,11 +255,11 @@ lock files, and other generated artifacts.
 | Surface | Lines |
 |---|---:|
 | Agent policy | 416 |
-| README | 250 |
-| Contracts and references | 970 |
-| Crate decisions | 221 |
+| README | 265 |
+| Contracts and references | 1,010 |
+| Crate decisions | 225 |
 | Changelog | 159 |
-| Rust source, including unit tests | 12,975 |
+| Rust source, including unit tests | 13,351 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **15,912** |
+| **Total** | **16,347** |

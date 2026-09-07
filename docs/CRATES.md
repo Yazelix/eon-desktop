@@ -21,6 +21,9 @@ Orbit-routed native left-pointer selection, authoritative completion revisions,
 and destination-tagged copy results.
 `ven-accept-continuous-output-scrollback-a1s` advances the exact Orbit source
 under unchanged ORBS v10 so relative scrolling remains usable during output.
+`ven-select-during-live-output-752` advances it again so Orbit-owned selection
+remains usable during compatible output and Begin accepts a nonfuture presented
+revision, without changing the protocol package or adding a dependency.
 `ven-venus-linux-wayland-only-ndj` selects native Linux Wayland and Vulkan as
 the sole host and replaces the clipboard adapter's X11 fallback with its
 already-locked Wayland data-control owner.
@@ -38,15 +41,16 @@ already-locked Wayland data-control owner.
 
 ### Orbit protocol consumer
 
-- **Selected shape:** Exact Git revision `a65e199e16e97330175e314cacf791fa00f53069` of the
+- **Selected shape:** Exact Git revision `91999d79546422b49bdbc124166a65859d0bd872` of the
   dependency-free, publish-false `orbit-protocol` 0.1.0 package
 - **Status:** Active
 - **Owner consequence:** Orbit alone owns ORBS v10, ORBF v1, semantic values, history,
   terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel
   outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied
-  text, terminal clipboard effects, read-only pane metadata, bounds, revision reduction, and
-  the accepted lifecycle contracts. Venus keeps no mirror terminal schema or viewport
-  authority; its native host supplies events and applies clipboard effects.
+  text, compatible-live-output gesture preservation, terminal clipboard effects, read-only
+  pane metadata, bounds, revision reduction, and the accepted lifecycle contracts. Venus
+  keeps no mirror terminal schema or viewport authority; its native host supplies events and
+  applies clipboard effects.
 
 ### Native host
 

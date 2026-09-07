@@ -69,7 +69,8 @@ retains accepted user-visible chronology.
 - **Consumer:** One focused Venus terminal surface.
 - **Trigger:** Native key, mouse, focus, paste, input-method, or resize activity.
 - **Result:** Venus maps native activity to canonical Orbit semantic input and
-  resize messages using one shared scaled geometry owner.
+  resize messages using one shared scaled geometry owner. Compatible output
+  advances render content without withdrawing the last presented input geometry.
 - **Important failures:** Invalid, stale, unsettled, or non-presented geometry
   cannot reach Orbit; capture and focus transitions withdraw obsolete input.
 - **Owner:** Venus native input and geometry owners; Orbit encodes terminal
@@ -158,7 +159,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proven
+- **Status:** Partially proved
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -182,6 +183,10 @@ retains accepted user-visible chronology.
     without synthetic momentum.
   - A transient presentation timeout preserves gesture estimation, kinetic
     velocity, and distance; an occluded surface still cancels them.
+  - Ordinary output preserving terminal dimensions and active screen keeps
+    wheel start/movement/end and pointer phases admissible between repaints.
+    Input carries an actually presented revision; render caching still advances
+    on each accepted frame. Orbit keeps parsing and owns anchored history.
   - Redraw follows native compositor callbacks.
   - Venus sends every left-pointer phase to Orbit. Orbit routes uncaptured
     input to cell, word, or logical-line selection, preserves terminal mouse
@@ -203,7 +208,7 @@ retains accepted user-visible chronology.
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
 - **Consumes:** Orbit `ORB-C5`, `ORB-C8`, and `ORB-C9` through canonical ORBS v10
-  at `a65e199e16e97330175e314cacf791fa00f53069`; exact patched winit
+  at `91999d79546422b49bdbc124166a65859d0bd872`; exact patched winit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
@@ -221,6 +226,9 @@ retains accepted user-visible chronology.
     records user acceptance of optimized native continuous-output hard flings on
     the exact source committed at the proof revision; that revision preserves
     transient timeout motion while cancelling an occluded surface explicitly.
+- **Open proof:** The live-output input candidate requires exact source
+  acceptance, the native application regression, and live Orbit selection and
+  history dogfood. Composed Eon installation is a separate acceptance slice.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -257,6 +265,8 @@ retains accepted user-visible chronology.
     each exact press and matching release without forwarding either to the
     selected terminal. Lowercase Ctrl+W remains terminal input, and none of
     these shortcuts enters a mode.
+  - Compatible terminal output does not withdraw tab/pane focus actions or
+    presented header hit targets while a repaint is pending.
   - Hit testing and actions retain the exact `tN` identity. AccessKit names pair
     that identity with a bounded full launch path, so duplicate leaves remain
     distinguishable without storing another tab name.
@@ -481,7 +491,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C18 — Picker-first tab directory presentation
 
-- **Status:** Proved
+- **Status:** Partially proved
 - **Consumer:** One person starting or using a live full-Eon Venus workspace.
 - **Trigger:** Venus is launched with `--workspace EON_WORKSPACE_SOCKET` and
   EONW v4 publishes one directory picker bound to an existing tab, including a
@@ -514,7 +524,7 @@ retains accepted user-visible chronology.
   owns the picker terminal Session and PTY.
 - **Consumes:** Eon `EON-C18`, EONW v4, and `eon-workspace-protocol` 0.1.0 at
   `c305453bba4fe50c29f65e829b9cd65af31ced8a`; unchanged Orbit ORBS v10 at
-  `a65e199e16e97330175e314cacf791fa00f53069`.
+  `91999d79546422b49bdbc124166a65859d0bd872`.
 - **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
   simultaneous terminal composition, configurable geometry, arbitrary command,
   application-ID/path inference, compatibility launch form, placeholder pane,
@@ -530,6 +540,8 @@ retains accepted user-visible chronology.
     picker-to-durable-to-identical-picker presentation, AT-SPI projection, and
     installed Eon Ctrl+Shift+W pending-tab close; prior EONW v3 picker proof
     `df88b2867d50c59a316418471abd000da02940bc`.
+- **Open proof:** The Orbit protocol tree is unchanged, but exact Venus source
+  acceptance remains required for the advanced dependency identity.
 
 ## Rules
 

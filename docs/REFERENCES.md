@@ -308,6 +308,35 @@ in-flight outcome, and never carries terminal-routing evidence across a plain
 frame. It adds no retry, failure-string policy, history cache, or revision
 owner.
 
+## Required for live-output selection acceptance
+
+`ven-select-during-live-output-752` consumes Orbit `ORB-C5/C8/C9` through
+accepted source `91999d79546422b49bdbc124166a65859d0bd872` under unchanged
+ORBS v10. Orbit admits a nonfuture presented Begin revision, owns the native
+tracked selection and history anchors, and preserves a gesture through
+compatible output. The protocol tree remains
+`10b417879f4c7ca0caa48f684448010264ab9086`.
+
+Venus's presentation owner separates content dirtiness from input geometry:
+ordinary frames with unchanged dimensions/screen advance the renderer cache
+without withdrawing the last actually presented revision. Structural changes
+still invalidate publication. Finish retains its authoritative presentation
+gate. Patched winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`
+`Window::request_redraw` gives no strong ordering guarantee, so input eligibility
+cannot depend on the next output frame being repainted first.
+
+The reference gate compares Ghostty
+`a887df42c56f6de86c0fe6da9c4eeca37931e083` tracked viewport pins,
+Alacritty `d692748d3f61253ebe9f5094320120d22f6a046f` grid offsets,
+kitty `d124d4f0976720a127c022e967d30f05df99399e` history offsets,
+tmux `578e07fcbc66dc60822b55b88ba12f518df57374` copy view with continuing
+parsing, and Zellij `af38660c5884f50bb3726682fb92961326c4268f` deferred PTY
+bytes while scrolled. Native Orbit/Ghostty anchoring retains one terminal owner;
+Venus adds no frozen history view, raw-output queue, parser pause, or dependency.
+These are inspected mechanisms, with no source copied or adapted. The native
+Application regression proves input admission between frames and repaint;
+actual Orbit dogfood separately checks anchoring and copied contents.
+
 ## Required for supervisor-owned native presentation
 
 `eon-cyt` consumes Eon's existing `EON-C11` Present action and exact child-process
