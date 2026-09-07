@@ -979,7 +979,7 @@ impl Renderer {
                     g: 202,
                     b: 216,
                 },
-                DrawStyleKind::Status,
+                DrawStyleKind::Status(Wrap::WordOrGlyph),
             );
         }
         self.cursor_vertex_boundary = cursor_vertex_boundary;
@@ -1124,7 +1124,7 @@ impl Renderer {
                         b: 190,
                     }
                 },
-                DrawStyleKind::Status,
+                DrawStyleKind::Status(Wrap::None),
                 workspace.tab_viewport,
             );
         }
@@ -1192,7 +1192,7 @@ impl Renderer {
                         b: 126,
                     }
                 },
-                DrawStyleKind::Status,
+                DrawStyleKind::Status(Wrap::None),
                 workspace.pane_viewport,
             );
         }
@@ -1211,7 +1211,7 @@ impl Renderer {
                 g: 192,
                 b: 94,
             },
-            DrawStyleKind::Status,
+            DrawStyleKind::Status(Wrap::None),
         );
     }
 
@@ -1417,12 +1417,16 @@ impl Renderer {
                 Wrap::None,
                 255,
             ),
-            DrawStyleKind::Status => (
+            DrawStyleKind::Status(wrap) => (
                 self.metrics.font_size,
-                self.metrics.height * 1.25,
+                if wrap == Wrap::None {
+                    self.metrics.height
+                } else {
+                    self.metrics.height * 1.25
+                },
                 Attrs::new().family(Family::SansSerif),
                 None,
-                Wrap::WordOrGlyph,
+                wrap,
                 255,
             ),
         };
@@ -1585,7 +1589,7 @@ enum DrawStyleKind {
     Cell(DrawStyle),
     Heading,
     Preedit,
-    Status,
+    Status(Wrap),
 }
 
 fn shaped_preedit_placement(buffer: &Buffer) -> (f32, f32) {
@@ -2262,6 +2266,109 @@ mod tests {
     use super::*;
     use crate::{DrawCell, DrawCursor, DrawRow};
     use orbit_protocol::{CellWidth, Screen};
+
+    #[test]
+    #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
+    fn long_workspace_labels_stay_on_the_visible_line() {
+        use eon_workspace_protocol::v4::{Pane, Snapshot, Tab};
+        use winit::{
+            application::ApplicationHandler, event::WindowEvent, event_loop::EventLoop,
+            platform::wayland::EventLoopBuilderExtWayland, window::WindowId,
+        };
+
+        struct Probe(bool);
+        impl ApplicationHandler for Probe {
+            fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+                let window = Arc::new(
+                    event_loop
+                        .create_window(Window::default_attributes())
+                        .unwrap(),
+                );
+                let mut renderer =
+                    pollster::block_on(Renderer::new(window, event_loop, 1.0, None)).unwrap();
+                let snapshot = Snapshot {
+                    active_tab: "t2".into(),
+                    directory_picker: None,
+                    tabs: ["eon", "machines_vs_aliens"]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, directory)| Tab {
+                            id: format!("t{}", index + 1),
+                            directory: format!("/tmp/{directory}").into_bytes(),
+                            selected_pane: Some(format!("p{}", index + 1)),
+                            panes: vec![Pane {
+                                id: format!("p{}", index + 1),
+                                session: format!("session-{}", index + 1),
+                                endpoint: format!("/tmp/session-{}.sock", index + 1).into_bytes(),
+                                live: true,
+                            }],
+                        })
+                        .collect(),
+                };
+                let workspace = WorkspaceScene::from_snapshot(
+                    &snapshot,
+                    PhysicalSize::new(900, 600),
+                    renderer.metrics(),
+                    0.0,
+                    0.0,
+                );
+                renderer.build_workspace(
+                    &workspace,
+                    WorkspaceFocus::Terminal,
+                    &mut RectangleBatch::new(900, 600),
+                );
+                let label = &renderer.text[1];
+                let line = label.buffer.layout_runs().next().unwrap();
+                assert_eq!(
+                    line.glyphs.last().unwrap().end,
+                    workspace.tabs[1].label().len(),
+                    "the directory name wrapped below the visible tab header"
+                );
+                assert!(line.line_w > (label.right - label.bound_left) as f32);
+                let underscore = line
+                    .glyphs
+                    .iter()
+                    .find(|glyph| &line.text[glyph.start..glyph.end] == "_")
+                    .unwrap()
+                    .physical((label.left, label.top), 1.0);
+                let ink = renderer
+                    .swash_cache
+                    .get_image(&mut renderer.font_system, underscore.cache_key)
+                    .as_ref()
+                    .unwrap();
+                let top = line.line_y.round() as i32 + underscore.y - ink.placement.top;
+                assert!(ink.placement.height > 0);
+                assert!(
+                    top >= label.bound_top && top + ink.placement.height as i32 <= label.bottom,
+                    "the directory underscore is clipped outside the header"
+                );
+                renderer.rebuild_if_needed(
+                    None,
+                    None,
+                    0.0,
+                    None,
+                    WorkspaceFocus::Terminal,
+                    &"Sessions unavailable. ".repeat(32),
+                    false,
+                    "",
+                    1,
+                );
+                assert!(renderer.text[1].buffer.layout_runs().count() > 1);
+                self.0 = true;
+                event_loop.exit();
+            }
+
+            fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
+        }
+        let event_loop = EventLoop::builder()
+            .with_wayland()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let mut probe = Probe(false);
+        event_loop.run_app(&mut probe).unwrap();
+        assert!(probe.0);
+    }
 
     #[test]
     fn device_loss_blocks_surface_recovery_but_destroy_does_not() {
