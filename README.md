@@ -11,7 +11,8 @@ standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion. Tab headers show the numeric part of Eon's stable `tN` identity,
 two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
-directory. Visible live pane headers show Eon's opaque pane identity, a
+directory. Headers keep long labels and underscores on one clipped line.
+Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
 only the selected endpoint receives presentation and input. A fresh workspace
@@ -248,18 +249,18 @@ revision must be available in the Git checkout cache or published to GitHub.
 
 ## LOC scorecard
 
-The scorecard counts tracked project text and code, including rendered
-`AGENTS.md` because agents consume it directly. It excludes `.git/`, Beads data,
-lock files, and other generated artifacts.
+The scorecard counts tracked handwritten text and code. It excludes `.git/`,
+Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy | 416 |
-| README | 265 |
-| Contracts and references | 1,028 |
+| Agent policy inputs | 208 |
+| README | 266 |
+| Repository ignore rules | 6 |
+| Contracts and references | 1,052 |
 | Crate decisions | 225 |
-| Changelog | 164 |
-| Rust source, including unit tests | 13,351 |
+| Changelog | 173 |
+| Rust source, including unit tests | 13,458 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **16,370** |
+| **Total** | **16,309** |

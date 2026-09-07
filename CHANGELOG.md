@@ -2,10 +2,19 @@
 
 ## Unreleased
 
+- Keep long workspace directory labels on the visible header line, including
+  underscores, instead of wrapping the name below its clip bounds.
 - Keep scrolling, selection, and tab/pane focus admitted across compatible
   terminal output while refreshing rendered content. Consume Orbit
   `91999d79546422b49bdbc124166a65859d0bd872` for nonfuture selection admission;
   geometry, attachment, and authoritative Finish presentation gates remain.
+  Installed Eon/EonTerm acceptance at Eon
+  `91c6ed5d51b5a09d5c9e1d2e30aebc191c10223f` covers native history, selection,
+  copy, and workspace focus with this exact Venus source.
+- Complete `VEN-C18` rapid-picker-reopen proof with unchanged Venus
+  `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` and Eon's distinct endpoints at
+  `4298fbb8868752e3d6c8eb4fd79fae067ab3e2a1`. Older compositions that reuse
+  endpoints retain the known attachment failure; fractional scale stays open.
 
 - Keep active precision gesture and kinetic scroll state across a transient GPU
   texture timeout without weakening occluded-surface cancellation, so the

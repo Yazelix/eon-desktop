@@ -236,9 +236,14 @@ retains accepted user-visible chronology.
     records user acceptance of optimized native continuous-output hard flings on
     `d3e63ae6e9fa0b72df426dbfc9bd29a96148577a`; that revision preserves
     transient timeout motion while cancelling an occluded surface explicitly.
-- **Open proof:** Adoption into the normal Eon manifest/profile remains a
-  separate acceptance slice. The isolated Eon Input Dogfood launcher selects
-  this exact source without changing that installed product.
+    Normal Eon manifest/profile adoption is accepted at Eon
+    `91c6ed5d51b5a09d5c9e1d2e30aebc191c10223f` in
+    `eon-accept-live-output-input-nxh`: both installed products use this exact
+    Venus source and Orbit `91999d79546422b49bdbc124166a65859d0bd872`.
+    Isolated Sway 1.12 proof covers anchored history, cell/word/line selection,
+    both clipboard destinations, explicit frozen copy, and busy-workspace
+    focus under appends, DEC 2026 batches, and active-screen redraws. The
+    separate Eon Input Dogfood launcher remains prior evidence.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -294,7 +299,8 @@ retains accepted user-visible chronology.
   `69c402737799f03e615473956954a043647a4713`.
 - **Boundary:** Other Linux Wayland compositors remain outside the current
   proof.
-- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
+- **Proof:** `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
+  `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
   - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
     COSMIC observations belong to the retained prior proof.
   - **Evidence:** Complete locked Rust checks and isolated Nix workspace
@@ -307,6 +313,14 @@ retains accepted user-visible chronology.
     isolated native picker-to-durable-to-picker attachment, AT-SPI projection,
     and installed Eon input for all five structural chords; prior complete EONW v3 proof
     `9b2a527d3581f40569f58e24130cc8f8f1222162`
+  - **Header evidence:** `ven-2fq` records actual-renderer red/green checks for
+    long directory labels and underscore ink inside the header, preserved
+    multiline failures, complete locked Rust checks, and native Sway 1.12
+    scale-1 installed Eon screenshot acceptance of two real Orbit-backed tabs.
+    Eon `/nix/store/j4n3j5r9mfj7xpkj6sjnb9cns11ffsly-eon-0.1.0` consumes
+    this exact Venus source with Orbit `91999d79546422b49bdbc124166a65859d0bd872`.
+    Long labels remain on one horizontally clipped line; this does not extend
+    scale proof.
 - **Open proof:** Fractional native scale remains to be dogfooded.
 
 ## VEN-C9 — Optional native decorations
@@ -477,9 +491,15 @@ retains accepted user-visible chronology.
 - **Proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
   - **Environment:** x86_64 Linux native Wayland
   - **Evidence:** Locked format/check/test/Clippy, exact dependency features,
-    no-Wayland failure, and live native event-loop launch
-- **Open proof:** Exact Eon pin/package integration and installed clipboard
-  acceptance are pending.
+    no-Wayland failure, and live native event-loop launch.
+    Installed Eon/EonTerm integration is accepted at Eon
+    `91c6ed5d51b5a09d5c9e1d2e30aebc191c10223f`, consuming Venus
+    `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` with the same Wayland/Vulkan
+    host. `eon-accept-live-output-input-nxh` records exact package/profile
+    identity and isolated Sway 1.12 selection-copy delivery to ordinary and
+    primary clipboards. VEN-C10 native-paste and VEN-C13 terminal-authored
+    clipboard gaps remain separate; this does not prove non-systemd delivery
+    or broader compositor coverage.
 
 ## VEN-C17 — Caller-owned native application identity
 
@@ -505,7 +525,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C18 — Picker-first tab directory presentation
 
-- **Status:** Partially proved
+- **Status:** Proved
 - **Consumer:** One person starting or using a live full-Eon Venus workspace.
 - **Trigger:** Venus is launched with `--workspace EON_WORKSPACE_SOCKET` and
   EONW v4 publishes one directory picker bound to an existing tab, including a
@@ -544,7 +564,7 @@ retains accepted user-visible chronology.
   application-ID/path inference, compatibility launch form, placeholder pane,
   selection sentinel, Orbit change, Eon runtime producer, or additional
   platform.
-- **Proof:** `d2d798099934dcf8037bfad6ab856e40c9b989fe`
+- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
   - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
     COSMIC observations belong to the retained prior proof.
   - **Evidence:** Complete locked Rust checks against exact EONW v4; explicit
@@ -552,14 +572,18 @@ retains accepted user-visible chronology.
     to the active durable pane while inactive; traversal and stable-target close
     admission, geometry, focus, metadata, and AccessKit checks; isolated native
     picker-to-durable-to-identical-picker presentation, AT-SPI projection, and
-    installed Eon Ctrl+Shift+W pending-tab close; prior EONW v3 picker proof
+    installed Eon Ctrl+Shift+W pending-tab close at retained Venus proof
+    `d2d798099934dcf8037bfad6ab856e40c9b989fe`; prior EONW v3 picker proof
     `df88b2867d50c59a316418471abd000da02940bc`.
-- **Open proof:** The unchanged protocol tree and exact dependency identity
-  are verified at `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`. Fast picker
-  retirement/recreation at the same socket can leave Venus on the prior exited
-  attachment if it misses the intermediate workspace state. The endpoint/live
-  comparison is unchanged by the live-output correction; this observed gap
-  remains outside that slice and prevents widening picker acceptance.
+    Eon `4298fbb8868752e3d6c8eb4fd79fae067ab3e2a1` closes the rapid-reopen
+    gap by assigning each picker a distinct endpoint through unchanged EONW v4.
+    `eon-investigate-picker-directory-discovery-ly9`, comment 791, records
+    exact installed artifact `/nix/store/008jbiqsprwvyn2w7bfnc7rqhd1vk36x-eon-0.1.0`
+    with this Venus source on isolated Sway 1.12: immediate cancel/reopen and
+    two same-tab native Alt+Z/Ctrl+C cycles stay attached to the current picker
+    without refocus and preserve durable panes. Older Eon compositions that
+    reuse a picker endpoint retain the known missed-transition failure.
+    Fractional native scale remains open under VEN-C8.
 
 ## Rules
 
