@@ -206,6 +206,10 @@ resolution and Eon owns serialization and persistence for composed launches;
 that Eon producer is tracked separately and is not part of the current launcher.
 
 In Eon's supervised mode, Venus reads one private bounded presentation stream.
+The `stdin-ready-v1` mode consumes one canonical EONW v4 startup snapshot for
+workspace launches, then reports `ready-v1` on stdout after admitting fonts and
+the actual window's initial native geometry, before terminal attachment. Eon
+bounds that exchange and starts new commands only after readiness.
 Each complete Present command keeps the same Venus process and terminal
 attachment and asks the native window system to present its existing window.
 If that stream closes or fails, Venus exits without stopping Orbit and releases
@@ -312,12 +316,12 @@ Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 323 |
+| README | 327 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,282 |
+| Contracts and references | 1,292 |
 | Crate decisions | 258 |
-| Changelog | 194 |
-| Rust source, including unit tests | 15,233 |
+| Changelog | 199 |
+| Rust source, including unit tests | 15,296 |
 | Rust integration tests | 898 |
 | Cargo manifest | 24 |
-| **Total** | **18,426** |
+| **Total** | **18,508** |

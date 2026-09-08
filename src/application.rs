@@ -613,6 +613,7 @@ struct Application {
     orbit_socket: Option<PathBuf>,
     workspace_socket: Option<PathBuf>,
     supervised: bool,
+    startup_admission: bool,
     decorations: bool,
     background_opacity: f32,
     background_blur: bool,
@@ -661,6 +662,7 @@ impl Application {
             orbit_socket,
             workspace_socket,
             supervised,
+            startup_admission,
             decorations,
             background_opacity,
             background_blur,
@@ -669,13 +671,16 @@ impl Application {
             columns,
             rows,
         } = arguments;
-        let initial_scale_pending =
-            columns.is_some() || rows.is_some() || fonts != FontSettings::default();
+        let initial_scale_pending = startup_admission
+            || columns.is_some()
+            || rows.is_some()
+            || fonts != FontSettings::default();
         Self {
             application_id,
             orbit_socket,
             workspace_socket,
             supervised,
+            startup_admission,
             decorations,
             background_opacity,
             background_blur,
@@ -769,11 +774,6 @@ impl Application {
             accessibility,
             window,
         });
-        if self.workspace_transport.is_none()
-            && let Some(socket) = self.workspace_socket.clone()
-        {
-            self.start_workspace(socket);
-        }
         if !self.initial_scale_pending {
             self.start_initial_attachment();
         }
@@ -782,6 +782,11 @@ impl Application {
     }
 
     fn start_initial_attachment(&mut self) {
+        if self.workspace_transport.is_none()
+            && let Some(socket) = self.workspace_socket.clone()
+        {
+            self.start_workspace(socket);
+        }
         self.reveal_workspace_selection();
         if self.workspace_socket.is_some() {
             if let Some((endpoint, live)) = self.workspace_model.active_attachment() {
@@ -2527,6 +2532,28 @@ impl ApplicationHandler<UserEvent> for Application {
                 .is_some_and(|state| state.window.current_monitor().is_some())
         {
             self.initial_scale_pending = false;
+            if self.startup_admission
+                && self
+                    .terminal_size()
+                    .and_then(|size| {
+                        surface_size(size, self.window.as_ref().unwrap().renderer.metrics())
+                    })
+                    .is_none()
+            {
+                self.fatal_error =
+                    Some("initial native window leaves no valid terminal grid".into());
+                event_loop.exit();
+                return;
+            }
+            if self.startup_admission
+                && let Err(error) = io::stdout()
+                    .write_all(b"ready-v1")
+                    .and_then(|()| io::stdout().flush())
+            {
+                self.fatal_error = Some(format!("Cannot report Venus startup readiness: {error}"));
+                event_loop.exit();
+                return;
+            }
             self.start_initial_attachment();
             self.refresh_client_view();
         }
@@ -3093,10 +3120,17 @@ pub(super) fn run(arguments: LaunchArguments) -> Result {
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()
         .map_err(|_| io::Error::other("Venus requires a native Wayland display"))?;
-    if arguments.supervised {
+    let mut application = Application::new(arguments, event_loop.create_proxy());
+    if application.startup_admission && application.workspace_socket.is_some() {
+        let response = yazelix_venus::read_workspace_response(&mut io::stdin().lock())?;
+        if !matches!(response, eon_workspace_protocol::v4::Response::Snapshot(_)) {
+            return Err("Venus startup admission requires an Eon workspace snapshot".into());
+        }
+        application.workspace_model.apply(response);
+    }
+    if application.supervised {
         start_presentation_control(event_loop.create_proxy())?;
     }
-    let mut application = Application::new(arguments, event_loop.create_proxy());
     event_loop.run_app(&mut application)?;
     if let Some(error) = application.fatal_error {
         return Err(error.into());

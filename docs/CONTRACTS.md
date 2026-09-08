@@ -42,6 +42,16 @@ retains accepted user-visible chronology.
 - **Compatibility order:** Prove Venus first with unchanged defaults and wire
   contracts, then let the separate Eon configuration issue consume that exact
   accepted source for Eon and EonTerm.
+- **Supervised startup admission (approved, proof pending):**
+  `EON_VENUS_PRESENTATION_CONTROL=stdin-ready-v1` uses private stdin/stdout.
+  Workspace mode first reads one bounded canonical EONW v4 Snapshot from stdin;
+  standalone mode has no snapshot prefix. After font/renderer initialization
+  and real-window initial native-scale admission, Venus writes exactly
+  `ready-v1` (eight bytes) and starts attachment. The caller may then start
+  Orbit and the user command. Invalid fonts, geometry or snapshot produce no
+  readiness; the caller bounds startup and closes a failed attempt. Existing
+  `present\n` and EOF control retain their meanings. Later user/compositor
+  resizing is outside this initial admission. EONW and ORBS remain unchanged.
 - **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1` (startup correction).
   Locked fmt/check/test/clippy and Nix package checks pass: 118 ordinary tests
   and five native regressions. Initial explicit-grid and font-only startup

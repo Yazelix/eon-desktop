@@ -343,6 +343,11 @@ fn workspace_exchange(
         .write_all(&encoded)
         .map_err(|error| format!("Cannot send Eon workspace action: {error}"))?;
 
+    read_workspace_response(&mut stream)
+}
+
+/// Read one bounded canonical response, leaving subsequent control bytes unread.
+pub fn read_workspace_response(stream: &mut impl Read) -> Result<WorkspaceResponse, String> {
     let mut response = vec![0; workspace::HEADER_BYTES];
     stream
         .read_exact(&mut response)
@@ -1247,6 +1252,17 @@ mod tests {
         }
         drop(transport);
         server.join().unwrap();
+    }
+
+    #[test]
+    fn startup_snapshot_leaves_following_presentation_control_unread() {
+        let snapshot = WorkspaceResponse::Snapshot(workspace_snapshot());
+        let mut bytes = workspace::encode_response(&snapshot).unwrap();
+        bytes.extend_from_slice(b"present\n");
+        let mut input = bytes.as_slice();
+        assert_eq!(read_workspace_response(&mut input).unwrap(), snapshot);
+        assert_eq!(input, b"present\n");
+        assert!(read_workspace_response(&mut &bytes[..workspace::HEADER_BYTES]).is_err());
     }
 
     #[test]

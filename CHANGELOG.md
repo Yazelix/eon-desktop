@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit the actual supervised window before reporting `stdin-ready-v1`
+  readiness, so Eon can validate fonts and initial native geometry before
+  starting a user command. Workspace admission consumes the canonical snapshot;
+  existing presentation commands and EOF shutdown remain on the same stream.
+
 - Validate font-only workspace geometry before attachment; reject typography
   that leaves no terminal cell in the initial window. Complete native startup
   without waiting for keyboard input or an unrelated event.

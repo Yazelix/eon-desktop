@@ -23,5 +23,5 @@ pub use scene::{
 };
 pub use transport::{
     MetadataEvent, MetadataTransport, SendError, Transport, TransportEvent, WorkspaceEvent,
-    WorkspaceTransport,
+    WorkspaceTransport, read_workspace_response,
 };

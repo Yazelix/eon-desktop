@@ -18,6 +18,7 @@ pub(super) struct LaunchArguments {
     pub(super) orbit_socket: Option<PathBuf>,
     pub(super) workspace_socket: Option<PathBuf>,
     pub(super) supervised: bool,
+    pub(super) startup_admission: bool,
     pub(super) decorations: bool,
     pub(super) background_opacity: f32,
     pub(super) background_blur: bool,
@@ -178,11 +179,13 @@ pub(super) fn launch_arguments(
         orbit_socket = Some(default_socket_path()?);
     }
 
+    let startup_admission = presentation_control.as_deref() == Some("stdin-ready-v1".as_ref());
     Ok(LaunchArguments {
         application_id: application_id.unwrap_or_else(|| "eon".into()),
         orbit_socket,
         workspace_socket,
-        supervised: presentation_control == Some(OsString::from("stdin")),
+        supervised: startup_admission || presentation_control == Some(OsString::from("stdin")),
+        startup_admission,
         decorations,
         background_opacity: background_opacity.unwrap_or(1.0),
         background_blur,
@@ -243,6 +246,16 @@ fn default_socket_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_admission_keeps_presentation_control_enabled() {
+        let arguments = launch_arguments(
+            [OsString::from("orbit.sock")],
+            Some("stdin-ready-v1".into()),
+        )
+        .unwrap();
+        assert!(arguments.supervised);
+    }
 
     #[test]
     fn typography_options_are_bounded_and_composable() {
