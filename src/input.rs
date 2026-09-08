@@ -28,7 +28,7 @@ pub struct InputState {
     selection_position: Option<SelectionPosition>,
     copy_pressed: bool,
     paste_shortcuts: Vec<WinitPhysicalKey>,
-    workspace_shortcuts: Vec<KeyCode>,
+    host_shortcuts: Vec<KeyCode>,
 }
 
 impl InputState {
@@ -92,7 +92,7 @@ impl InputState {
             retired.push(WinitPhysicalKey::Code(KeyCode::KeyC));
         }
         retired.extend(
-            std::mem::take(&mut self.workspace_shortcuts)
+            std::mem::take(&mut self.host_shortcuts)
                 .into_iter()
                 .map(WinitPhysicalKey::Code),
         );
@@ -395,6 +395,11 @@ impl InputState {
     }
 
     #[must_use]
+    pub fn pointer_busy(&self) -> bool {
+        self.is_selecting() || !self.pressed_buttons.is_empty()
+    }
+
+    #[must_use]
     pub fn consumes_copy_shortcut(
         &mut self,
         key: WinitPhysicalKey,
@@ -441,7 +446,7 @@ impl InputState {
         capture_shortcut(&mut self.paste_shortcuts, physical_key, state, recognized)
     }
 
-    pub fn consumes_workspace_shortcut(
+    pub fn consumes_host_shortcut(
         &mut self,
         key: KeyCode,
         state: ElementState,
@@ -449,7 +454,7 @@ impl InputState {
         recognized: bool,
     ) -> bool {
         let recognized = !repeat && recognized;
-        capture_shortcut(&mut self.workspace_shortcuts, key, state, recognized)
+        capture_shortcut(&mut self.host_shortcuts, key, state, recognized)
     }
 }
 
@@ -851,7 +856,7 @@ mod tests {
             Pressed,
             false
         ));
-        assert!(input.consumes_workspace_shortcut(KeyCode::KeyH, Pressed, false, true));
+        assert!(input.consumes_host_shortcut(KeyCode::KeyH, Pressed, false, true));
 
         assert_eq!(
             input.terminal_focus(false),
@@ -1219,7 +1224,7 @@ mod tests {
 
         let mut input = InputState::default();
         let mut shortcut = |key, state, repeat, recognized| {
-            input.consumes_workspace_shortcut(key, state, repeat, recognized)
+            input.consumes_host_shortcut(key, state, repeat, recognized)
         };
         assert!(!shortcut(KeyH, Pressed, true, true));
         assert!(shortcut(KeyH, Pressed, false, true));

@@ -16,6 +16,36 @@ retains accepted user-visible chronology.
 - **Proved:** the listed immutable revision and evidence cover the contract
 - **Retired:** explicitly replaced or removed; its ID is never reused
 
+## VEN-C5 — Explicit native hyperlinks
+
+- **Status:** Candidate; activated by the user through `ven-lq4`.
+- **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link,
+  inspects links with Ctrl+Shift+O, or explicitly activates one.
+- **Result:** The presented link is highlighted and its actual target is
+  inspectable. Tab/Shift+Tab chooses a link; Left/Right pages the complete
+  escaped target; Enter opens, Ctrl+Shift+C copies, and Escape dismisses.
+  Ctrl+Shift+left click opens only when press and release identify the same
+  presented target. Ordinary terminal clicks and selection retain their owner.
+- **Failures:** Revision, attachment, geometry, or presentation changes retire
+  link actions. Opening accepts at most 4096 bytes of ASCII HTTP/HTTPS URI
+  syntax with a host and without credentials. Copy accepts bounded target text
+  without control characters. Unsupported or malformed targets, missing native
+  handlers, and launch failures/timeouts have bounded visual and accessible
+  notices. No URI is opened on hover or keyboard focus.
+- **Owners:** Orbit owns URI attributes; Scene derives spans; Venus presentation
+  identity gates actions; the existing renderer, input, AccessKit status and
+  Wayland clipboard owners project them. Linux `gio open` on the host PATH
+  dispatches the exact URI as one argument to the desktop's registered handler.
+  One launch runs at a time with a ten-second dispatcher deadline.
+- **Consumes:** Accepted Orbit `91999d79546422b49bdbc124166a65859d0bd872`,
+  `ORB-C6` proof `a65e199e16e97330175e314cacf791fa00f53069`, ORBF v1/ORBS v10.
+- **Boundary:** No heuristic detection, file/custom-scheme opening, URI rewrite,
+  browser embedding, new crate, or protocol change. Host GIO and a registered
+  handler are required for opening; copy remains available without them.
+  Native Linux Wayland only; other platforms remain unsupported.
+- **Proof:** Pending deterministic identity/policy checks and native hover,
+  keyboard, copy/open, mouse-reporting, and failure observations.
+
 ## VEN-C1 — Authoritative native presentation
 
 - **Status:** Proved

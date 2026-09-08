@@ -159,6 +159,7 @@ struct ContentKey {
     blink_visible: bool,
     preedit: String,
     status: String,
+    hyperlink: Option<(u16, u16)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -445,6 +446,7 @@ pub struct Renderer {
     text_renderer: TextRenderer,
     text: Vec<PlacedText>,
     content_key: Option<ContentKey>,
+    hyperlink: Option<(u16, u16)>,
     cursor_tail: Option<(SceneColor, f32)>,
     cursor_animation: CursorAnimation,
     last_cursor_frame: Option<Instant>,
@@ -456,6 +458,32 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    pub fn set_hyperlink(&mut self, hyperlink: Option<(u16, u16)>) {
+        self.hyperlink = hyperlink;
+    }
+
+    /// Notice placement shares the rendered link's geometry, keeping its target visible.
+    #[must_use]
+    pub fn notice_rect(&self, workspace: Option<&WorkspaceScene>) -> SceneRect {
+        let height = self.metrics.height * if self.hyperlink.is_some() { 3.0 } else { 1.5 };
+        let bottom = self.config.height as f32 - height - self.metrics.height * 0.5;
+        let link_bottom = self.hyperlink.map(|(row, _)| {
+            workspace.map_or(0.0, |workspace| workspace.terminal.top)
+                + self.metrics.padding
+                + f32::from(row + 1) * self.metrics.height
+        });
+        SceneRect {
+            left: self.metrics.padding,
+            top: if link_bottom.is_some_and(|link| link > bottom) {
+                self.metrics.padding
+            } else {
+                bottom
+            },
+            width: self.config.width as f32 - self.metrics.padding * 2.0,
+            height,
+        }
+    }
+
     pub async fn new(
         window: Arc<Window>,
         event_loop: &ActiveEventLoop,
@@ -616,6 +644,7 @@ impl Renderer {
             text_renderer,
             text: Vec::new(),
             content_key: None,
+            hyperlink: None,
             cursor_tail,
             cursor_animation: CursorAnimation::default(),
             last_cursor_frame: None,
@@ -844,6 +873,7 @@ impl Renderer {
             blink_visible,
             preedit: preedit.to_owned(),
             status: status.to_owned(),
+            hyperlink: self.hyperlink,
         };
         if self.content_key.as_ref() == Some(&key) {
             return false;
@@ -889,6 +919,7 @@ impl Renderer {
                         origin,
                     );
                     self.build_preedit(scene, preedit, &mut rectangles, origin, clip);
+                    self.build_hyperlink(scene, &mut rectangles, origin);
                     rectangles.clip = None;
                 }
             }
@@ -909,7 +940,7 @@ impl Renderer {
                 );
             }
             if !status.is_empty() {
-                self.build_notice(status, &mut rectangles);
+                self.build_notice(status, &mut rectangles, Some(workspace));
             }
         } else if let Some(scene) = scene {
             self.clear = clear_color(
@@ -945,9 +976,10 @@ impl Renderer {
                 origin,
             );
             self.build_preedit(scene, preedit, &mut rectangles, origin, clip);
+            self.build_hyperlink(scene, &mut rectangles, origin);
             rectangles.clip = None;
             if !status.is_empty() {
-                self.build_notice(status, &mut rectangles);
+                self.build_notice(status, &mut rectangles, None);
             }
         } else {
             self.clear = clear_color(
@@ -1198,20 +1230,69 @@ impl Renderer {
         }
     }
 
-    fn build_notice(&mut self, status: &str, rectangles: &mut RectangleBatch) {
-        build_notice_rectangles(rectangles, self.metrics);
+    fn build_hyperlink(&self, scene: &Scene, rectangles: &mut RectangleBatch, origin: SceneRect) {
+        if let Some((row, column)) = self.hyperlink
+            && let Some(link) = scene.hyperlink_at(row, column)
+        {
+            let rect = link.rect(origin, self.metrics);
+            rectangles.push_hollow(
+                rect.left,
+                rect.top,
+                rect.width,
+                rect.height,
+                1.0,
+                SceneColor {
+                    r: 137,
+                    g: 180,
+                    b: 250,
+                },
+            );
+        }
+    }
+
+    fn build_notice(
+        &mut self,
+        status: &str,
+        rectangles: &mut RectangleBatch,
+        workspace: Option<&WorkspaceScene>,
+    ) {
+        let rect = self.notice_rect(workspace);
+        // Text is drawn after rectangles; clip underlying rows out of this overlay.
+        for text in &mut self.text {
+            if text.top < rect.top {
+                text.bottom = text.bottom.min(rect.top as i32);
+            } else {
+                text.bound_top = text.bound_top.max(rect.bottom() as i32);
+            }
+        }
+        rectangles.push(
+            rect.left,
+            rect.top,
+            rect.width,
+            rect.height,
+            SceneColor {
+                r: 35,
+                g: 29,
+                b: 18,
+            },
+            0.96,
+        );
         self.push_text(
             status,
             self.metrics.padding * 2.0,
-            self.config.height as f32 - self.metrics.height * 1.7,
+            rect.top + self.metrics.height * 0.3,
             self.config.width as f32 - self.metrics.padding * 4.0,
-            self.metrics.height,
+            rect.height - self.metrics.height * 0.3,
             SceneColor {
                 r: 245,
                 g: 192,
                 b: 94,
             },
-            DrawStyleKind::Status(Wrap::None),
+            if self.hyperlink.is_some() {
+                DrawStyleKind::Link
+            } else {
+                DrawStyleKind::Status(Wrap::None)
+            },
         );
     }
 
@@ -1409,7 +1490,7 @@ impl Renderer {
                 Wrap::None,
                 255,
             ),
-            DrawStyleKind::Preedit => (
+            DrawStyleKind::Preedit | DrawStyleKind::Link => (
                 self.cell_font.size,
                 self.metrics.height,
                 self.cell_font.attrs(),
@@ -1447,7 +1528,7 @@ impl Renderer {
             buffer,
             left: left + left_offset,
             top: top
-                - if matches!(kind, DrawStyleKind::Preedit) {
+                - if matches!(kind, DrawStyleKind::Preedit | DrawStyleKind::Link) {
                     self.cell_font.top_offset
                 } else {
                     0.0
@@ -1589,6 +1670,7 @@ enum DrawStyleKind {
     Cell(DrawStyle),
     Heading,
     Preedit,
+    Link,
     Status(Wrap),
 }
 
@@ -2180,21 +2262,6 @@ fn build_tail_cursor(
     active
 }
 
-fn build_notice_rectangles(rectangles: &mut RectangleBatch, metrics: CellMetrics) {
-    rectangles.push(
-        metrics.padding,
-        rectangles.height as f32 - metrics.height * 2.0,
-        rectangles.width as f32 - metrics.padding * 2.0,
-        metrics.height * 1.5,
-        SceneColor {
-            r: 35,
-            g: 29,
-            b: 18,
-        },
-        0.96,
-    );
-}
-
 fn nonzero(size: PhysicalSize<u32>) -> PhysicalSize<u32> {
     PhysicalSize::new(size.width.max(1), size.height.max(1))
 }
@@ -2409,6 +2476,7 @@ mod tests {
             blink_visible: true,
             preedit: String::new(),
             status: String::new(),
+            hyperlink: None,
         };
 
         assert_ne!(key(1), key(2));

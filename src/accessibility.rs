@@ -219,8 +219,7 @@ impl Snapshot {
         }
         if status_alert {
             let mut status = Node::new(Role::Alert);
-            status.set_label("Venus status");
-            status.set_value(self.status.as_str());
+            status.set_label(self.status.as_str());
             nodes.push((STATUS, status));
         }
 
@@ -503,7 +502,7 @@ mod tests {
             Some("terminal content")
         );
         assert_eq!(node(&update, STATUS).role(), Role::Alert);
-        assert_eq!(node(&update, STATUS).value(), Some("renderer failure"));
+        assert_eq!(node(&update, STATUS).label(), Some("renderer failure"));
         assert_eq!(node(&update, WINDOW).children(), &[CONTENT, STATUS]);
     }
 

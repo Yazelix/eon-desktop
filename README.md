@@ -58,6 +58,31 @@ cargo run --locked -- /path/to/orbit.sock
 Venus requires a native Wayland display and fails before presentation
 attachment when one is unavailable. X11, Xwayland, and macOS are unsupported.
 
+### Hyperlinks
+
+Hover an explicit OSC 8 link to highlight it and preview its actual target.
+Ctrl+Shift+left click opens it. Ordinary clicks retain terminal mouse reporting
+and selection behavior; ordinary URL-looking text is not detected as a link.
+
+Ctrl+Shift+O enters link inspection without opening anything. Tab/Shift+Tab
+chooses a visible link, Left/Right pages its complete escaped target, Enter
+opens it, Ctrl+Shift+C copies the exact target, and Escape returns to typing.
+Inspection consumes typing until dismissed. A changed frame retires the target;
+Tab inspects links in the current presentation. Hover and actions pause during
+scroll animation and renderer recovery.
+
+Opening accepts ASCII HTTP/HTTPS targets up to 4096 bytes, with a host and
+without credentials. Other schemes, malformed targets and oversized links
+produce an accessible notice. Copy accepts target text up to the same limit
+without control characters, including schemes that cannot be opened.
+The native Linux host must provide `gio` on PATH and a registered HTTP/HTTPS
+handler. Venus passes one exact URI argument without a shell, allows one
+dispatch at a time, and retires a stalled dispatcher after ten seconds.
+Copy does not require GIO. Broader compositor and fractional-scale proof remain
+open.
+
+### Attachment
+
 Without an argument, Venus uses
 `$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
 `/tmp/yazelix-orbit-$UID/orbit.sock` when the runtime directory is unavailable.
@@ -255,12 +280,12 @@ Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 266 |
+| README | 291 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,067 |
-| Crate decisions | 225 |
+| Contracts and references | 1,124 |
+| Crate decisions | 237 |
 | Changelog | 176 |
-| Rust source, including unit tests | 13,468 |
+| Rust source, including unit tests | 14,289 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **16,337** |
+| **Total** | **17,252** |

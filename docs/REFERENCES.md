@@ -5,6 +5,33 @@ source reuse. Before code, the implementing Bead records exact releases or
 commits, useful mechanisms, rejected surrounding scope, license compatibility,
 and consequences for ownership, code shape, and the first check.
 
+## Explicit hyperlink interaction
+
+`ven-lq4` follows the
+[OSC 8 specification](https://iterm2.com/feature-reporting/Hyperlinks_in_Terminal_Emulators.html)
+for cell-authored targets and inspection of the actual URI. The preserved
+2020-05-31 document supplies protocol semantics, not current terminal support
+claims. Current Ghostty and Kitty documentation supplied UX comparisons only.
+The exact selected winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` cursor and
+event APIs own the native pointer boundary. Foot
+`85655c74a4ded119392ea8b632626c3920042807` (`url-mode.c`, `doc/foot.ini.5.scd`)
+demonstrates explicit keyboard traversal, clipboard activation and a distinct
+launcher. Venus rejects its URL discovery, launch templates and file rewriting.
+
+[GLib 2.84.4's GIO dispatcher](https://github.com/GNOME/glib/blob/2.84.4/gio/gio-tool-open.c)
+preserves a URI argument and completes after dispatch to the registered handler.
+Its `gdesktopappinfo.c` launches a separate process, so Venus can retire its own
+dispatcher without owning the browser lifetime. The existing host `gio open`
+command is the native seam; no crate or packaged dependency is added.
+`xdg-open` was rejected because some paths wait for the browser process itself;
+opener crates and direct portal bindings would add an unnecessary owner here.
+Official Apple `NSWorkspace.open` documentation was inspected as the Bead's
+required platform comparison; `VEN-C16` excludes macOS implementation.
+
+Foot is MIT and GLib LGPL-2.1-or-later. This is mechanism inspection, with no
+source copied into Venus. Native GIO, exact clipboard bytes, pointer/keyboard
+capture, stale-frame refusal and AT-SPI target/error names are the falsifiers.
+
 ## Required before the first client implementation
 
 - Orbit `ORB-C1` through `ORB-C6`, ORBF v1, ORBS v1, and the dependency-free

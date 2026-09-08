@@ -31,7 +31,7 @@ impl SceneRect {
         (self.left..self.right()).contains(&x) && (self.top..self.bottom()).contains(&y)
     }
 
-    pub(crate) fn intersection(self, other: Self) -> Option<Self> {
+    pub fn intersection(self, other: Self) -> Option<Self> {
         let left = self.left.max(other.left);
         let top = self.top.max(other.top);
         let right = self.right().min(other.right());
@@ -442,7 +442,7 @@ impl WorkspaceScene {
     }
 
     #[must_use]
-    pub(crate) fn visible_terminal(&self) -> Option<SceneRect> {
+    pub fn visible_terminal(&self) -> Option<SceneRect> {
         self.terminal.intersection(self.pane_viewport)
     }
 
@@ -553,7 +553,66 @@ pub struct DrawRow {
     pub cells: Vec<DrawCell>,
 }
 
+/// A contiguous visible row span, borrowing Orbit's exact target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hyperlink<'a> {
+    pub row: u16,
+    pub column: u16,
+    pub columns: u16,
+    pub uri: &'a str,
+}
+
+impl Hyperlink<'_> {
+    #[must_use]
+    pub fn rect(self, origin: SceneRect, metrics: CellMetrics) -> SceneRect {
+        SceneRect {
+            left: origin.left + metrics.padding + f32::from(self.column) * metrics.width,
+            top: origin.top + metrics.padding + f32::from(self.row) * metrics.height,
+            width: f32::from(self.columns) * metrics.width,
+            height: metrics.height,
+        }
+    }
+
+    #[must_use]
+    pub fn contains(self, row: u16, column: u16) -> bool {
+        self.row == row && (self.column..self.column + self.columns).contains(&column)
+    }
+}
+
 impl DrawRow {
+    fn hyperlinks(&self, row: u16) -> impl Iterator<Item = Hyperlink<'_>> {
+        let mut column = 0;
+        let visible_uri = |cell: &DrawCell| {
+            matches!(cell.width, CellWidth::Narrow | CellWidth::Wide)
+                && !cell.style.invisible
+                && !cell.hyperlink.is_empty()
+        };
+        std::iter::from_fn(move || {
+            while column < self.cells.len() {
+                let cell = &self.cells[column];
+                if !visible_uri(cell) {
+                    column += 1;
+                    continue;
+                }
+                let start = column;
+                let uri = cell.hyperlink.as_str();
+                while let Some(cell) = self.cells.get(column) {
+                    if !visible_uri(cell) || cell.hyperlink != uri {
+                        break;
+                    }
+                    column += if cell.width == CellWidth::Wide { 2 } else { 1 };
+                }
+                return Some(Hyperlink {
+                    row,
+                    column: start as u16,
+                    columns: (column - start) as u16,
+                    uri,
+                });
+            }
+            None
+        })
+    }
+
     pub(crate) fn from_protocol(row: &Row, frame: &Frame) -> Self {
         Self {
             wrapped: row.wrapped,
@@ -685,6 +744,21 @@ impl AccessibleText {
 }
 
 impl Scene {
+    pub fn hyperlinks(&self) -> impl Iterator<Item = Hyperlink<'_>> {
+        self.content
+            .iter()
+            .enumerate()
+            .flat_map(|(row, content)| content.hyperlinks(row as u16))
+    }
+
+    #[must_use]
+    pub fn hyperlink_at(&self, row: u16, column: u16) -> Option<Hyperlink<'_>> {
+        self.content
+            .get(usize::from(row))?
+            .hyperlinks(row)
+            .find(|link| link.contains(row, column))
+    }
+
     /// Materialize a validated Orbit frame without retaining a second wire schema.
     #[must_use]
     pub fn from_frame(frame: &Frame) -> Self {
@@ -1108,6 +1182,35 @@ mod tests {
         style.selected = false;
         style.inverse = true;
         assert!(!is_default_background(style));
+    }
+
+    #[test]
+    fn hyperlinks_follow_visible_heads_and_wide_cells() {
+        let mut row = DrawRow {
+            wrapped: false,
+            wrap_continuation: false,
+            kitty_virtual_placeholder: false,
+            cells: vec![
+                draw_cell("A", CellWidth::Narrow, false),
+                draw_cell("界", CellWidth::Wide, false),
+                draw_cell("", CellWidth::SpacerTail, false),
+                draw_cell("hidden", CellWidth::Narrow, false),
+                draw_cell("B", CellWidth::Narrow, false),
+                draw_cell("", CellWidth::SpacerHead, false),
+            ],
+        };
+        for cell in &mut row.cells {
+            cell.hyperlink = "https://example.com/exact?x=%26&y=2".into();
+        }
+        row.cells[2].hyperlink = "https://wrong-tail.invalid".into();
+        row.cells[3].style.invisible = true;
+        let links = row.hyperlinks(2).collect::<Vec<_>>();
+        assert_eq!(links.len(), 2);
+        assert_eq!((links[0].row, links[0].column, links[0].columns), (2, 0, 3));
+        assert_eq!(links[0].uri, row.cells[0].hyperlink);
+        assert!(links[0].contains(2, 2));
+        assert!(!links[0].contains(2, 3));
+        assert_eq!((links[1].column, links[1].columns), (4, 1));
     }
 
     #[test]

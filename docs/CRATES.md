@@ -30,6 +30,18 @@ already-locked Wayland data-control owner.
 
 ## Current decisions
 
+### Native hyperlink dispatch
+
+- **Selected shape:** Existing Linux host `gio open -- URI`, invoked with Rust
+  `Command`; no new direct crate or Nix package.
+- **Owner consequence:** GIO owns desktop handler selection and launch. Venus
+  owns its HTTP/HTTPS admission policy and one dispatcher with a ten-second
+  deadline. Missing GIO or a handler produces a visible, accessible failure.
+  The existing Wayland clipboard owner copies explicit targets independently.
+- **Rejected:** A browser/opener crate, direct portal dependency, custom D-Bus
+  plumbing, URL discovery, and `xdg-open` paths that wait for browser lifetime.
+  Revisit only if a supported Linux desktop cannot dispatch through host GIO.
+
 ### Eon workspace protocol consumer
 
 - **Selected shape:** Exact Git revision `963bdaf4d9816f27a26c7bdb6ee122855566a222` of the
