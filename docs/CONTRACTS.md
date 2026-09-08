@@ -42,7 +42,7 @@ retains accepted user-visible chronology.
 - **Compatibility order:** Prove Venus first with unchanged defaults and wire
   contracts, then let the separate Eon configuration issue consume that exact
   accepted source for Eon and EonTerm.
-- **Supervised startup admission (approved, proof pending):**
+- **Supervised startup admission:**
   `EON_VENUS_PRESENTATION_CONTROL=stdin-ready-v1` uses private stdin/stdout.
   Workspace mode first reads one bounded canonical EONW v4 Snapshot from stdin;
   standalone mode has no snapshot prefix. After font/renderer initialization
@@ -52,6 +52,19 @@ retains accepted user-visible chronology.
   readiness; the caller bounds startup and closes a failed attempt. Existing
   `present\n` and EOF control retain their meanings. Later user/compositor
   resizing is outside this initial admission. EONW and ORBS remain unchanged.
+- **Startup-admission proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`.
+  Locked fmt/check/test/clippy pass (120 ordinary tests); five existing native
+  checks pass in separate processes on x86_64 Linux, Sway 1.12 / lavapipe
+  26.1.1 at 1.25 scale. The actual standalone/workspace window reports readiness
+  for defaults and explicit grids without an Orbit process. Missing fonts,
+  impossible workspace geometry and malformed snapshots exit without readiness;
+  Present and EOF shutdown pass. The final native grid is checked before Ready.
+  Reproduction inputs and observations are retained under
+  `~/.local/state/eon/proofs/ven-c19-ec80e36625dec73544c0cb64becf4b135c932a63/`.
+  This accepts the child startup boundary; composed Nix/installed Eon acceptance
+  remains with `eon-terminal-typography-geometry-config-b63`. Earlier typography,
+  input, accessibility, fractional-scale and compositor evidence stays scoped
+  to its recorded identities and observations below.
 - **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1` (startup correction).
   Locked fmt/check/test/clippy and Nix package checks pass: 118 ordinary tests
   and five native regressions. Initial explicit-grid and font-only startup
