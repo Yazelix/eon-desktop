@@ -282,10 +282,10 @@ Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 | Agent policy inputs | 208 |
 | README | 291 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,124 |
+| Contracts and references | 1,152 |
 | Crate decisions | 237 |
-| Changelog | 176 |
+| Changelog | 182 |
 | Rust source, including unit tests | 14,289 |
 | Rust integration tests | 898 |
 | Cargo manifest | 23 |
-| **Total** | **17,252** |
+| **Total** | **17,286** |

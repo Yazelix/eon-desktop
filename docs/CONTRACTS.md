@@ -18,7 +18,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C5 — Explicit native hyperlinks
 
-- **Status:** Candidate; activated by the user through `ven-lq4`.
+- **Status:** Proved
 - **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link,
   inspects links with Ctrl+Shift+O, or explicitly activates one.
 - **Result:** The presented link is highlighted and its actual target is
@@ -43,8 +43,35 @@ retains accepted user-visible chronology.
   browser embedding, new crate, or protocol change. Host GIO and a registered
   handler are required for opening; copy remains available without them.
   Native Linux Wayland only; other platforms remain unsupported.
-- **Proof:** Pending deterministic identity/policy checks and native hover,
-  keyboard, copy/open, mouse-reporting, and failure observations.
+- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
+  - **Environment:** x86_64 Linux, private Sway 1.12, Vulkan Mesa lavapipe,
+    host GIO 2.80.0, Wayland clipboard and AT-SPI.
+  - **Checks:** Locked fmt/check/test/clippy; 115 ordinary tests and both native
+    renderer/Application checks. The native Application check rejects unpainted
+    and replaced link targets, preserves wide tails, refreshes hover after
+    presentation and retires the attachment. A real stalled child proves the
+    dispatcher deadline and reaping.
+  - **Dogfood:** Native keyboard traversal/paging, exact clipboard and real GIO
+    dispatch of `https://example.com/exact?x=%26&y=2#part`, unsupported-scheme
+    and malformed-percent refusal, mouse-reporting press/release preservation,
+    explicit click capture, bottom-row hover, replacement during a held click,
+    and native missing-handler failure. Target and failure text were read
+    through AT-SPI. The final amendment added only a timeout test and LOC;
+    native-verified production source is unchanged.
+  - **Integration:** Accepted Eon
+    `be9d0e37c7d0029d6832ff609082faa885280762` installed this exact source as
+    `/nix/store/746dv1wk3pmmizz18d4v238p0s69qmf9-yazelix-venus-0.1.0`.
+    Both Eon and EonTerm profiles matched their built artifacts; installed
+    native checks passed on Sway 1.12/Nix Mesa 26.1.2 lavapipe. EonTerm repeated
+    the target, mouse, failure and stale-click dogfood above; full Eon proved
+    picker cancellation, target inspection, exact copy and native dispatch.
+    Host-only XDG handler preferences were preserved. Eon's contract index and
+    `ven-lq4` record the exact artifacts. Fractional scale and broader compositor
+    quality remain unproved.
+
+The `VEN-C1`, `VEN-C2` and `VEN-C4` proof revisions advance for this exact
+hyperlink slice. Their distinct earlier evidence and listed proof gaps remain
+qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
@@ -75,7 +102,7 @@ retains accepted user-visible chronology.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
   owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `5d22b09e323212693a8e54c4c63089784b660cad`
+- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
   - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
     evidence from the accepted presentation lineage
   - **Evidence:**
@@ -89,7 +116,8 @@ retains accepted user-visible chronology.
     - Cursor tail `254beec194fe5cac208cced34d346014b0484319`, native
       dogfood `c618cfd087da7c64adf8cd093c3f4b458e8fd5d4`, and wide
       timing comparison `9a1658561a130f6d4656a3049a707feb7cecaa72`
-    - Omitted-profile tail and explicit-`none` proof at the listed revision
+    - Omitted-profile tail and explicit-`none` proof at
+      `5d22b09e323212693a8e54c4c63089784b660cad`
 - **Open proof:** Composed Eon cursor-profile serialization and broader Linux
   compositor coverage remain separately tracked.
 
@@ -110,7 +138,7 @@ retains accepted user-visible chronology.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces.
-- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
+- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
   - **Environment:** Accepted deterministic host coverage plus retained native
     geometry and input evidence
   - **Evidence:** Native Application input-between-frames regression;
@@ -178,7 +206,7 @@ retains accepted user-visible chronology.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
-- **Proof:** `588996739aaff32756ca24960135371a94636801`
+- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
   - **Environment:** x86_64 Linux deterministic host coverage with retained
     native title and supervised-loss evidence
   - **Evidence:** First-renderer-error retention, best-effort diagnostics,
