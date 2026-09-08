@@ -1806,10 +1806,10 @@ impl Renderer {
             {
                 continue;
             }
-            let mut buffer = Buffer::new(
-                &mut self.fonts.font_system,
-                Metrics::new(self.cell_font.size, self.metrics.height),
-            );
+            // A cell needs one line, not Vec's four-line initial allocation.
+            let mut buffer =
+                Buffer::new_empty(Metrics::new(self.cell_font.size, self.metrics.height));
+            buffer.lines.reserve_exact(1);
             buffer.set_size(Some(layout_width.max(1.0)), Some(layout_height.max(1.0)));
             buffer.set_wrap(Wrap::None);
             buffer.set_monospace_width(Some(self.metrics.width));

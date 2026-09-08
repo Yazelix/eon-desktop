@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reduce per-cell text-buffer allocations by reserving one line while preserving
+  glyph selection and cell geometry.
+
 - Admit the actual supervised window before reporting `stdin-ready-v1`
   readiness, so Eon can validate fonts and initial native geometry before
   starting a user command. Workspace admission consumes the canonical snapshot;
