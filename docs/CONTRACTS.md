@@ -247,6 +247,12 @@ qualified by the identities and boundaries below.
       timing comparison `9a1658561a130f6d4656a3049a707feb7cecaa72`
     - Omitted-profile tail and explicit-`none` proof at
       `5d22b09e323212693a8e54c4c63089784b660cad`
+    - Cell-buffer allocation proof at
+      `541a9cb43c155b8b97069904593dc81c73682613`: the
+      [memory comparison](benchmarks/venus-memory-2026-09-08.md) records
+      repeated PSS/USS savings and identical baseline/candidate pixels on
+      isolated Sway/software Vulkan. It preserves the earlier presentation
+      proofs and does not extend COSMIC, fractional-scale or compositor coverage.
 - **Open proof:** Composed Eon cursor-profile serialization and broader Linux
   compositor coverage remain separately tracked.
 

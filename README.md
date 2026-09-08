@@ -277,6 +277,8 @@ selection or primary destination to the primary clipboard.
   evidence used by the implementation gate.
 - [`docs/CRATES.md`](docs/CRATES.md) records the measured dependency selection,
   owner seams, and rejected alternatives.
+- The [memory comparison](docs/benchmarks/venus-memory-2026-09-08.md) records
+  the cell-buffer allocation savings and their environment limits.
 
 ```sh
 cargo fmt --check
@@ -311,17 +313,19 @@ revision must be available in the Git checkout cache or published to GitHub.
 ## LOC scorecard
 
 The scorecard counts tracked handwritten text and code. It excludes `.git/`,
-Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
+Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`
+and benchmark CSV data.
 
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 327 |
+| README | 331 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,309 |
+| Contracts and references | 1,315 |
+| Memory benchmark report | 158 |
 | Crate decisions | 258 |
 | Changelog | 202 |
 | Rust source, including unit tests | 15,296 |
 | Rust integration tests | 898 |
 | Cargo manifest | 24 |
-| **Total** | **18,528** |
+| **Total** | **18,696** |
