@@ -43,7 +43,18 @@ retains accepted user-visible chronology.
   browser embedding, new crate, or protocol change. Host GIO and a registered
   handler are required for opening; copy remains available without them.
   Native Linux Wayland only; other platforms remain unsupported.
-- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
+- **Proof:** `cf3a9169f2cd95d42c689134a52d51d9147ff37c`
+  - **Inspection correction:** The real Application regression fails before
+    this revision and passes after it: unidentified native presses are captured,
+    their repeats/releases stay captured after Escape, and fresh presses return
+    to terminal routing. Locked checks (115 ordinary tests) and both native
+    checks pass. Earlier hyperlink dogfood below retains its exact source.
+  - **Installed correction:** Eon
+    `07867f99d176012a9d34a61aa37b5de9ce0888af` selects this exact source;
+    both profiles launch `/nix/store/fxf4xyadmiwn7m8ndc0i0gxzcbrq5r2p-yazelix-venus-0.1.0/bin/yazelix-venus`.
+    Installed EonTerm on Sway 1.12/Nix Mesa 26.1.2 captured real native keycode
+    240 carrying text during inspection, admitted it before/after inspection,
+    and copied the exact link. Eon's contract index records both artifacts.
   - **Environment:** x86_64 Linux, private Sway 1.12, Vulkan Mesa lavapipe,
     host GIO 2.80.0, Wayland clipboard and AT-SPI.
   - **Checks:** Locked fmt/check/test/clippy; 115 ordinary tests and both native
@@ -51,15 +62,16 @@ retains accepted user-visible chronology.
     and replaced link targets, preserves wide tails, refreshes hover after
     presentation and retires the attachment. A real stalled child proves the
     dispatcher deadline and reaping.
-  - **Dogfood:** Native keyboard traversal/paging, exact clipboard and real GIO
+  - **Initial dogfood (`d1223463b2b513c04242df50a4bd948d0533cfde`):**
+    Native keyboard traversal/paging, exact clipboard and real GIO
     dispatch of `https://example.com/exact?x=%26&y=2#part`, unsupported-scheme
     and malformed-percent refusal, mouse-reporting press/release preservation,
     explicit click capture, bottom-row hover, replacement during a held click,
     and native missing-handler failure. Target and failure text were read
-    through AT-SPI. The final amendment added only a timeout test and LOC;
-    native-verified production source is unchanged.
+    through AT-SPI.
   - **Integration:** Accepted Eon
-    `be9d0e37c7d0029d6832ff609082faa885280762` installed this exact source as
+    `be9d0e37c7d0029d6832ff609082faa885280762` installed source
+    `d1223463b2b513c04242df50a4bd948d0533cfde` as
     `/nix/store/746dv1wk3pmmizz18d4v238p0s69qmf9-yazelix-venus-0.1.0`.
     Both Eon and EonTerm profiles matched their built artifacts; installed
     native checks passed on Sway 1.12/Nix Mesa 26.1.2 lavapipe. EonTerm repeated
@@ -138,7 +150,7 @@ qualified by the identities and boundaries below.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces.
-- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
+- **Proof:** `cf3a9169f2cd95d42c689134a52d51d9147ff37c`
   - **Environment:** Accepted deterministic host coverage plus retained native
     geometry and input evidence
   - **Evidence:** Native Application input-between-frames regression;
