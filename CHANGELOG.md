@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Validate font-only workspace geometry before attachment; reject typography
+  that leaves no terminal cell in the initial window. Complete native startup
+  without waiting for keyboard input or an unrelated event.
+
 - Accept startup font family, ordered fallback families, font size, line height,
   and initial columns/rows through VEN-C19. Preserve defaults, share one physical
   cell grid, include workspace/picker overhead, and reject invalid settings or

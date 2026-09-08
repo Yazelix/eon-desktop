@@ -669,6 +669,8 @@ impl Application {
             columns,
             rows,
         } = arguments;
+        let initial_scale_pending =
+            columns.is_some() || rows.is_some() || fonts != FontSettings::default();
         Self {
             application_id,
             orbit_socket,
@@ -683,7 +685,7 @@ impl Application {
             rows,
             proxy,
             fatal_error: None,
-            initial_scale_pending: columns.is_some() || rows.is_some(),
+            initial_scale_pending,
             window: None,
             transport: None,
             workspace_transport: None,
@@ -734,7 +736,7 @@ impl Application {
         #[cfg(target_os = "linux")]
         let attributes = attributes.with_name(self.application_id.as_str(), "yazelix-venus");
         let window = Arc::new(event_loop.create_window(attributes)?);
-        if (self.columns.is_some() || self.rows.is_some()) && window.scale_factor() != 1.0 {
+        if self.initial_scale_pending && window.scale_factor() != 1.0 {
             let initial = initial_window_size(
                 self.columns,
                 self.rows,
@@ -2087,7 +2089,7 @@ fn window_attributes(
 impl ApplicationHandler<UserEvent> for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none()
-            && (self.columns.is_some() || self.rows.is_some())
+            && self.initial_scale_pending
             && self.workspace_model.snapshot().is_none()
             && let Some(socket) = self.workspace_socket.clone()
         {
@@ -2566,6 +2568,10 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.next_blink,
                 self.next_animation,
                 self.orbit_retry.deadline,
+                // winit may suppress output-enter wakeups. Poll only until
+                // this window completes its initial native size admission.
+                (self.initial_scale_pending && self.window.is_some())
+                    .then_some(now + ANIMATION_FRAME_INTERVAL),
                 self.link_opener
                     .as_ref()
                     .map(|_| now + Duration::from_millis(50)),
@@ -3124,12 +3130,80 @@ mod tests {
     use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
 
     #[test]
+    #[ignore = "requires an isolated native Wayland display"]
+    fn typography_without_grid_waits_for_and_validates_workspace_geometry() {
+        use winit::platform::wayland::EventLoopBuilderExtWayland;
+        struct Probe(Application);
+        impl ApplicationHandler<UserEvent> for Probe {
+            fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+                self.0.resumed(event_loop);
+                assert!(self.0.window.is_none(), "wait for workspace geometry");
+                self.0
+                    .workspace_model
+                    .apply(eon_workspace_protocol::v4::Response::Snapshot(Snapshot {
+                        active_tab: "t1".into(),
+                        directory_picker: None,
+                        tabs: vec![Tab {
+                            id: "t1".into(),
+                            directory: b"/tmp".to_vec(),
+                            selected_pane: Some("p1".into()),
+                            panes: vec![Pane {
+                                id: "p1".into(),
+                                session: "s1".into(),
+                                endpoint: b"/unused-orbit.sock".to_vec(),
+                                live: true,
+                            }],
+                        }],
+                    }));
+                self.0.resumed(event_loop);
+                assert!(self.0.window.is_none());
+                assert!(self.0.transport.is_none());
+                assert!(
+                    self.0
+                        .fatal_error
+                        .as_deref()
+                        .is_some_and(|error| { error.contains("initial terminal dimensions") })
+                );
+            }
+            fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
+        }
+        let event_loop = EventLoop::<UserEvent>::with_user_event()
+            .with_wayland()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let arguments = launch::launch_arguments(
+            ["--font-size", "96", "--line-height", "3", "--workspace"]
+                .into_iter()
+                .map(OsString::from)
+                .chain([std::env::temp_dir()
+                    .join("venus-unavailable-typography-workspace.sock")
+                    .into_os_string()]),
+            None,
+        )
+        .unwrap();
+        let mut probe = Probe(Application::new(arguments, event_loop.create_proxy()));
+        event_loop.run_app(&mut probe).unwrap();
+        assert!(probe.0.fatal_error.is_some());
+    }
+
+    #[test]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
     fn native_initial_grid_survives_compositor_scale_admission() {
+        native_startup(true);
+    }
+
+    #[test]
+    #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
+    fn native_font_only_startup_completes_without_input() {
+        native_startup(false);
+    }
+
+    fn native_startup(explicit_grid: bool) {
         use winit::platform::wayland::EventLoopBuilderExtWayland;
         struct Probe {
             app: Application,
-            start: Instant,
+            explicit_grid: bool,
             checked: bool,
         }
         impl ApplicationHandler<UserEvent> for Probe {
@@ -3137,6 +3211,10 @@ mod tests {
                 self.app.resumed(event_loop);
             }
             fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+                assert!(
+                    !matches!(event, UserEvent::Exit),
+                    "native startup must complete without a test timer or user input"
+                );
                 self.app.user_event(event_loop, event);
             }
             fn window_event(
@@ -3155,28 +3233,24 @@ mod tests {
             }
             fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
                 self.app.about_to_wait(event_loop);
-                if self.start.elapsed() < Duration::from_secs(2) {
-                    event_loop.set_control_flow(ControlFlow::WaitUntil(
-                        self.start + Duration::from_secs(2),
-                    ));
+                if self.app.initial_scale_pending {
                     return;
                 }
-                assert!(
-                    !self.app.initial_scale_pending,
-                    "native scale admission completes"
-                );
+                assert!(self.app.transport.is_some());
                 let state = self
                     .app
                     .window
                     .as_ref()
                     .expect("the configured native window opens");
                 let size = surface_size(state.renderer.size(), state.renderer.metrics()).unwrap();
-                assert_eq!(
-                    (size.cols, size.rows),
-                    (100, 30),
-                    "scale {}",
-                    state.scale_factor
-                );
+                if self.explicit_grid {
+                    assert_eq!((size.cols, size.rows), (100, 30));
+                } else {
+                    assert_eq!(
+                        state.renderer.size(),
+                        LogicalSize::new(960.0, 600.0).to_physical::<u32>(state.scale_factor)
+                    );
+                }
                 self.checked = true;
                 event_loop.exit();
             }
@@ -3195,12 +3269,14 @@ mod tests {
                 "20",
                 "--line-height",
                 "1.5",
-                "--columns",
-                "100",
-                "--rows",
-                "30",
             ]
             .into_iter()
+            .chain(
+                explicit_grid
+                    .then_some(["--columns", "100", "--rows", "30"])
+                    .into_iter()
+                    .flatten(),
+            )
             .map(OsString::from)
             .chain([std::env::temp_dir()
                 .join("venus-unavailable-typography.sock")
@@ -3210,10 +3286,21 @@ mod tests {
         .unwrap();
         let mut probe = Probe {
             app: Application::new(arguments, event_loop.create_proxy()),
-            start: Instant::now(),
+            explicit_grid,
             checked: false,
         };
+        let proxy = event_loop.create_proxy();
+        let (stop, stopped) = std::sync::mpsc::channel::<()>();
+        let watchdog = thread::spawn(move || {
+            if stopped.recv_timeout(Duration::from_secs(5))
+                == Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            {
+                let _ = proxy.send_event(UserEvent::Exit);
+            }
+        });
         event_loop.run_app(&mut probe).unwrap();
+        let _ = stop.send(());
+        watchdog.join().unwrap();
         assert!(probe.checked);
     }
 
@@ -3716,6 +3803,9 @@ mod tests {
             .unwrap(),
             event_loop.create_proxy(),
         );
+        // This input fixture supplies its own attachment and frames; native
+        // startup admission has separate coverage.
+        app.initial_scale_pending = false;
         app.workspace_model
             .apply(workspace::Response::Snapshot(snapshot));
         app.workspace_transport = Some(WorkspaceTransport::start(workspace_socket, || {}));

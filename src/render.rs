@@ -101,7 +101,7 @@ pub struct CellMetrics {
 }
 
 /// Startup typography. Validation is shared by launch parsing and font resolution.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FontSettings {
     pub family: Option<String>,
     pub fallbacks: Vec<String>,
@@ -291,9 +291,7 @@ impl FontSetup {
                 padding: DEFAULT_METRICS.padding,
             },
             family,
-            configured: family.is_some()
-                || settings.size != DEFAULT_METRICS.font_size
-                || settings.line_height != FontSettings::default().line_height,
+            configured: settings != &FontSettings::default(),
         })
     }
 

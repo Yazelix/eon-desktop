@@ -86,6 +86,8 @@ workspace headers or picker gutters. An omitted dimension retains its existing
 initial window dimension; the default window is 960 by 600 logical pixels.
 Requests must fit Orbit's 100,000-cell and native surface limits. The compositor
 may override initial sizing, and later user resizing remains unconstrained.
+Typography must leave room for a terminal cell in the initial window, including
+workspace headers, even when columns and rows are omitted.
 These are startup options; Eon owns persistent product configuration.
 
 ### Hyperlinks
@@ -310,12 +312,12 @@ Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 321 |
+| README | 323 |
 | Repository ignore rules | 6 |
 | Contracts and references | 1,264 |
 | Crate decisions | 258 |
-| Changelog | 190 |
-| Rust source, including unit tests | 15,145 |
+| Changelog | 194 |
+| Rust source, including unit tests | 15,233 |
 | Rust integration tests | 898 |
 | Cargo manifest | 24 |
-| **Total** | **18,314** |
+| **Total** | **18,408** |
