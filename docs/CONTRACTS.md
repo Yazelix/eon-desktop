@@ -42,7 +42,25 @@ retains accepted user-visible chronology.
 - **Compatibility order:** Prove Venus first with unchanged defaults and wire
   contracts, then let the separate Eon configuration issue consume that exact
   accepted source for Eon and EonTerm.
-- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`; x86_64 Linux, isolated Sway 1.12,
+- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1` (startup correction).
+  Locked fmt/check/test/clippy and Nix package checks pass: 118 ordinary tests
+  and five native regressions. Initial explicit-grid and font-only startup
+  complete without input at scales 1, 1.25, 1.5 and 2 on Sway 1.12/lavapipe
+  26.1.1. The watchdog can only fail startup; it cannot supply a successful
+  admission wakeup as the earlier probe did.
+  Package `/nix/store/k1pdjvzha5skyrp2nsvn0ih6gz6lj2j6-yazelix-venus-0.1.0`
+  produces real PTY grids of 73 by 18 standalone, 73 by 12 in a three-pane
+  workspace, and 71 by 15 in the picker at 1.25 with 20 px / 1.5 typography
+  and omitted columns/rows. Both workspace modes reject 96 px / 3 typography
+  with exit 1 and zero observed Orbit connections.
+  Reproduction inputs and costly build evidence are retained under
+  `~/.local/state/eon/proofs/ven-c19-1b32e5ba7105d14f654136578a65c97a25b53fc1/`.
+  Eon `e10a01ee93d6d32d7312d1c82ff6f524aca31583` consumes this exact source;
+  both refreshed profiles match their builds. Installed EonTerm PTY startup
+  and Eon directory-picker presentation pass at 1.25. Eon's contract index
+  records the artifacts and observation limits.
+- **Typography matrix proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`;
+  x86_64 Linux, isolated Sway 1.12,
   Mesa 26.1.1 lavapipe, DejaVu Sans Mono and Symbols Nerd Font Mono.
   - Locked fmt/check/test/clippy passed: 118 ordinary tests. All three ignored
     native tests passed, including configured live-output input/selection and
@@ -73,7 +91,7 @@ retains accepted user-visible chronology.
   native IME proof uses a stable keyboard/pointer seat. That pre-existing
   hot-unplug limitation is outside this typography change.
 
-This source advances `VEN-C1`, `VEN-C2` and `VEN-C4` for the startup slice above.
+The current proof advances `VEN-C1`, `VEN-C2` and `VEN-C4` only for startup.
 Their distinct earlier proof identities and remaining limits stay qualified.
 
 ## Status
@@ -184,7 +202,7 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
   owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`
+- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
@@ -222,7 +240,7 @@ qualified by the identities and boundaries below.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces.
-- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`
+- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** Accepted deterministic host coverage plus retained native
@@ -292,7 +310,7 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
-- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`
+- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux deterministic host coverage with retained
