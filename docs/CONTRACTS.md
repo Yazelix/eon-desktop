@@ -454,6 +454,15 @@ qualified by the identities and boundaries below.
     active tab around exactly one expanded pane. Each tab shows its numeric
     `tN` prefix plus the leaf, `~`, or `/` derived from Eon's authoritative
     launch directory.
+  - Tabs have rounded corners and separated hit targets. Width follows shaped
+    label text plus padding, capped near 280 logical pixels at default
+    typography. Long labels use a cluster-safe middle ellipsis; when even that
+    cannot fit, preserve the numeric identity whenever it fits. Overflow stays
+    horizontally scrollable across the whole strip, including its gaps, and
+    selection reveals the active tab. Hover shows
+    its control-sanitized launch path within available window space; the
+    accessible name retains that path. Selection and keyboard focus remain
+    distinct. Pane shell navigation does not rename or resize tabs.
   - Every visible live pane endpoint has one bounded read-only metadata observer.
   - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
     and one compact working-directory label.
@@ -499,6 +508,17 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Rounded adaptive tabs and hover paths are mechanically verified and
+    dogfooded as candidate `ven-rounded-adaptive-tabs-vdf` over
+    `963e56e5cb43bc184e2fd0ac62451d8d75e20c72`. Retained evidence is in
+    `~/.local/state/eon/proofs/ven-rounded-adaptive-tabs-vdf-2026-09-08-review-2/`:
+    exact source/binary hashes, 121 ordinary Rust tests, native application
+    red/green for wheel scrolling in padding and between tabs, and an Eon-backed
+    wheel observation. Rendering, hover, focus, resize, picker and 1x/1.25x/2x
+    observations in the sibling `-review-1/` directory remain prior-candidate
+    evidence. All native observations use private Sway 1.12/Vulkan; they do not
+    close the existing fractional-scale or other compositor gaps. Substituted
+    debug-child proof is not accepted source or installed Eon pin/profile proof.
   - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
     COSMIC observations belong to the retained prior proof.
   - **Evidence:** Complete locked Rust checks and isolated Nix workspace

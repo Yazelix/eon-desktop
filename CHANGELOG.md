@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Use rounded, separated workspace tabs sized to their shaped directory labels.
+  Cap long tabs with middle ellipsis, expose the launch path on hover, and
+  preserve horizontal scrolling, selection reveal and distinct keyboard focus.
+  Keep a fitting tab number visible when the name and ellipsis cannot fit.
+  Scroll across the whole tab strip, including padding and gaps between tabs.
+
 - Reduce per-cell text-buffer allocations by reserving one line while preserving
   glyph selection and cell geometry.
 

@@ -5,6 +5,21 @@ source reuse. Before code, the implementing Bead records exact releases or
 commits, useful mechanisms, rejected surrounding scope, license compatibility,
 and consequences for ownership, code shape, and the first check.
 
+## Rounded adaptive workspace tabs
+
+`ven-rounded-adaptive-tabs-vdf` inspects Qt qtbase 6.8.3
+`c07c2d5a527a644d36e7853d55132ae38921682f`, `src/widgets/widgets/qtabbar.cpp`:
+natural font-metric sizing, cumulative tab layout, display-text elision and
+selected-rectangle reveal. Qt's widget, style, drag and animation systems are
+outside Venus scope. LGPL/GPL/commercial source inspection only; no code copied.
+The existing cosmic-text 0.19.0 shaper supplies measured widths and glyph-cluster
+byte boundaries with the same attributes used by glyphon 0.12.0 for header
+rendering. Scene rectangles retain layout, clipping, hit and AccessKit ownership.
+The existing rectangle batch supplies rounded fills; clipped text areas keep
+terminal glyphs out of path previews without another renderer or dependency.
+Different label widths, valid cluster cuts, overflow/reveal, accessible clipped
+bounds and isolated native hover/focus rendering are the falsifiers.
+
 ## Explicit hyperlink interaction
 
 `ven-lq4` follows the

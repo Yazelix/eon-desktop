@@ -446,6 +446,7 @@ mod tests {
             CellMetrics::for_scale(1.0),
             0.0,
             0.0,
+            |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
         )
     }
 
@@ -641,14 +642,21 @@ mod tests {
                     "pane-1",
                 ),
                 workspace_tab("t2", &["pane-7"], "pane-7"),
+                workspace_tab("t3", &["pane-8"], "pane-8"),
             ],
             directory_picker: None,
         };
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
             let size = PhysicalSize::new(100, (140.0 * scale) as u32);
-            let workspace =
-                WorkspaceScene::from_snapshot(&workspace_snapshot, size, metrics, 20.0, 20.0);
+            let workspace = WorkspaceScene::from_snapshot(
+                &workspace_snapshot,
+                size,
+                metrics,
+                20.0,
+                20.0,
+                |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
+            );
             let mut snapshot = Snapshot {
                 content: AccessibleText {
                     rows: vec![
@@ -713,6 +721,7 @@ mod tests {
                 metrics,
                 workspace.tab_scroll_limit(),
                 workspace.pane_scroll_limit(),
+                |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
             );
             assert_eq!(fully_clipped.visible_terminal(), None);
             snapshot.set_workspace(Some(&fully_clipped));
@@ -778,6 +787,7 @@ mod tests {
             0.0,
             0.0,
             |endpoint| (endpoint == b"/run/eon/two.sock").then_some(&metadata),
+            |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
         );
         let terminal_bounds = rect(workspace.visible_terminal().unwrap());
         let mut snapshot = Snapshot {
@@ -842,6 +852,7 @@ mod tests {
             CellMetrics::for_scale(1.0),
             0.0,
             0.0,
+            |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
         );
         let mut snapshot = Snapshot {
             content: AccessibleText {
@@ -886,6 +897,7 @@ mod tests {
             CellMetrics::for_scale(1.0),
             0.0,
             0.0,
+            |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
         );
         snapshot.set_workspace(Some(&inactive_picker));
         let active_tab = snapshot.tab_ids["t2"];

@@ -649,6 +649,7 @@ struct Application {
     window_focused: bool,
     window_occluded: bool,
     workspace_focus: WorkspaceFocus,
+    tab_texts: HashMap<String, (String, f32)>,
     tab_scroll: f32,
     pane_scroll: f32,
     terminal_scroll: TerminalScroll,
@@ -716,6 +717,7 @@ impl Application {
             window_focused: false,
             window_occluded: false,
             workspace_focus: WorkspaceFocus::Terminal,
+            tab_texts: HashMap::new(),
             tab_scroll: 0.0,
             pane_scroll: 0.0,
             terminal_scroll: TerminalScroll::default(),
@@ -776,6 +778,8 @@ impl Application {
         });
         if !self.initial_scale_pending {
             self.start_initial_attachment();
+        } else {
+            self.reveal_workspace_selection();
         }
         self.refresh_client_view();
         Ok(())
@@ -889,6 +893,7 @@ impl Application {
                         .get(endpoint)
                         .map(|observer| &observer.metadata)
                 },
+                |id, _| self.tab_texts[id].clone(),
             )
         })
     }
@@ -915,18 +920,24 @@ impl Application {
     }
 
     fn reveal_workspace_selection(&mut self) {
-        let Some(state) = &self.window else {
+        let Some(state) = &mut self.window else {
             return;
         };
         let Some(snapshot) = self.workspace_model.snapshot() else {
             return;
         };
+        self.tab_texts.clear();
         let scene = WorkspaceScene::from_snapshot(
             snapshot,
             state.renderer.size(),
             state.renderer.metrics(),
             0.0,
             0.0,
+            |id, label| {
+                let fitted = state.renderer.fit_tab_text(label);
+                self.tab_texts.insert(id.to_owned(), fitted.clone());
+                fitted
+            },
         );
         self.tab_scroll = scene.active_tab_scroll();
         self.pane_scroll = scene.selected_pane_scroll();
@@ -1023,6 +1034,9 @@ impl Application {
             }
         };
         if self.window.is_none() || self.initial_scale_pending {
+            if snapshot_changed {
+                self.reveal_workspace_selection();
+            }
             return;
         }
         if unavailable && !self.metadata_observers.is_empty() {
@@ -2008,12 +2022,26 @@ impl Application {
         });
         let kinetic_active = self.terminal_scroll.velocity != 0.0;
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
+        let hovered_tab = (self.window_focused
+            && self.links.pointer_inside
+            && !self.input.pointer_busy()
+            && !self.links.keyboard)
+            .then(|| {
+                workspace.as_ref().and_then(|scene| {
+                    match scene.hit_test(self.cursor.x as f32, self.cursor.y as f32) {
+                        Some(WorkspaceHit::Tab(id)) => Some(id.to_owned()),
+                        _ => None,
+                    }
+                })
+            })
+            .flatten();
         let mut refresh = false;
         let mut presented = false;
         let Some(state) = &mut self.window else {
             return;
         };
         state.renderer.set_hyperlink(highlighted_link);
+        state.renderer.set_hovered_tab(hovered_tab);
         match state.renderer.render(
             self.model.scene(),
             self.model.scroll_preview(),
@@ -2261,6 +2289,19 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::CursorMoved { position, .. } => {
+                let tab_at = |position: PhysicalPosition<f64>| {
+                    workspace.as_ref().and_then(|scene| {
+                        match scene.hit_test(position.x as f32, position.y as f32) {
+                            Some(WorkspaceHit::Tab(id)) => Some(id),
+                            _ => None,
+                        }
+                    })
+                };
+                if tab_at(self.cursor) != tab_at(position)
+                    || (!self.links.pointer_inside && tab_at(position).is_some())
+                {
+                    state.window.request_redraw();
+                }
                 self.cursor = position;
                 self.links.pointer_inside = true;
                 if self.links.pressed.is_some() {
@@ -2288,6 +2329,7 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorLeft { .. } => {
                 self.links.pointer_inside = false;
+                state.window.request_redraw();
                 self.cancel_terminal_scroll();
                 self.cancel_pointer_sequence();
                 if !self.links.keyboard {
@@ -2396,7 +2438,11 @@ impl ApplicationHandler<UserEvent> for Application {
                     state.renderer.reset_cursor_animation();
                     state.window.request_redraw();
                 }
-                if matches!(hit, Some(WorkspaceHit::Tab(_))) {
+                if workspace.as_ref().is_some_and(|scene| {
+                    scene
+                        .tab_viewport
+                        .contains(self.cursor.x as f32, self.cursor.y as f32)
+                }) {
                     if presentation_current {
                         self.scroll_workspace(delta, true, metrics);
                     }
@@ -3059,8 +3105,12 @@ fn initial_window_size(
         }),
     );
     let limit = wgpu::Limits::default().max_texture_dimension_2d;
-    let workspace =
-        snapshot.map(|snapshot| WorkspaceScene::from_snapshot(snapshot, size, metrics, 0.0, 0.0));
+    // Grid admission depends on header heights, not tab text fitting.
+    let workspace = snapshot.map(|snapshot| {
+        WorkspaceScene::from_snapshot(snapshot, size, metrics, 0.0, 0.0, |_, _| {
+            (String::new(), 0.0)
+        })
+    });
     let terminal = terminal_screen(workspace.as_ref(), size);
     let admitted = surface_size(terminal, metrics);
     if size.width > limit
@@ -3369,8 +3419,11 @@ mod tests {
                 for snapshot in [None, Some(&snapshot)] {
                     let size =
                         initial_window_size(Some(100), Some(30), metrics, scale, snapshot).unwrap();
-                    let workspace =
-                        snapshot.map(|s| WorkspaceScene::from_snapshot(s, size, metrics, 0.0, 0.0));
+                    let workspace = snapshot.map(|s| {
+                        WorkspaceScene::from_snapshot(s, size, metrics, 0.0, 0.0, |_, _| {
+                            (String::new(), 0.0)
+                        })
+                    });
                     let actual =
                         surface_size(terminal_screen(workspace.as_ref(), size), metrics).unwrap();
                     assert_eq!((actual.cols, actual.rows), (100, 30));
@@ -3756,6 +3809,45 @@ mod tests {
                     !app.handle_link_key(unknown, ElementState::Pressed, false),
                     "fresh keys return to terminal routing"
                 );
+
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::Resized(PhysicalSize::new(100, 600)),
+                );
+                let scene = app.workspace_scene().unwrap();
+                assert!(scene.tab_scroll_limit() > 0.0);
+                for position in [
+                    PhysicalPosition::new(10.0, 1.0),
+                    PhysicalPosition::new(
+                        f64::from(scene.tabs[0].rect.right() + 1.0),
+                        f64::from(scene.tab_viewport.height / 2.0),
+                    ),
+                ] {
+                    app.tab_scroll = 0.0;
+                    app.presentation.invalidate();
+                    app.render();
+                    app.cursor = position;
+                    assert_eq!(
+                        app.workspace_scene()
+                            .unwrap()
+                            .hit_test(position.x as f32, position.y as f32),
+                        None
+                    );
+                    app.window_event(
+                        event_loop,
+                        id,
+                        WindowEvent::MouseWheel {
+                            device_id,
+                            delta: MouseScrollDelta::LineDelta(0.0, -1.0),
+                            phase: TouchPhase::Moved,
+                        },
+                    );
+                    assert!(
+                        app.tab_scroll > 0.0,
+                        "wheel over tab-strip gaps must scroll tabs"
+                    );
+                }
                 app.set_orbit_attachment(b"replacement".to_vec(), false);
                 assert_eq!(app.presented_revision(), None);
                 assert!(app.pointer_link().is_none());

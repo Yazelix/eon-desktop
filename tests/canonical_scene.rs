@@ -53,13 +53,16 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     };
     let size = PhysicalSize::new(800, 600);
     let metrics = CellMetrics::for_scale(1.0);
-    let initial = WorkspaceScene::from_snapshot(&snapshot, size, metrics, 0.0, 0.0);
+    let initial = WorkspaceScene::from_snapshot(&snapshot, size, metrics, 0.0, 0.0, |_, text| {
+        (text.to_owned(), text.chars().count() as f32 * 10.0)
+    });
     let scene = WorkspaceScene::from_snapshot(
         &snapshot,
         size,
         metrics,
         initial.active_tab_scroll(),
         initial.selected_pane_scroll(),
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
 
     assert_eq!(
@@ -69,6 +72,15 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
             .map(|tab| tab.id.as_str())
             .collect::<Vec<_>>(),
         ["t1", "t2"]
+    );
+    assert!(scene.tabs[1].rect.width > scene.tabs[0].rect.width);
+    assert!(scene.tabs[0].rect.right() < scene.tabs[1].rect.left);
+    assert_eq!(
+        scene.hit_test(
+            scene.tabs[0].rect.right() + 1.0,
+            scene.tabs[0].rect.top + 2.0
+        ),
+        None,
     );
     assert_eq!(
         scene
@@ -108,7 +120,10 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         endpoint: b"/run/eon/session-4.sock".to_vec(),
         live: true,
     });
-    let fitting = WorkspaceScene::from_snapshot(&fitting_snapshot, size, metrics, 0.0, 0.0);
+    let fitting =
+        WorkspaceScene::from_snapshot(&fitting_snapshot, size, metrics, 0.0, 0.0, |_, text| {
+            (text.to_owned(), text.chars().count() as f32 * 10.0)
+        });
     assert_eq!(fitting.pane_scroll_limit(), 0.0);
     assert!(fitting.panes.iter().all(|pane| {
         pane.rect.top >= fitting.pane_viewport.top
@@ -127,7 +142,10 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         });
     }
     overflow_snapshot.tabs[0].selected_pane = Some("pane-32".into());
-    let unscrolled = WorkspaceScene::from_snapshot(&overflow_snapshot, size, metrics, 0.0, 0.0);
+    let unscrolled =
+        WorkspaceScene::from_snapshot(&overflow_snapshot, size, metrics, 0.0, 0.0, |_, text| {
+            (text.to_owned(), text.chars().count() as f32 * 10.0)
+        });
     assert!(unscrolled.pane_scroll_limit() > 0.0);
     let revealed = WorkspaceScene::from_snapshot(
         &overflow_snapshot,
@@ -135,6 +153,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         metrics,
         0.0,
         unscrolled.selected_pane_scroll(),
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     let selected = revealed
         .panes
@@ -145,22 +164,38 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     assert_eq!(revealed.terminal.top, selected.rect.bottom());
     assert!(revealed.terminal.bottom() <= revealed.pane_viewport.bottom());
     assert!(matches!(
-        revealed.hit_test(1.0, revealed.tab_viewport.bottom() - 1.0),
+        revealed.hit_test(
+            revealed.tabs[0].rect.left + 1.0,
+            revealed.tabs[0].rect.top + 1.0
+        ),
         Some(WorkspaceHit::Tab(_))
     ));
 
     let mut second_tab = snapshot.clone();
     second_tab.active_tab = "t2".into();
-    let narrow =
-        WorkspaceScene::from_snapshot(&second_tab, PhysicalSize::new(100, 600), metrics, 0.0, 0.0);
+    let narrow = WorkspaceScene::from_snapshot(
+        &second_tab,
+        PhysicalSize::new(100, 600),
+        metrics,
+        0.0,
+        0.0,
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
+    );
     let revealed = WorkspaceScene::from_snapshot(
         &second_tab,
         PhysicalSize::new(100, 600),
         metrics,
         narrow.active_tab_scroll(),
         narrow.selected_pane_scroll(),
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
-    assert_eq!(revealed.hit_test(1.0, 1.0), Some(WorkspaceHit::Tab("t2")));
+    assert_eq!(
+        revealed.hit_test(
+            revealed.tabs[1].rect.left + 1.0,
+            revealed.tabs[1].rect.top + 1.0
+        ),
+        Some(WorkspaceHit::Tab("t2"))
+    );
 
     let tiny = WorkspaceScene::from_snapshot(
         &snapshot,
@@ -168,6 +203,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         metrics,
         f32::NAN,
         f32::INFINITY,
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     assert_eq!((tiny.tab_scroll(), tiny.pane_scroll()), (0.0, 0.0));
     assert!(tiny.terminal.bottom() <= 1.0);
@@ -184,6 +220,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         metrics,
         0.0,
         0.0,
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     assert!(picker.panes.is_empty());
     assert_eq!(picker.terminal.left, metrics.width);
@@ -211,6 +248,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         metrics,
         0.0,
         0.0,
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     assert!(!inactive_picker.directory_picker());
     assert_eq!(inactive_picker.panes.len(), 1);
@@ -238,6 +276,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         metrics,
         0.0,
         0.0,
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     assert!(pending_picker.tabs[1].selected);
     assert_eq!(pending_picker.panes, picker.panes);
@@ -255,6 +294,7 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         metrics,
         0.0,
         0.0,
+        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     assert_eq!(tiny_picker.terminal, tiny_picker.pane_viewport);
 }

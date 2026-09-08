@@ -377,6 +377,7 @@ struct ContentKey {
     preedit: String,
     status: String,
     hyperlink: Option<(u16, u16)>,
+    hovered_tab: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -661,9 +662,11 @@ pub struct Renderer {
     viewport: Viewport,
     atlas: TextAtlas,
     text_renderer: TextRenderer,
+    tab_tooltip: Option<(usize, TextBounds)>,
     text: Vec<PlacedText>,
     content_key: Option<ContentKey>,
     hyperlink: Option<(u16, u16)>,
+    hovered_tab: Option<String>,
     cursor_tail: Option<(SceneColor, f32)>,
     cursor_animation: CursorAnimation,
     last_cursor_frame: Option<Instant>,
@@ -675,6 +678,18 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    pub fn set_hovered_tab(&mut self, tab: Option<String>) {
+        self.hovered_tab = tab;
+    }
+    /// Fit the scene's canonical label using the same typography as its header.
+    pub fn fit_tab_text(&mut self, label: &str) -> (String, f32) {
+        let width = (crate::scene::tab_max_width(self.metrics, self.config.width as f32)
+            - self.metrics.padding * 2.0)
+            .max(0.0)
+            .floor();
+        fit_tab_text(&mut self.fonts.font_system, self.metrics, label, width)
+    }
+
     pub fn set_hyperlink(&mut self, hyperlink: Option<(u16, u16)>) {
         self.hyperlink = hyperlink;
     }
@@ -864,9 +879,11 @@ impl Renderer {
             viewport,
             atlas,
             text_renderer,
+            tab_tooltip: None,
             text: Vec::new(),
             content_key: None,
             hyperlink: None,
+            hovered_tab: None,
             cursor_tail,
             cursor_animation: CursorAnimation::default(),
             last_cursor_frame: None,
@@ -969,7 +986,7 @@ impl Renderer {
                     &mut self.fonts.font_system,
                     &mut self.atlas,
                     &self.viewport,
-                    text_areas(&self.text),
+                    text_areas(&self.text, self.tab_tooltip),
                     &mut self.swash_cache,
                 )
                 .is_err()
@@ -982,7 +999,7 @@ impl Renderer {
                         &mut self.fonts.font_system,
                         &mut self.atlas,
                         &self.viewport,
-                        text_areas(&self.text),
+                        text_areas(&self.text, self.tab_tooltip),
                         &mut self.swash_cache,
                     )
                     .map_err(display_error("the Venus glyph atlas is full"))?;
@@ -1106,12 +1123,14 @@ impl Renderer {
             preedit: preedit.to_owned(),
             status: status.to_owned(),
             hyperlink: self.hyperlink,
+            hovered_tab: self.hovered_tab.clone(),
         };
         if self.content_key.as_ref() == Some(&key) {
             return false;
         }
 
         self.text.clear();
+        self.tab_tooltip = None;
         let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
         let mut cursor_vertex_boundary = 0;
         if let Some(workspace) = workspace {
@@ -1174,6 +1193,7 @@ impl Renderer {
             if !status.is_empty() {
                 self.build_notice(status, &mut rectangles, Some(workspace));
             }
+            self.build_tab_tooltip(workspace, &mut rectangles);
         } else if let Some(scene) = scene {
             self.clear = clear_color(
                 scene.background,
@@ -1314,6 +1334,80 @@ impl Renderer {
         self.upload_dynamic_vertices(&rectangles.bytes);
     }
 
+    fn build_tab_tooltip(&mut self, workspace: &WorkspaceScene, rectangles: &mut RectangleBatch) {
+        let Some(tab) = workspace
+            .tabs
+            .iter()
+            .find(|tab| self.hovered_tab.as_deref() == Some(&tab.id))
+        else {
+            return;
+        };
+        let padding = self.metrics.padding;
+        let top = workspace.tab_viewport.bottom() + padding / 3.0;
+        let width = (self.config.width as f32 - padding * 2.0).min(self.metrics.font_size * 40.0);
+        let height = self.config.height as f32 - top - padding;
+        if width <= padding * 2.0 || height <= padding * 2.0 {
+            return;
+        }
+        let before = self.text.len();
+        self.push_text(
+            tab.accessible_label(),
+            0.0,
+            top + padding,
+            width - padding * 2.0,
+            height - padding * 2.0,
+            SceneColor {
+                r: 239,
+                g: 244,
+                b: 248,
+            },
+            DrawStyleKind::Status(Wrap::WordOrGlyph),
+        );
+        let Some(text) = self.text.get_mut(before) else {
+            return;
+        };
+        let mut text_width = 0.0_f32;
+        let mut text_height = 0.0_f32;
+        for run in text.buffer.layout_runs() {
+            text_width = text_width.max(run.line_w);
+            text_height = text_height.max(run.line_top + run.line_height);
+        }
+        let width = (text_width.ceil() + padding * 2.0).min(width);
+        let height = (text_height.ceil() + padding * 2.0).min(height);
+        let left = tab.rect.left.clamp(
+            padding,
+            (self.config.width as f32 - width - padding).max(padding),
+        );
+        text.left = left + padding;
+        text.bound_left = text.left.floor() as i32;
+        text.right = (left + width - padding).ceil() as i32;
+        text.bound_top = (top + padding).floor() as i32;
+        text.bottom = (top + height - padding).ceil() as i32;
+        self.tab_tooltip = Some((
+            before,
+            TextBounds {
+                left: left.floor() as i32,
+                top: top.floor() as i32,
+                right: (left + width).ceil() as i32,
+                bottom: (top + height).ceil() as i32,
+            },
+        ));
+        rectangles.push_rounded(
+            SceneRect {
+                left,
+                top,
+                width,
+                height,
+            },
+            padding / 2.0,
+            SceneColor {
+                r: 37,
+                g: 49,
+                b: 64,
+            },
+        );
+    }
+
     fn build_workspace(
         &mut self,
         workspace: &WorkspaceScene,
@@ -1340,33 +1434,49 @@ impl Renderer {
             workspace.tab_viewport.top,
             workspace.tab_viewport.width,
             workspace.tab_viewport.height,
-            idle,
+            DEFAULT_BACKGROUND,
             1.0,
         );
+        rectangles.clip = Some(workspace.tab_viewport);
         for tab in &workspace.tabs {
-            let Some(rect) = tab.rect.intersection(workspace.tab_viewport) else {
+            if tab.rect.intersection(workspace.tab_viewport).is_none() {
                 continue;
+            }
+            let radius = self.metrics.padding / 2.0;
+            let fill = if tab.selected {
+                selected
+            } else if self.hovered_tab.as_deref() == Some(&tab.id) {
+                SceneColor {
+                    r: 23,
+                    g: 34,
+                    b: 46,
+                }
+            } else {
+                idle
             };
-            rectangles.push(
-                rect.left,
-                rect.top,
-                rect.width,
-                rect.height,
-                if tab.selected { selected } else { idle },
-                1.0,
-            );
+            rectangles.push_rounded(tab.rect, radius, fill);
             if tab.selected {
-                rectangles.push(rect.left, rect.bottom() - 3.0, rect.width, 3.0, accent, 1.0);
                 if focus == WorkspaceFocus::Tabs {
-                    rectangles.push_hollow(
-                        rect.left + 2.0,
-                        rect.top + 2.0,
-                        rect.width - 4.0,
-                        rect.height - 4.0,
-                        1.0,
-                        accent,
+                    rectangles.push_rounded(tab.rect, radius, accent);
+                    rectangles.push_rounded(
+                        SceneRect {
+                            left: tab.rect.left + 1.0,
+                            top: tab.rect.top + 1.0,
+                            width: tab.rect.width - 2.0,
+                            height: tab.rect.height - 2.0,
+                        },
+                        radius - 1.0,
+                        fill,
                     );
                 }
+                rectangles.push(
+                    tab.rect.left + radius,
+                    tab.rect.bottom() - 3.0,
+                    tab.rect.width - radius * 2.0,
+                    2.0,
+                    accent,
+                    1.0,
+                );
             }
             self.push_text_clipped(
                 tab.label(),
@@ -1392,6 +1502,7 @@ impl Renderer {
                 workspace.tab_viewport,
             );
         }
+        rectangles.clip = None;
         if workspace.directory_picker() {
             rectangles.push(
                 workspace.pane_viewport.left,
@@ -2087,20 +2198,121 @@ fn shaping(text: &str) -> Shaping {
     }
 }
 
-fn text_areas(text: &[PlacedText]) -> impl Iterator<Item = TextArea<'_>> {
-    text.iter().map(|text| TextArea {
-        buffer: &text.buffer,
-        left: text.left,
-        top: text.top,
-        scale: 1.0,
-        bounds: TextBounds {
+fn fit_tab_text(
+    fonts: &mut FontSystem,
+    metrics: CellMetrics,
+    text: &str,
+    width: f32,
+) -> (String, f32) {
+    let mut buffer = Buffer::new(fonts, Metrics::new(metrics.font_size, metrics.height));
+    buffer.set_size(None, Some(metrics.height));
+    buffer.set_wrap(Wrap::None);
+    let measure = |buffer: &mut Buffer, fonts: &mut FontSystem, text: &str| {
+        buffer.set_text(
+            text,
+            &Attrs::new().family(Family::SansSerif),
+            shaping(text),
+            None,
+        );
+        buffer.shape_until_scroll(fonts, false);
+        buffer
+            .layout_runs()
+            .map(|run| run.line_w)
+            .fold(0.0, f32::max)
+    };
+    let measured = measure(&mut buffer, fonts, text);
+    if measured <= width {
+        return (text.to_owned(), measured);
+    }
+
+    // Keep the numeric identity; cuts use the shaper's original cluster boundaries.
+    let prefix = text.find("  ").map_or(0, |index| index + 2);
+    let mut boundaries: Vec<_> = buffer
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter())
+        .flat_map(|glyph| [glyph.start, glyph.end])
+        .filter(|index| *index >= prefix)
+        .collect();
+    boundaries.extend([prefix, text.len()]);
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    let mut low = 0;
+    let mut high = boundaries.len().saturating_sub(2);
+    let identity = text[..prefix].trim_end();
+    let identity_width = measure(&mut buffer, fonts, identity);
+    let mut best = if identity_width <= width {
+        (identity.to_owned(), identity_width)
+    } else {
+        (String::new(), 0.0)
+    };
+    while low <= high {
+        let kept = low + (high - low) / 2;
+        let candidate = format!(
+            "{}…{}",
+            &text[..boundaries[kept.div_ceil(2)]],
+            &text[boundaries[boundaries.len() - 1 - kept / 2]..]
+        );
+        let measured = measure(&mut buffer, fonts, &candidate);
+        if measured <= width {
+            best = (candidate, measured);
+            low = kept + 1;
+        } else if kept == 0 {
+            break;
+        } else {
+            high = kept - 1;
+        }
+    }
+    best
+}
+
+fn text_areas(
+    text: &[PlacedText],
+    overlay: Option<(usize, TextBounds)>,
+) -> impl Iterator<Item = TextArea<'_>> {
+    text.iter().enumerate().flat_map(move |(index, text)| {
+        let bounds = TextBounds {
             left: text.bound_left,
             top: text.bound_top,
             right: text.right,
             bottom: text.bottom,
-        },
-        default_color: text.color,
-        custom_glyphs: &[],
+        };
+        let mut clips = [bounds; 4];
+        let count = if let Some((first_overlay_text, occlusion)) = overlay
+            && index < first_overlay_text
+            && bounds.left < occlusion.right
+            && bounds.right > occlusion.left
+            && bounds.top < occlusion.bottom
+            && bounds.bottom > occlusion.top
+        {
+            // Rectangles precede glyphs. Keep the text around this floating
+            // preview without cloning its buffers or adding a rendering pass.
+            clips[0].bottom = bounds.bottom.min(occlusion.top);
+            clips[1].top = bounds.top.max(occlusion.bottom);
+            clips[2].top = bounds.top.max(occlusion.top);
+            clips[2].bottom = bounds.bottom.min(occlusion.bottom);
+            clips[2].right = bounds.right.min(occlusion.left);
+            clips[3] = TextBounds {
+                left: bounds.left.max(occlusion.right),
+                right: bounds.right,
+                ..clips[2]
+            };
+            4
+        } else {
+            1
+        };
+        clips
+            .into_iter()
+            .take(count)
+            .filter(|clip| clip.left < clip.right && clip.top < clip.bottom)
+            .map(move |bounds| TextArea {
+                buffer: &text.buffer,
+                left: text.left,
+                top: text.top,
+                scale: 1.0,
+                bounds,
+                default_color: text.color,
+                custom_glyphs: &[],
+            })
     })
 }
 
@@ -2112,6 +2324,42 @@ struct RectangleBatch {
 }
 
 impl RectangleBatch {
+    fn push_rounded(&mut self, rect: SceneRect, radius: f32, color: SceneColor) {
+        let radius = radius
+            .min(rect.width / 2.0)
+            .min(rect.height / 2.0)
+            .max(0.0)
+            .floor();
+        self.push(
+            rect.left,
+            rect.top + radius,
+            rect.width,
+            rect.height - radius * 2.0,
+            color,
+            1.0,
+        );
+        // Pixel-height bands reuse the existing clipped pipeline; fractional edge
+        // coverage softens the curve without widening every terminal vertex.
+        for row in 0..radius as u32 {
+            let dy = radius - row as f32 - 0.5;
+            let inset = radius - (radius * radius - dy * dy).sqrt();
+            let left = rect.left + inset;
+            let right = rect.right() - inset;
+            for top in [rect.top + row as f32, rect.bottom() - row as f32 - 1.0] {
+                self.push(
+                    left.ceil(),
+                    top,
+                    right.floor() - left.ceil(),
+                    1.0,
+                    color,
+                    1.0,
+                );
+                self.push(left.floor(), top, 1.0, 1.0, color, left.ceil() - left);
+                self.push(right.floor(), top, 1.0, 1.0, color, right - right.floor());
+            }
+        }
+    }
+
     fn new(width: u32, height: u32) -> Self {
         Self {
             bytes: Vec::new(),
@@ -2702,6 +2950,43 @@ mod tests {
     }
 
     #[test]
+    fn tab_text_fits_shaped_width_without_splitting_combining_clusters() {
+        let mut fonts = FontSystem::new();
+        for scale in [1.0, 1.25, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let available = (crate::scene::tab_max_width(metrics, 1000.0 * scale as f32)
+                - metrics.padding * 2.0)
+                .floor();
+            for label in ["1  eon", "2  machine_vs_aliens"] {
+                let fitted = fit_tab_text(&mut fonts, metrics, label, available);
+                assert_eq!(fitted.0, label);
+                assert!(fitted.1 > 0.0 && fitted.1 <= available);
+            }
+            let label = format!("3  {}", "e\u{301}".repeat(80));
+            let (fitted, measured) = fit_tab_text(&mut fonts, metrics, &label, available);
+            assert!(measured <= available);
+            let (head, tail) = fitted.split_once('…').expect("long label must elide");
+            assert!(head.starts_with("3  ") && head.ends_with('\u{301}'));
+            assert!(tail.starts_with('e') && tail.ends_with('\u{301}'));
+            assert!(label.starts_with(head) && label.ends_with(tail));
+            let exact = fit_tab_text(&mut fonts, metrics, &fitted, f32::INFINITY);
+            assert!((exact.1 - measured).abs() < 0.01);
+
+            let identity_width = fit_tab_text(&mut fonts, metrics, "64", f32::INFINITY).1;
+            let fitted = fit_tab_text(&mut fonts, metrics, "64  machine_vs_aliens", identity_width);
+            assert_eq!(
+                fitted.0, "64",
+                "keep a fitting identity when the name cannot fit"
+            );
+            assert!(fitted.1 <= identity_width);
+            assert_eq!(
+                fit_tab_text(&mut fonts, metrics, "64  eon", 0.0),
+                (String::new(), 0.0)
+            );
+        }
+    }
+
+    #[test]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn long_workspace_labels_stay_on_the_visible_line() {
         use eon_workspace_protocol::v4::{Pane, Snapshot, Tab};
@@ -2751,6 +3036,7 @@ mod tests {
                     renderer.metrics(),
                     0.0,
                     0.0,
+                    |_, label| renderer.fit_tab_text(label),
                 );
                 renderer.build_workspace(
                     &workspace,
@@ -2764,7 +3050,8 @@ mod tests {
                     workspace.tabs[1].label().len(),
                     "the directory name wrapped below the visible tab header"
                 );
-                assert!(line.line_w > (label.right - label.bound_left) as f32);
+                assert!(workspace.tabs[1].rect.width > workspace.tabs[0].rect.width);
+                assert!(line.line_w <= (label.right - label.bound_left) as f32);
                 let underscore = line
                     .glyphs
                     .iter()
@@ -2781,6 +3068,25 @@ mod tests {
                 assert!(
                     top >= label.bound_top && top + ink.placement.height as i32 <= label.bottom,
                     "the directory underscore is clipped outside the header"
+                );
+                renderer.set_hovered_tab(Some("t2".into()));
+                renderer.build_tab_tooltip(&workspace, &mut RectangleBatch::new(900, 600));
+                let (first, overlay) = renderer.tab_tooltip.unwrap();
+                let areas: Vec<_> =
+                    text_areas(&renderer.text[..first], renderer.tab_tooltip).collect();
+                assert!(
+                    areas.iter().all(|area| {
+                        let b = area.bounds;
+                        b.right <= overlay.left
+                            || b.left >= overlay.right
+                            || b.bottom <= overlay.top
+                            || b.top >= overlay.bottom
+                    }),
+                    "underlying text must not paint over the hover path"
+                );
+                assert_eq!(
+                    renderer.text[first].buffer.lines[0].text(),
+                    "t2  /tmp/machines_vs_aliens"
                 );
                 renderer.rebuild_if_needed(
                     None,
@@ -2850,6 +3156,7 @@ mod tests {
             preedit: String::new(),
             status: String::new(),
             hyperlink: None,
+            hovered_tab: None,
         };
 
         assert_ne!(key(1), key(2));

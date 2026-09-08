@@ -11,7 +11,8 @@ standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion. Tab headers show the numeric part of Eon's stable `tN` identity,
 two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
-directory. Headers keep long labels and underscores on one clipped line.
+directory. Rounded tabs fit their labels, with middle ellipsis for long names
+and full launch-path previews on hover.
 Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
@@ -240,13 +241,19 @@ terminal, tab, and pane keyboard focus; Left/Right on
 tabs, Up/Down on panes, and Escape remain
 available. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
 directory while hit testing and actions retain `tN`; accessibility pairs `tN`
-with a bounded full path. Pane headers show pane identity, two spaces, then the
+with its full launch path. Tab widths follow shaped text plus padding up to
+280 logical pixels at default typography; larger fonts scale that limit.
+Long labels preserve both ends without cutting shaped clusters. If the name and
+ellipsis cannot fit, the tab keeps its number whenever that fits. Hover previews
+wrap the path within the window. Shell `cd` changes pane metadata, while tab
+names and widths stay tied to the launch directory.
+Pane headers show pane identity, two spaces, then the
 home marker at exact home, a `~/`-anchored path below home, or an absolute path elsewhere;
 unset or empty `HOME` keeps paths absolute. Overlong labels preserve their
 rightmost components. Terminal titles stay in
 the selected native window, and Session mappings remain in Eon diagnostics.
-Wheel over the tab strip or a pane header to reach clipped headers without
-scrolling the terminal. In standalone mode these keys remain Orbit input.
+Wheel over the tab strip, including its gaps, or a pane header to reach clipped
+headers without scrolling the terminal. In standalone mode these keys remain Orbit input.
 
 Compatible terminal output keeps scrolling, selection, and tab/pane focus usable
 between repaints. Venus retains the last presented input geometry while
@@ -319,13 +326,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 331 |
+| README | 338 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,315 |
+| Contracts and references | 1,350 |
 | Memory benchmark report | 158 |
 | Crate decisions | 258 |
-| Changelog | 202 |
-| Rust source, including unit tests | 15,296 |
-| Rust integration tests | 898 |
+| Changelog | 208 |
+| Rust source, including unit tests | 15,734 |
+| Rust integration tests | 938 |
 | Cargo manifest | 24 |
-| **Total** | **18,696** |
+| **Total** | **19,222** |

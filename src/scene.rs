@@ -27,7 +27,7 @@ impl SceneRect {
         self.top + self.height
     }
 
-    fn contains(self, x: f32, y: f32) -> bool {
+    pub fn contains(self, x: f32, y: f32) -> bool {
         (self.left..self.right()).contains(&x) && (self.top..self.bottom()).contains(&y)
     }
 
@@ -180,16 +180,26 @@ fn tab_labels(id: &str, directory: &[u8], home: Option<&Path>) -> (String, Strin
     } else if path == Path::new("/") {
         "/".into()
     } else {
-        bounded_metadata_field(
-            &path
-                .file_name()
-                .unwrap_or(path.as_os_str())
-                .to_string_lossy(),
-        )
+        path.file_name()
+            .unwrap_or(path.as_os_str())
+            .to_string_lossy()
+            .into_owned()
     };
     let number = id.strip_prefix('t').unwrap_or(id);
-    let full_path = bounded_metadata_field(&path.as_os_str().to_string_lossy());
-    (format!("{number}  {leaf}"), format!("{id}  {full_path}"))
+    let clean = |text: &str| {
+        text.chars()
+            .map(|c| if c.is_control() { '\u{fffd}' } else { c })
+            .collect::<String>()
+    };
+    let full_path = clean(&path.as_os_str().to_string_lossy());
+    (
+        format!("{number}  {}", clean(&leaf)),
+        format!("{id}  {full_path}"),
+    )
+}
+
+pub(crate) fn tab_max_width(metrics: CellMetrics, viewport_width: f32) -> f32 {
+    (metrics.font_size * 17.5).min((viewport_width - metrics.padding * 2.0 / 3.0).max(1.0))
 }
 
 /// Native workspace target at one physical point.
@@ -256,10 +266,17 @@ impl WorkspaceScene {
         metrics: CellMetrics,
         tab_scroll: f32,
         pane_scroll: f32,
+        tab_text: impl FnMut(&str, &str) -> (String, f32),
     ) -> Self {
-        Self::from_snapshot_with_metadata(snapshot, size, metrics, tab_scroll, pane_scroll, |_| {
-            None
-        })
+        Self::from_snapshot_with_metadata(
+            snapshot,
+            size,
+            metrics,
+            tab_scroll,
+            pane_scroll,
+            |_| None,
+            tab_text,
+        )
     }
 
     #[must_use]
@@ -270,12 +287,14 @@ impl WorkspaceScene {
         tab_scroll: f32,
         pane_scroll: f32,
         metadata: impl Fn(&[u8]) -> Option<&'a PaneMetadata>,
+        mut tab_text: impl FnMut(&str, &str) -> (String, f32),
     ) -> Self {
         let width = size.width as f32;
         let height = size.height as f32;
         let (tab_height, pane_height) = header_heights(metrics);
         let tab_height = tab_height.min(height);
-        let tab_width = (metrics.width * 14.0).round().max(72.0);
+        let gap = (metrics.padding / 3.0).min(tab_height / 4.0);
+        let max_tab_width = tab_max_width(metrics, width);
         let tab_viewport = SceneRect {
             left: 0.0,
             top: 0.0,
@@ -293,37 +312,46 @@ impl WorkspaceScene {
             .iter()
             .position(|tab| tab.id == snapshot.active_tab)
             .expect("EONW validates the active tab");
-        let tab_scroll_limit = (snapshot.tabs.len() as f32 * tab_width - width).max(0.0);
-        let tab_scroll = if tab_scroll.is_finite() {
-            tab_scroll.clamp(0.0, tab_scroll_limit)
-        } else {
-            0.0
-        };
         let home = std::env::var_os("HOME");
-        let tabs = snapshot
+        let mut tab_end = gap;
+        let mut tabs: Vec<_> = snapshot
             .tabs
             .iter()
             .enumerate()
             .map(|(index, tab)| {
                 let (label, accessible_label) =
                     tab_labels(&tab.id, &tab.directory, home.as_deref().map(Path::new));
+                let (label, text_width) = tab_text(&tab.id, &label);
+                let tab_width = (text_width.ceil() + metrics.padding * 2.0)
+                    .clamp((metrics.font_size * 4.0).min(max_tab_width), max_tab_width);
+                let left = tab_end;
+                tab_end += tab_width + gap;
                 WorkspaceTab {
                     id: tab.id.clone(),
                     selected: index == active_tab,
                     rect: SceneRect {
-                        left: index as f32 * tab_width - tab_scroll,
-                        top: 0.0,
+                        left,
+                        top: gap,
                         width: tab_width,
-                        height: tab_height,
+                        height: (tab_height - gap * 2.0).max(0.0),
                     },
                     label,
                     accessible_label,
                 }
             })
             .collect();
-        let active_tab_scroll = (active_tab as f32 * tab_width
-            - (width - tab_width).max(0.0) / 2.0)
-            .clamp(0.0, tab_scroll_limit);
+        let tab_scroll_limit = (tab_end - width).max(0.0);
+        let active = tabs[active_tab].rect;
+        let active_tab_scroll =
+            (active.left - (width - active.width).max(0.0) / 2.0).clamp(0.0, tab_scroll_limit);
+        let tab_scroll = if tab_scroll.is_finite() {
+            tab_scroll.clamp(0.0, tab_scroll_limit)
+        } else {
+            0.0
+        };
+        for tab in &mut tabs {
+            tab.rect.left -= tab_scroll;
+        }
         if directory_picker_visible(snapshot) {
             let horizontal_inset =
                 if pane_viewport.width >= metrics.padding * 2.0 + metrics.width * 3.0 {
@@ -1044,9 +1072,8 @@ mod tests {
         );
         let long = format!("/tmp/{}", "eon".repeat(100));
         let labels = tab_labels("t5", long.as_bytes(), None);
-        assert!(labels.0.ends_with(&"eon".repeat(26)));
-        assert!(labels.0.chars().count() <= 84);
-        assert!(labels.1.chars().count() <= 84);
+        assert_eq!(labels.0, format!("5  {}", "eon".repeat(100)));
+        assert_eq!(labels.1, format!("t5  {long}"));
     }
 
     #[test]
