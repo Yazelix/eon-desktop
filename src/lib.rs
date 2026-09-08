@@ -15,7 +15,7 @@ pub use model::{
     ClipboardEffect, ConnectionState, LocalNoticeSource, ModelError, SessionModel, WorkspaceModel,
     directory_picker_visible,
 };
-pub use render::{CellMetrics, PresentOutcome, RenderError, Renderer};
+pub use render::{CellMetrics, FontSettings, FontSetup, PresentOutcome, RenderError, Renderer};
 pub use scene::{
     Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Hyperlink, PaneMetadata, Scene,
     ScenePreview, SceneRect, WorkspaceFocus, WorkspaceHit, WorkspacePane, WorkspaceScene,

@@ -594,8 +594,15 @@ mod tests {
             })
         );
 
+        let fonts = crate::FontSetup::new(&crate::FontSettings {
+            family: Some("DejaVu Sans Mono".into()),
+            size: 20.0,
+            line_height: 1.5,
+            ..Default::default()
+        })
+        .unwrap();
         for scale in [1.0, 1.25, 1.5, 2.0] {
-            let metrics = CellMetrics::for_scale(scale);
+            let metrics = fonts.metrics(scale);
             let update = Snapshot {
                 content: AccessibleText {
                     rows: vec![row.clone(); 2],

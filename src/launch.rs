@@ -1,6 +1,6 @@
 use crate::Result;
 use std::{env, ffi::OsString, fs, os::unix::fs::MetadataExt, path::PathBuf};
-use yazelix_venus::Color;
+use yazelix_venus::{Color, FontSettings};
 
 const DEFAULT_CURSOR_TAIL: (Color, f32) = (
     Color {
@@ -10,7 +10,7 @@ const DEFAULT_CURSOR_TAIL: (Color, f32) = (
     },
     1.0,
 );
-const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
+const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
 
 #[derive(Debug)]
 pub(super) struct LaunchArguments {
@@ -22,6 +22,9 @@ pub(super) struct LaunchArguments {
     pub(super) background_opacity: f32,
     pub(super) background_blur: bool,
     pub(super) cursor_tail: Option<(Color, f32)>,
+    pub(super) fonts: FontSettings,
+    pub(super) columns: Option<u16>,
+    pub(super) rows: Option<u16>,
 }
 
 pub(super) fn launch_arguments(
@@ -38,9 +41,32 @@ pub(super) fn launch_arguments(
     let mut cursor_effect = None;
     let mut cursor_trail_color = None;
     let mut cursor_trail_duration = None;
+    let mut family = None;
+    let mut fallbacks = Vec::new();
+    let mut font_size = None;
+    let mut line_height = None;
+    let mut columns = None;
+    let mut rows = None;
 
     while let Some(argument) = arguments.next() {
-        if argument == "--application-id" {
+        if argument == "--font-family" {
+            option_value(&mut family, arguments.next())?;
+        } else if argument == "--font-fallback" {
+            let mut family = None;
+            option_value(&mut family, arguments.next())?;
+            if fallbacks.len() == 8 {
+                return Err(USAGE.into());
+            }
+            fallbacks.push(family.unwrap());
+        } else if argument == "--font-size" {
+            option_value(&mut font_size, arguments.next())?;
+        } else if argument == "--line-height" {
+            option_value(&mut line_height, arguments.next())?;
+        } else if argument == "--columns" {
+            option_value(&mut columns, arguments.next())?;
+        } else if argument == "--rows" {
+            option_value(&mut rows, arguments.next())?;
+        } else if argument == "--application-id" {
             if application_id.is_some() {
                 return Err(USAGE.into());
             }
@@ -130,6 +156,24 @@ pub(super) fn launch_arguments(
         _ => return Err(USAGE.into()),
     };
 
+    let defaults = FontSettings::default();
+    let fonts = FontSettings {
+        family,
+        fallbacks,
+        size: font_size.unwrap_or(defaults.size),
+        line_height: line_height.unwrap_or(defaults.line_height),
+    };
+    fonts.validate()?;
+    if columns == Some(0)
+        || rows == Some(0)
+        || u32::from(columns.unwrap_or(1)) * u32::from(rows.unwrap_or(1))
+            > orbit_protocol::MAX_CELLS as u32
+    {
+        return Err(
+            "initial terminal columns/rows must be positive and fit Orbit's 100,000-cell limit"
+                .into(),
+        );
+    }
     if orbit_socket.is_none() && workspace_socket.is_none() {
         orbit_socket = Some(default_socket_path()?);
     }
@@ -143,7 +187,23 @@ pub(super) fn launch_arguments(
         background_opacity: background_opacity.unwrap_or(1.0),
         background_blur,
         cursor_tail,
+        fonts,
+        columns,
+        rows,
     })
+}
+
+fn option_value<T: std::str::FromStr>(slot: &mut Option<T>, value: Option<OsString>) -> Result {
+    if slot.is_some() {
+        return Err(USAGE.into());
+    }
+    *slot = value
+        .and_then(|value| value.into_string().ok())
+        .and_then(|value| value.parse().ok());
+    if slot.is_none() {
+        return Err(USAGE.into());
+    }
+    Ok(())
 }
 
 fn valid_application_id(value: &str) -> bool {
@@ -183,6 +243,51 @@ fn default_socket_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typography_options_are_bounded_and_composable() {
+        let parse =
+            |arguments: &[&str]| launch_arguments(arguments.iter().map(OsString::from), None);
+        assert!(
+            parse(&[
+                "--font-family",
+                "DejaVu Sans Mono",
+                "--font-fallback",
+                "DejaVu Sans",
+                "--font-size",
+                "20",
+                "--line-height",
+                "1.5",
+                "--columns",
+                "100",
+                "--rows",
+                "30",
+                "--workspace",
+                "eon.sock"
+            ])
+            .is_ok()
+        );
+        for args in [
+            vec!["--font-size", "NaN"],
+            vec!["--font-size", "5.9"],
+            vec!["--font-size", "96.1"],
+            vec!["--line-height", "inf"],
+            vec!["--line-height", "0.9"],
+            vec!["--line-height", "3.1"],
+            vec!["--font-family", ""],
+            vec!["--font-family", " Font"],
+            vec!["--font-fallback", "x\n"],
+            vec!["--font-size", "16", "--font-size", "20"],
+            vec!["--columns", "0"],
+            vec!["--rows", "65536"],
+            vec!["--rows", "2", "--rows", "3"],
+            vec!["--columns", "1000", "--rows", "1000"],
+        ] {
+            assert!(parse(&args).is_err(), "accepted {args:?}");
+        }
+        let too_many = ["--font-fallback", "DejaVu Sans"].repeat(9);
+        assert!(parse(&too_many).is_err());
+    }
 
     #[test]
     fn arguments_are_complete_bounded_and_defaulted() {

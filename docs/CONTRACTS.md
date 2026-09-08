@@ -6,6 +6,47 @@ retains accepted user-visible chronology.
 
 `VEN-C16` owns platform scope.
 
+## VEN-C19 — Startup typography and terminal geometry
+
+- **Status:** Candidate
+- **Consumer:** One direct or caller-launched Venus surface.
+- **Trigger:** Optional `--font-family`, repeatable `--font-fallback`,
+  `--font-size`, `--line-height`, `--columns`, and `--rows` startup options.
+- **Result:** Installed primary monospace and ordered fallback families feed the
+  existing shaper. One `CellMetrics` grid owns rendering, resize, pointer and
+  selection geometry, scrolling, cursor, IME and accessibility. Family names
+  are nonempty trimmed UTF-8 without controls, at most 128 bytes; at most eight
+  fallbacks are accepted. Nominal font size is 6–96 logical px (default 16);
+  line height is 1–3 times that size (default 1.125). Named overrides precede
+  specialty/platform fallback. No font override preserves existing font choice
+  and specialty handling; no overrides preserve 10 by 18 logical cells and the
+  960 by 600 logical initial window.
+- **Initial geometry:** Optional positive `u16` columns/rows request terminal
+  dimensions, with workspace headers and picker inset supplied by the existing
+  Scene owner. Omitted dimensions retain the existing initial window dimension.
+  Requests must fit Orbit's 100,000-cell limit and native pixel/GPU bounds.
+  Compositor sizing policy may override the request; actual resize remains
+  authoritative. Later user resizing is not constrained to the initial grid.
+- **Important failures:** Invalid values, duplicate singleton options, absent
+  named families, a non-monospace primary, or impossible initial dimensions
+  fail with bounded diagnostics before terminal presentation/attachment.
+  Native output admission can require an initial window buffer to learn scale.
+  Missing named fonts are not silently substituted. Availability does not
+  promise every Unicode glyph or style variant. No live reload is provided.
+- **Owner:** Venus launch, font fitter, `CellMetrics`, and workspace Scene;
+  Orbit retains terminal authority and Eon retains product configuration.
+- **Consumes:** ORBF v1 / ORBS v10 at Orbit
+  `91999d79546422b49bdbc124166a65859d0bd872`, EONW v4 at Eon
+  `c305453bba4fe50c29f65e829b9cd65af31ced8a`, and the selected glyphon 0.12.0 /
+  cosmic-text 0.19.0 APIs with exact unicode-script 0.5.8.
+- **Compatibility order:** Prove Venus first with unchanged defaults and wire
+  contracts, then let the separate Eon configuration issue consume that exact
+  accepted source for Eon and EonTerm.
+- **Open proof:** Bounds and actual fallback selection; shared geometry and
+  native default/configured rendering at 1, 1.25, 1.5 and 2 scale; standalone
+  and workspace interaction. Existing fractional/compositor proof gaps remain
+  qualified until exercised by this candidate.
+
 ## Status
 
 - **Planned:** accepted contract with no sufficient implementation evidence

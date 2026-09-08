@@ -6,16 +6,21 @@ use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
     Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
+use glyphon::{
+    cosmic_text::{Fallback, PlatformFallback},
+    fontdb,
+};
 use orbit_protocol::{CellWidth, CursorShape, Underline, session::VerticalDirection};
 use std::{
     error::Error,
     fmt,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     time::Instant,
 };
+use unicode_script::Script;
 use wgpu::{
     BlendState, BufferDescriptor, BufferUsages, ColorTargetState, ColorWrites,
     CommandEncoderDescriptor, CompositeAlphaMode, CurrentSurfaceTexture, DeviceDescriptor,
@@ -38,6 +43,12 @@ const LONG_CURSOR_ANIMATION: f32 = 0.15;
 const MAX_CURSOR_DELTA: f32 = 0.1;
 const CURSOR_SETTLED: f32 = 0.01;
 const DEVICE_LOST: &str = "the Venus GPU device was lost";
+const DEFAULT_METRICS: CellMetrics = CellMetrics {
+    width: 10.0,
+    height: 18.0,
+    font_size: 16.0,
+    padding: 12.0,
+};
 const DEFAULT_BACKGROUND: SceneColor = SceneColor {
     r: 10,
     g: 13,
@@ -89,8 +100,212 @@ pub struct CellMetrics {
     pub padding: f32,
 }
 
+/// Startup typography. Validation is shared by launch parsing and font resolution.
+#[derive(Clone, Debug)]
+pub struct FontSettings {
+    pub family: Option<String>,
+    pub fallbacks: Vec<String>,
+    pub size: f32,
+    pub line_height: f32,
+}
+
+impl Default for FontSettings {
+    fn default() -> Self {
+        Self {
+            family: None,
+            fallbacks: Vec::new(),
+            size: DEFAULT_METRICS.font_size,
+            line_height: DEFAULT_METRICS.height / DEFAULT_METRICS.font_size,
+        }
+    }
+}
+
+impl FontSettings {
+    pub fn validate(&self) -> Result<(), RenderError> {
+        if !self.size.is_finite()
+            || !(6.0..=96.0).contains(&self.size)
+            || !self.line_height.is_finite()
+            || !(1.0..=3.0).contains(&self.line_height)
+            || self.fallbacks.len() > 8
+            || self.family.iter().chain(&self.fallbacks).any(|name| {
+                name.is_empty()
+                    || name.len() > 128
+                    || name.trim() != name
+                    || name.chars().any(char::is_control)
+            })
+        {
+            return Err(RenderError("invalid terminal typography: font size must be 6..96, line height 1..3, with at most eight fallback families and nonempty trimmed family names up to 128 bytes without controls".into()));
+        }
+        Ok(())
+    }
+}
+
+struct OrderedFallback {
+    names: Vec<&'static str>,
+    common: Vec<&'static str>,
+    // Script is a u8 in the exact selected unicode-script release.
+    scripts: [OnceLock<Vec<&'static str>>; 256],
+}
+
+impl Fallback for OrderedFallback {
+    fn common_fallback(&self) -> &[&'static str] {
+        &self.common
+    }
+    fn forbidden_fallback(&self) -> &[&'static str] {
+        PlatformFallback.forbidden_fallback()
+    }
+    fn script_fallback(&self, script: Script, locale: &str) -> &[&'static str] {
+        self.scripts[script as usize].get_or_init(|| {
+            self.names
+                .iter()
+                .copied()
+                .chain(
+                    PlatformFallback
+                        .script_fallback(script, locale)
+                        .iter()
+                        .copied(),
+                )
+                .collect()
+        })
+    }
+}
+
+/// Resolved fonts are admitted before native window creation and moved into its renderer.
+pub struct FontSetup {
+    font_system: FontSystem,
+    logical: CellMetrics,
+    family: Option<&'static str>,
+    configured: bool,
+}
+
+impl FontSetup {
+    pub fn new(settings: &FontSettings) -> Result<Self, RenderError> {
+        Self::resolve(settings, FontSystem::new())
+    }
+
+    fn resolve(settings: &FontSettings, mut font_system: FontSystem) -> Result<Self, RenderError> {
+        settings.validate()?;
+        for (index, name) in settings
+            .family
+            .iter()
+            .chain(&settings.fallbacks)
+            .enumerate()
+        {
+            let id = font_system
+                .db()
+                .query(&fontdb::Query {
+                    families: &[Family::Name(name)],
+                    ..Default::default()
+                })
+                .ok_or_else(|| {
+                    RenderError(format!("terminal font family is unavailable: {name}"))
+                })?;
+            if index == 0
+                && settings.family.is_some()
+                && !font_system.db().face(id).unwrap().monospaced
+            {
+                return Err(RenderError(format!(
+                    "terminal primary font is not monospace: {name}"
+                )));
+            }
+            if font_system.get_font(id, Weight::NORMAL).is_none() {
+                return Err(RenderError(format!(
+                    "cannot load terminal font family: {name}"
+                )));
+            }
+        }
+        let family = if settings.family.is_some() || !settings.fallbacks.is_empty() {
+            let primary = if let Some(name) = &settings.family {
+                name.clone()
+            } else {
+                let mut buffer =
+                    Buffer::new(&mut font_system, Metrics::new(settings.size, settings.size));
+                buffer.set_text(
+                    " ",
+                    &Attrs::new().family(Family::Monospace),
+                    Shaping::Advanced,
+                    None,
+                );
+                buffer.shape_until_scroll(&mut font_system, false);
+                let id = buffer
+                    .layout_runs()
+                    .flat_map(|run| run.glyphs)
+                    .next()
+                    .ok_or_else(|| RenderError("no usable monospace font is installed".into()))?
+                    .font_id;
+                font_system.db().face(id).unwrap().families[0].0.clone()
+            };
+            // ponytail: cosmic-text requires static family names; at most nine bounded
+            // startup names live for this process. Revisit with upstream runtime lists/live reload.
+            let primary: &'static str = Box::leak(primary.into_boxed_str());
+            let names: Vec<&'static str> = settings
+                .fallbacks
+                .iter()
+                .map(|name| &*Box::leak(name.clone().into_boxed_str()))
+                .collect();
+            let common = names
+                .iter()
+                .copied()
+                .chain(PlatformFallback.common_fallback().iter().copied())
+                .collect();
+            let (locale, db) = font_system.into_locale_and_db();
+            font_system = FontSystem::new_with_locale_and_db_and_fallback(
+                locale,
+                db,
+                OrderedFallback {
+                    names,
+                    common,
+                    scripts: std::array::from_fn(|_| OnceLock::new()),
+                },
+            );
+            Some(primary)
+        } else {
+            None
+        };
+        let width = if let Some(family) = family {
+            let mut buffer =
+                Buffer::new(&mut font_system, Metrics::new(settings.size, settings.size));
+            buffer.set_text(
+                " ",
+                &Attrs::new().family(Family::Name(family)),
+                Shaping::Advanced,
+                None,
+            );
+            buffer
+                .line_layout(&mut font_system, 0)
+                .and_then(|lines| lines.first())
+                .map(|line| line.w)
+                .filter(|width| width.is_finite() && *width > 0.0)
+                .ok_or_else(|| {
+                    RenderError("terminal primary font has no usable cell advance".into())
+                })?
+        } else {
+            DEFAULT_METRICS.width * settings.size / DEFAULT_METRICS.font_size
+        };
+        Ok(Self {
+            font_system,
+            logical: CellMetrics {
+                width,
+                height: settings.size * settings.line_height,
+                font_size: settings.size,
+                padding: DEFAULT_METRICS.padding,
+            },
+            family,
+            configured: family.is_some()
+                || settings.size != DEFAULT_METRICS.font_size
+                || settings.line_height != FontSettings::default().line_height,
+        })
+    }
+
+    #[must_use]
+    pub fn metrics(&self, scale: f64) -> CellMetrics {
+        self.logical.scaled(scale)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct CellFont {
+    family: Option<&'static str>,
     size: f32,
     top_offset: f32,
     letter_spacing: f32,
@@ -101,7 +316,7 @@ struct CellFont {
 impl CellFont {
     fn attrs(self) -> Attrs<'static> {
         Attrs::new()
-            .family(Family::Monospace)
+            .family(self.family.map_or(Family::Monospace, Family::Name))
             .letter_spacing(self.letter_spacing)
     }
 }
@@ -109,12 +324,16 @@ impl CellFont {
 impl CellMetrics {
     #[must_use]
     pub fn for_scale(scale_factor: f64) -> Self {
+        DEFAULT_METRICS.scaled(scale_factor)
+    }
+
+    fn scaled(self, scale_factor: f64) -> Self {
         let scale = scale_factor as f32;
         Self {
-            width: (10.0 * scale).round().max(1.0),
-            height: (18.0 * scale).round().max(1.0),
-            font_size: (16.0 * scale).max(1.0),
-            padding: (12.0 * scale).round(),
+            width: (self.width * scale).round().max(1.0),
+            height: (self.height * scale).round().max(1.0),
+            font_size: (self.font_size * scale).max(1.0),
+            padding: (self.padding * scale).round(),
         }
     }
 }
@@ -439,7 +658,7 @@ pub struct Renderer {
     dynamic_vertices: wgpu::Buffer,
     dynamic_vertex_capacity: u64,
     dynamic_vertex_count: u32,
-    font_system: FontSystem,
+    fonts: FontSetup,
     swash_cache: SwashCache,
     viewport: Viewport,
     atlas: TextAtlas,
@@ -489,6 +708,7 @@ impl Renderer {
         event_loop: &ActiveEventLoop,
         background_opacity: f32,
         cursor_tail: Option<(SceneColor, f32)>,
+        mut fonts: FontSetup,
     ) -> Result<Self, RenderError> {
         let size = nonzero(window.inner_size());
         let instance = Instance::new(InstanceDescriptor::new_with_display_handle(Box::new(
@@ -606,9 +826,13 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        let mut font_system = FontSystem::new();
-        let metrics = CellMetrics::for_scale(window.scale_factor());
-        let cell_font = fitted_cell_font(&mut font_system, metrics);
+        let metrics = fonts.metrics(window.scale_factor());
+        let cell_font = fitted_cell_font(
+            &mut fonts.font_system,
+            metrics,
+            fonts.family,
+            fonts.configured,
+        );
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
@@ -637,7 +861,7 @@ impl Renderer {
             dynamic_vertices,
             dynamic_vertex_capacity: vertex_capacity,
             dynamic_vertex_count: 0,
-            font_system,
+            fonts,
             swash_cache,
             viewport,
             atlas,
@@ -662,6 +886,11 @@ impl Renderer {
     }
 
     #[must_use]
+    pub fn metrics_at_scale(&self, scale: f64) -> CellMetrics {
+        self.fonts.metrics(scale)
+    }
+
+    #[must_use]
     pub fn size(&self) -> PhysicalSize<u32> {
         PhysicalSize::new(self.config.width, self.config.height)
     }
@@ -670,9 +899,14 @@ impl Renderer {
         let size = nonzero(size);
         self.config.width = size.width;
         self.config.height = size.height;
-        let metrics = CellMetrics::for_scale(scale_factor);
+        let metrics = self.fonts.metrics(scale_factor);
         if metrics != self.metrics {
-            self.cell_font = fitted_cell_font(&mut self.font_system, metrics);
+            self.cell_font = fitted_cell_font(
+                &mut self.fonts.font_system,
+                metrics,
+                self.fonts.family,
+                self.fonts.configured,
+            );
             self.metrics = metrics;
         }
         self.surface.configure(&self.device, &self.config);
@@ -734,7 +968,7 @@ impl Renderer {
                 .prepare(
                     &self.device,
                     &self.queue,
-                    &mut self.font_system,
+                    &mut self.fonts.font_system,
                     &mut self.atlas,
                     &self.viewport,
                     text_areas(&self.text),
@@ -747,7 +981,7 @@ impl Renderer {
                     .prepare(
                         &self.device,
                         &self.queue,
-                        &mut self.font_system,
+                        &mut self.fonts.font_system,
                         &mut self.atlas,
                         &self.viewport,
                         text_areas(&self.text),
@@ -1513,12 +1747,15 @@ impl Renderer {
         };
         let layout_width = layout_width.max(1.0);
         let layout_height = layout_height.max(1.0);
-        let mut buffer = Buffer::new(&mut self.font_system, Metrics::new(font_size, line_height));
+        let mut buffer = Buffer::new(
+            &mut self.fonts.font_system,
+            Metrics::new(font_size, line_height),
+        );
         buffer.set_size(Some(layout_width), Some(layout_height));
         buffer.set_wrap(wrap);
         buffer.set_monospace_width(monospace_width);
         buffer.set_text(text, &attrs, shaping(text), None);
-        buffer.shape_until_scroll(&mut self.font_system, false);
+        buffer.shape_until_scroll(&mut self.fonts.font_system, false);
         let (left_offset, measured_width) = if matches!(kind, DrawStyleKind::Preedit) {
             shaped_preedit_placement(&buffer)
         } else {
@@ -1559,7 +1796,11 @@ impl Renderer {
             .clone()
             .metrics(Metrics::new(self.cell_font.box_size, self.metrics.height))
             .letter_spacing(self.cell_font.box_letter_spacing);
-        let braille_attrs = attrs.clone().family(Family::Name(BRAILLE_FAMILY));
+        let braille_attrs = if self.fonts.family.is_some() {
+            attrs.clone()
+        } else {
+            attrs.clone().family(Family::Name(BRAILLE_FAMILY))
+        };
         for box_drawing in [false, true] {
             if !segments
                 .iter()
@@ -1568,7 +1809,7 @@ impl Renderer {
                 continue;
             }
             let mut buffer = Buffer::new(
-                &mut self.font_system,
+                &mut self.fonts.font_system,
                 Metrics::new(self.cell_font.size, self.metrics.height),
             );
             buffer.set_size(Some(layout_width.max(1.0)), Some(layout_height.max(1.0)));
@@ -1583,7 +1824,7 @@ impl Renderer {
                 &box_attrs,
                 box_drawing,
             );
-            buffer.shape_until_scroll(&mut self.font_system, false);
+            buffer.shape_until_scroll(&mut self.fonts.font_system, false);
             self.text.push(PlacedText {
                 buffer,
                 left,
@@ -1685,7 +1926,12 @@ fn shaped_preedit_placement(buffer: &Buffer) -> (f32, f32) {
     (-left, right - left)
 }
 
-fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellFont {
+fn fitted_cell_font(
+    font_system: &mut FontSystem,
+    metrics: CellMetrics,
+    family: Option<&'static str>,
+    configured: bool,
+) -> CellFont {
     let top_offset = ((metrics.height - metrics.font_size) / 2.0)
         .round()
         .max(0.0);
@@ -1693,7 +1939,7 @@ fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellF
     buffer.set_wrap(Wrap::None);
     buffer.set_text(
         " ",
-        &Attrs::new().family(Family::Monospace),
+        &Attrs::new().family(family.map_or(Family::Monospace, Family::Name)),
         Shaping::Advanced,
         None,
     );
@@ -1704,6 +1950,7 @@ fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellF
         .filter(|width| width.is_finite() && *width > 0.0);
     advance.map_or(
         CellFont {
+            family,
             size: metrics.font_size,
             top_offset,
             letter_spacing: 0.0,
@@ -1715,8 +1962,13 @@ fn fitted_cell_font(font_system: &mut FontSystem, metrics: CellMetrics) -> CellF
                 .round()
                 .max(1.0);
             let size = (fitted_size - 1.0).clamp(1.0, metrics.font_size);
-            let box_size = fitted_size + 1.0;
+            let box_size = if configured {
+                (fitted_size + 1.0).max(metrics.height)
+            } else {
+                fitted_size + 1.0
+            };
             CellFont {
+                family,
                 size,
                 top_offset,
                 letter_spacing: metrics.width / size - advance / metrics.font_size,
@@ -1784,13 +2036,14 @@ fn cell_ink_right(run: &GlyphRun, next: Option<&GlyphRun>, columns: u16) -> u16 
 }
 
 fn cell_text_attrs(cell_font: CellFont, text: &str, style: DrawStyle) -> Attrs<'static> {
+    let mut attrs = cell_font.attrs();
     if is_nerd_font_symbol(text) {
         // The packaged symbol face is Regular-only; bold can select an ambient mono face.
-        return Attrs::new()
-            .family(Family::Name(NERD_FONT_FAMILY))
-            .letter_spacing(cell_font.letter_spacing);
+        if cell_font.family.is_none() {
+            attrs = attrs.family(Family::Name(NERD_FONT_FAMILY));
+        }
+        return attrs;
     }
-    let mut attrs = cell_font.attrs();
     if style.bold {
         attrs = attrs.weight(Weight::BOLD);
     }
@@ -2335,6 +2588,122 @@ mod tests {
     use orbit_protocol::{CellWidth, Screen};
 
     #[test]
+    fn configured_fonts_resolve_fallbacks_and_scale_one_grid() {
+        let original = FontSystem::new();
+        let named = |name: &str| {
+            original
+                .db()
+                .faces()
+                .find(|face| face.families.iter().any(|(family, _)| family == name))
+                .expect("the accepted font environment supplies the tested face")
+                .clone()
+        };
+        let mono = named("DejaVu Sans Mono");
+        let symbol = named(NERD_FONT_FAMILY);
+        let make_system = || {
+            let mut db = fontdb::Database::new();
+            db.push_face_info(mono.clone());
+            for name in ["Venus Fallback A", "Venus Fallback B"] {
+                let mut face = symbol.clone();
+                face.families.truncate(1);
+                face.families[0].0 = name.into();
+                db.push_face_info(face);
+            }
+            FontSystem::new_with_locale_and_db("en-US".into(), db)
+        };
+        let mut settings = FontSettings {
+            family: Some("DejaVu Sans Mono".into()),
+            fallbacks: vec!["Venus Fallback A".into(), "Venus Fallback B".into()],
+            size: 20.0,
+            line_height: 1.5,
+        };
+        for expected in ["Venus Fallback A", "Venus Fallback B"] {
+            let mut fonts = FontSetup::resolve(&settings, make_system()).unwrap();
+            for scale in [1.0, 1.25, 1.5, 2.0] {
+                let metrics = fonts.metrics(scale);
+                assert_eq!(metrics.height, (30.0 * scale as f32).round());
+                assert_eq!(metrics.font_size, 20.0 * scale as f32);
+                let cell_font =
+                    fitted_cell_font(&mut fonts.font_system, metrics, fonts.family, true);
+                let mut buffer = Buffer::new(
+                    &mut fonts.font_system,
+                    Metrics::new(cell_font.size, metrics.height),
+                );
+                buffer.set_monospace_width(Some(metrics.width));
+                buffer.set_text(
+                    "\u{f015}",
+                    &cell_text_attrs(
+                        cell_font,
+                        "\u{f015}",
+                        DrawStyle {
+                            bold: true,
+                            ..plain_style()
+                        },
+                    ),
+                    Shaping::Advanced,
+                    None,
+                );
+                buffer.shape_until_scroll(&mut fonts.font_system, false);
+                let glyph = &buffer.layout_runs().next().unwrap().glyphs[0];
+                assert_ne!(glyph.glyph_id, 0);
+                assert_eq!(
+                    fonts.font_system.db().face(glyph.font_id).unwrap().families[0].0,
+                    expected
+                );
+                let buffer = grid_buffer(
+                    &mut fonts.font_system,
+                    metrics,
+                    cell_font,
+                    "abc",
+                    false,
+                    cell_font.attrs(),
+                );
+                for (column, glyph) in buffer
+                    .layout_runs()
+                    .next()
+                    .unwrap()
+                    .glyphs
+                    .iter()
+                    .enumerate()
+                {
+                    assert!((glyph.x - column as f32 * metrics.width).abs() < 0.01);
+                }
+            }
+            settings.fallbacks.reverse();
+        }
+        settings.family = Some("Missing Venus Font".into());
+        assert!(
+            FontSetup::resolve(&settings, make_system())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("unavailable")
+        );
+        settings.family = None;
+        settings.fallbacks = vec!["Missing Venus Fallback".into()];
+        assert!(
+            FontSetup::resolve(&settings, make_system())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("unavailable")
+        );
+        settings.family = Some("DejaVu Sans".into());
+        settings.fallbacks.clear();
+        assert!(
+            FontSetup::resolve(&settings, FontSystem::new())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("not monospace")
+        );
+        let defaults = FontSetup::new(&FontSettings::default()).unwrap();
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            assert_eq!(defaults.metrics(scale), CellMetrics::for_scale(scale));
+        }
+    }
+
+    #[test]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn long_workspace_labels_stay_on_the_visible_line() {
         use eon_workspace_protocol::v4::{Pane, Snapshot, Tab};
@@ -2351,8 +2720,14 @@ mod tests {
                         .create_window(Window::default_attributes())
                         .unwrap(),
                 );
-                let mut renderer =
-                    pollster::block_on(Renderer::new(window, event_loop, 1.0, None)).unwrap();
+                let mut renderer = pollster::block_on(Renderer::new(
+                    window,
+                    event_loop,
+                    1.0,
+                    None,
+                    FontSetup::new(&FontSettings::default()).unwrap(),
+                ))
+                .unwrap();
                 let snapshot = Snapshot {
                     active_tab: "t2".into(),
                     directory_picker: None,
@@ -2400,7 +2775,7 @@ mod tests {
                     .physical((label.left, label.top), 1.0);
                 let ink = renderer
                     .swash_cache
-                    .get_image(&mut renderer.font_system, underscore.cache_key)
+                    .get_image(&mut renderer.fonts.font_system, underscore.cache_key)
                     .as_ref()
                     .unwrap();
                 let top = line.line_y.round() as i32 + underscore.y - ink.placement.top;
@@ -3157,7 +3532,10 @@ mod tests {
                 ),
                 (width, height, font_size, padding)
             );
-            assert_eq!(fitted_cell_font(&mut font_system, metrics).size, font_size);
+            assert_eq!(
+                fitted_cell_font(&mut font_system, metrics, None, false).size,
+                font_size
+            );
         }
     }
 
@@ -3256,9 +3634,16 @@ mod tests {
 
     #[test]
     fn shaped_preedit_follows_emitted_glyphs_without_charging_combining_marks() {
-        let mut font_system = FontSystem::new();
-        let metrics = CellMetrics::for_scale(1.25);
-        let cell_font = fitted_cell_font(&mut font_system, metrics);
+        let mut fonts = FontSetup::new(&FontSettings {
+            family: Some("DejaVu Sans Mono".into()),
+            size: 20.0,
+            line_height: 1.5,
+            ..Default::default()
+        })
+        .unwrap();
+        let metrics = fonts.metrics(1.25);
+        let cell_font = fitted_cell_font(&mut fonts.font_system, metrics, fonts.family, true);
+        let mut font_system = fonts.font_system;
         let mut text_width = |text: &str| {
             let mut buffer = Buffer::new(
                 &mut font_system,
@@ -3299,7 +3684,7 @@ mod tests {
         let mut font_system = FontSystem::new();
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
-            let cell_font = fitted_cell_font(&mut font_system, metrics);
+            let cell_font = fitted_cell_font(&mut font_system, metrics, None, false);
             for (text, box_drawing, attrs) in [
                 ("narrow text", false, cell_font.attrs()),
                 (
@@ -3412,7 +3797,7 @@ mod tests {
         }
 
         let metrics = CellMetrics::for_scale(1.0);
-        let cell_font = fitted_cell_font(&mut font_system, metrics);
+        let cell_font = fitted_cell_font(&mut font_system, metrics, None, false);
         let buffer = grid_buffer(
             &mut font_system,
             metrics,
@@ -3462,7 +3847,7 @@ mod tests {
         let mut swash_cache = SwashCache::new();
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
-            let cell_font = fitted_cell_font(&mut font_system, metrics);
+            let cell_font = fitted_cell_font(&mut font_system, metrics, None, false);
             for frame in SPINNER.chars() {
                 let text = format!("{frame}│X");
                 let buffer = grid_buffer(
@@ -3518,7 +3903,7 @@ mod tests {
         let mut failures = Vec::new();
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
-            let cell_font = fitted_cell_font(&mut font_system, metrics);
+            let cell_font = fitted_cell_font(&mut font_system, metrics, None, false);
             for (style, attrs) in [
                 ("regular", cell_font.attrs()),
                 ("bold", cell_font.attrs().weight(Weight::BOLD)),
@@ -3575,7 +3960,7 @@ mod tests {
         let mut font_system = FontSystem::new();
         let mut swash_cache = SwashCache::new();
         let metrics = CellMetrics::for_scale(1.0);
-        let cell_font = fitted_cell_font(&mut font_system, metrics);
+        let cell_font = fitted_cell_font(&mut font_system, metrics, None, false);
         let mut observed_overhang = false;
         for symbol in ["\u{e5ff}", "\u{f015}", "\u{f15b}", "\u{f489}", "\u{f0868}"] {
             let geometry = [false, true].map(|bold| {

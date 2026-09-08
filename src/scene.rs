@@ -226,7 +226,29 @@ pub struct WorkspaceScene {
     directory_picker: bool,
 }
 
+fn header_heights(metrics: CellMetrics) -> (f32, f32) {
+    (
+        (metrics.height * 1.75).round().max(1.0),
+        (metrics.height * 1.5).round().max(1.0),
+    )
+}
+
 impl WorkspaceScene {
+    /// Extra pixels around an initially requested terminal grid.
+    #[must_use]
+    pub fn initial_overhead(snapshot: &Snapshot, metrics: CellMetrics) -> (f32, f32) {
+        let (tab_height, pane_height) = header_heights(metrics);
+        if directory_picker_visible(snapshot) {
+            (metrics.width * 2.0, tab_height + metrics.height * 2.0)
+        } else {
+            let tab = snapshot
+                .tabs
+                .iter()
+                .find(|tab| tab.id == snapshot.active_tab)
+                .expect("EONW validates the active tab");
+            (0.0, tab_height + pane_height * tab.panes.len() as f32)
+        }
+    }
     #[must_use]
     pub fn from_snapshot(
         snapshot: &Snapshot,
@@ -251,7 +273,8 @@ impl WorkspaceScene {
     ) -> Self {
         let width = size.width as f32;
         let height = size.height as f32;
-        let tab_height = (metrics.height * 1.75).round().max(1.0).min(height);
+        let (tab_height, pane_height) = header_heights(metrics);
+        let tab_height = tab_height.min(height);
         let tab_width = (metrics.width * 14.0).round().max(72.0);
         let tab_viewport = SceneRect {
             left: 0.0,
@@ -336,10 +359,7 @@ impl WorkspaceScene {
         }
 
         let active = &snapshot.tabs[active_tab];
-        let pane_height = (metrics.height * 1.5)
-            .round()
-            .max(1.0)
-            .min(pane_viewport.height);
+        let pane_height = pane_height.min(pane_viewport.height);
         let selected = active
             .selected_pane
             .as_ref()

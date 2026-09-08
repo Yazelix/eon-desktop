@@ -3102,6 +3102,7 @@ dependencies = [
  "glyphon",
  "orbit-protocol",
  "pollster",
+ "unicode-script",
  "wgpu",
  "winit",
  "wl-clipboard-rs",

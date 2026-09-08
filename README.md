@@ -58,6 +58,36 @@ cargo run --locked -- /path/to/orbit.sock
 Venus requires a native Wayland display and fails before presentation
 attachment when one is unavailable. X11, Xwayland, and macOS are unsupported.
 
+### Typography and initial size
+
+Startup options apply to standalone and workspace surfaces:
+
+```sh
+cargo run --locked -- \
+  --font-family 'DejaVu Sans Mono' \
+  --font-fallback 'Symbols Nerd Font Mono' \
+  --font-size 20 --line-height 1.5 \
+  --columns 100 --rows 30 /path/to/orbit.sock
+```
+
+The primary family must be installed and monospace. Repeat `--font-fallback`
+for up to eight installed families in preference order; platform fallback
+follows them. Names are nonempty trimmed UTF-8, at most 128 bytes without
+controls. Missing named fonts fail launch. Font availability does not promise
+all glyphs or style variants; Venus does not install fonts.
+
+`--font-size` accepts 6–96 nominal logical pixels, and `--line-height` accepts
+1–3 times that size. Absence preserves 16 px nominal text and 10 by 18 logical
+cells. One rounded physical cell grid drives text, cursor, pointer, selection,
+scrolling, IME and accessibility.
+
+Positive `--columns` and `--rows` request a terminal grid, including space for
+workspace headers or picker gutters. An omitted dimension retains its existing
+initial window dimension; the default window is 960 by 600 logical pixels.
+Requests must fit Orbit's 100,000-cell and native surface limits. The compositor
+may override initial sizing, and later user resizing remains unconstrained.
+These are startup options; Eon owns persistent product configuration.
+
 ### Hyperlinks
 
 Hover an explicit OSC 8 link to highlight it and preview its actual target.
@@ -279,13 +309,13 @@ Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy inputs | 208 |
-| README | 291 |
+| Agent policy inputs | 284 |
+| README | 321 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,164 |
-| Crate decisions | 237 |
+| Contracts and references | 1,229 |
+| Crate decisions | 258 |
 | Changelog | 185 |
-| Rust source, including unit tests | 14,318 |
+| Rust source, including unit tests | 15,145 |
 | Rust integration tests | 898 |
-| Cargo manifest | 23 |
-| **Total** | **17,330** |
+| Cargo manifest | 24 |
+| **Total** | **18,350** |

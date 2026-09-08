@@ -85,6 +85,27 @@ already-locked Wayland data-control owner.
   shaping, fallback, clipping, raster cache, atlas, and text preparation. Neither sees
   transport or terminal state.
 
+### Ordered startup font fallback
+
+- **Selected:** direct `unicode-script = "=0.5.8"`, already present through
+  cosmic-text 0.19.0; approved for `VEN-C19`.
+- **Capability:** name `Script` in cosmic-text's public `Fallback` trait. The
+  selected shaper keeps family matching, cluster shaping and platform fallback.
+  Neither glyphon nor cosmic-text re-exports this required type.
+- **Cost:** one dependency edge; no new package, version, feature, native/build
+  dependency or Nix input. MIT OR Apache-2.0. About 40 lines of provider glue
+  prepend the bounded startup list; no separate font resolver is introduced.
+- **Rejected:** stdlib/fontdb alone cannot own cluster-aware fallback;
+  fontconfig does not control cosmic-text's subsequent iterator; a local
+  per-character resolver duplicates shaping policy. No additional text stack.
+- **Lifetime:** the API requires static family names. At most nine startup
+  names remain allocated for the process; live reload is outside this contract.
+- **Maintenance:** align the exact type version with cosmic-text. Remove this
+  edge/provider when upstream re-exports `Script` or offers ordered runtime
+  lists. No new Wayland, IME, accessibility or browser owner is introduced.
+- **Check:** a controlled font database reverses the actual selected glyph
+  font ID with fallback order, including regular-only symbols under bold text.
+
 ### Accessibility
 
 - **Selected shape:** AccessKit 0.24.1 and accesskit_winit 0.33.2 with the Unix async-io

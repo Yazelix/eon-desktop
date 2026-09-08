@@ -32,6 +32,30 @@ Foot is MIT and GLib LGPL-2.1-or-later. This is mechanism inspection, with no
 source copied into Venus. Native GIO, exact clipboard bytes, pointer/keyboard
 capture, stale-frame refusal and AT-SPI target/error names are the falsifiers.
 
+## Startup typography and initial geometry
+
+`VEN-C19` uses the selected glyphon 0.12.0 / cosmic-text 0.19.0 `FontSystem`,
+`Fallback`, `Attrs` and platform fallback sources, fontdb 0.23.0 family queries,
+and unicode-script 0.5.8's `Script`. Explicit primary names preserve ordered
+fallback before generic family search. Keep the existing font fitter and
+`CellMetrics`; reject another resolver or geometry owner.
+
+Patched winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` owns native sizing.
+Its Wayland event loop consumes `ScaleFactorChanged`'s `InnerSizeWriter`
+synchronously; use that one admission to preserve the requested grid when the
+initial output scale arrives after the first buffer. Later user size/scale
+changes remain authoritative. Workspace Scene owns header and picker overhead.
+
+Rio `e1946a7b98a5a5a4074f384437f0256abf1df75b`,
+`sugarloaf/src/font/mod.rs` and `rio-backend/src/config/window.rs`, supplies
+comparison evidence for ordered face lookup and independent columns/rows.
+Its font cache, terminal state, renderer, config framework and platform layers
+are rejected scope. MIT inspection only; no source copied or adapted.
+
+The first falsifiers are actual glyph font-ID ordering, missing named fonts,
+and exact terminal grid sizes. Native default/configured rendering and
+interaction remain separate evidence from pure shaping and geometry checks.
+
 ## Required before the first client implementation
 
 - Orbit `ORB-C1` through `ORB-C6`, ORBF v1, ORBS v1, and the dependency-free

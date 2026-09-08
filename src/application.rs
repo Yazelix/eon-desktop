@@ -33,10 +33,10 @@ use winit::{
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, ClipboardEffect, Color, ConnectionState,
-    Hyperlink, InputState, LocalNoticeSource, MetadataEvent, MetadataTransport, ModelError,
-    PaneMetadata, PresentOutcome, Renderer, Scene, ScenePreview, SceneRect, SessionModel,
-    Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel,
-    WorkspaceScene, WorkspaceTransport, directory_picker_visible,
+    FontSettings, FontSetup, Hyperlink, InputState, LocalNoticeSource, MetadataEvent,
+    MetadataTransport, ModelError, PaneMetadata, PresentOutcome, Renderer, Scene, ScenePreview,
+    SceneRect, SessionModel, Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus,
+    WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, directory_picker_visible,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -617,6 +617,11 @@ struct Application {
     background_opacity: f32,
     background_blur: bool,
     cursor_tail: Option<(Color, f32)>,
+    fonts: FontSettings,
+    columns: Option<u16>,
+    rows: Option<u16>,
+    fatal_error: Option<String>,
+    initial_scale_pending: bool,
     proxy: EventLoopProxy<UserEvent>,
     window: Option<WindowState>,
     transport: Option<Transport>,
@@ -660,6 +665,9 @@ impl Application {
             background_opacity,
             background_blur,
             cursor_tail,
+            fonts,
+            columns,
+            rows,
         } = arguments;
         Self {
             application_id,
@@ -670,7 +678,12 @@ impl Application {
             background_opacity,
             background_blur,
             cursor_tail,
+            fonts,
+            columns,
+            rows,
             proxy,
+            fatal_error: None,
+            initial_scale_pending: columns.is_some() || rows.is_some(),
             window: None,
             transport: None,
             workspace_transport: None,
@@ -704,14 +717,33 @@ impl Application {
     }
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result {
+        let fonts = FontSetup::new(&self.fonts)?;
+        let initial = initial_window_size(
+            self.columns,
+            self.rows,
+            fonts.metrics(1.0),
+            1.0,
+            self.workspace_model.snapshot(),
+        )?;
         let attributes = window_attributes(
             self.decorations,
             self.background_opacity,
             self.background_blur,
-        );
+        )
+        .with_inner_size(initial.to_logical::<f64>(1.0));
         #[cfg(target_os = "linux")]
         let attributes = attributes.with_name(self.application_id.as_str(), "yazelix-venus");
         let window = Arc::new(event_loop.create_window(attributes)?);
+        if (self.columns.is_some() || self.rows.is_some()) && window.scale_factor() != 1.0 {
+            let initial = initial_window_size(
+                self.columns,
+                self.rows,
+                fonts.metrics(window.scale_factor()),
+                window.scale_factor(),
+                self.workspace_model.snapshot(),
+            )?;
+            let _ = window.request_inner_size(initial);
+        }
         let accessibility = Accessibility::new(window.inner_size());
         let adapter = accesskit_winit::Adapter::with_mixed_handlers(
             event_loop,
@@ -724,6 +756,7 @@ impl Application {
             event_loop,
             self.background_opacity,
             self.cursor_tail,
+            fonts,
         ))?;
         let scale_factor = window.scale_factor();
 
@@ -734,11 +767,24 @@ impl Application {
             accessibility,
             window,
         });
-        if let Some(socket) = self.workspace_socket.clone() {
-            let proxy = self.proxy.clone();
-            self.workspace_transport = Some(WorkspaceTransport::start(socket, move || {
-                let _ = proxy.send_event(UserEvent::Workspace);
-            }));
+        if self.workspace_transport.is_none()
+            && let Some(socket) = self.workspace_socket.clone()
+        {
+            self.start_workspace(socket);
+        }
+        if !self.initial_scale_pending {
+            self.start_initial_attachment();
+        }
+        self.refresh_client_view();
+        Ok(())
+    }
+
+    fn start_initial_attachment(&mut self) {
+        self.reveal_workspace_selection();
+        if self.workspace_socket.is_some() {
+            if let Some((endpoint, live)) = self.workspace_model.active_attachment() {
+                self.set_orbit_attachment(endpoint.to_vec(), live);
+            }
         } else {
             self.start_orbit(
                 self.orbit_socket
@@ -746,8 +792,13 @@ impl Application {
                     .expect("standalone launch has an Orbit socket"),
             );
         }
-        self.refresh_client_view();
-        Ok(())
+    }
+
+    fn start_workspace(&mut self, socket: PathBuf) {
+        let proxy = self.proxy.clone();
+        self.workspace_transport = Some(WorkspaceTransport::start(socket, move || {
+            let _ = proxy.send_event(UserEvent::Workspace);
+        }));
     }
 
     fn start_orbit(&mut self, socket: PathBuf) {
@@ -964,6 +1015,9 @@ impl Application {
                 (self.workspace_model.mark_unavailable(detail), false)
             }
         };
+        if self.window.is_none() || self.initial_scale_pending {
+            return;
+        }
         if unavailable && !self.metadata_observers.is_empty() {
             self.metadata_observers.clear();
             self.presentation.invalidate();
@@ -1883,6 +1937,9 @@ impl Application {
         if let Some(notice) = self.model.notice() {
             return notice.to_owned();
         }
+        if self.initial_scale_pending {
+            return "Opening terminal.".into();
+        }
         if let Some(socket) = &self.workspace_socket
             && self.workspace_model.snapshot().is_none()
         {
@@ -2030,9 +2087,19 @@ fn window_attributes(
 impl ApplicationHandler<UserEvent> for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none()
+            && (self.columns.is_some() || self.rows.is_some())
+            && self.workspace_model.snapshot().is_none()
+            && let Some(socket) = self.workspace_socket.clone()
+        {
+            if self.workspace_transport.is_none() {
+                self.start_workspace(socket);
+            }
+            return;
+        }
+        if self.window.is_none()
             && let Err(error) = self.create_window(event_loop)
         {
-            report(error);
+            self.fatal_error = Some(error.to_string());
             event_loop.exit();
         }
     }
@@ -2071,7 +2138,31 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.send_resize();
                 self.refresh_client_view();
             }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+            WindowEvent::ScaleFactorChanged {
+                scale_factor,
+                mut inner_size_writer,
+            } => {
+                if self.initial_scale_pending {
+                    let initial = initial_window_size(
+                        self.columns,
+                        self.rows,
+                        state.renderer.metrics_at_scale(scale_factor),
+                        scale_factor,
+                        self.workspace_model.snapshot(),
+                    );
+                    match initial.and_then(|size| {
+                        inner_size_writer
+                            .request_inner_size(size)
+                            .map_err(Into::into)
+                    }) {
+                        Ok(()) => {}
+                        Err(error) => {
+                            self.fatal_error = Some(error.to_string());
+                            event_loop.exit();
+                            return;
+                        }
+                    }
+                }
                 self.terminal_scroll.cancel();
                 state.scale_factor = scale_factor;
                 self.presentation.invalidate();
@@ -2383,6 +2474,14 @@ impl ApplicationHandler<UserEvent> for Application {
                 for event in events {
                     self.handle_workspace(event);
                 }
+                if self.window.is_none() {
+                    if self.workspace_model.snapshot().is_some() {
+                        self.resumed(event_loop);
+                    } else if let Some(notice) = self.workspace_model.notice() {
+                        self.fatal_error = Some(notice.to_owned());
+                        event_loop.exit();
+                    }
+                }
             }
             UserEvent::AccessKit(event) => {
                 let Some(state) = &mut self.window else {
@@ -2416,6 +2515,19 @@ impl ApplicationHandler<UserEvent> for Application {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Initial Wayland scale can arrive after the first buffer. Once the
+        // window has entered an output, later scale/size changes belong to the user.
+        if self.initial_scale_pending
+            && self.fatal_error.is_none()
+            && self
+                .window
+                .as_ref()
+                .is_some_and(|state| state.window.current_monitor().is_some())
+        {
+            self.initial_scale_pending = false;
+            self.start_initial_attachment();
+            self.refresh_client_view();
+        }
         let now = Instant::now();
         if let Some(notice) = self
             .link_opener
@@ -2895,6 +3007,46 @@ fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::Cl
     }
 }
 
+fn initial_window_size(
+    columns: Option<u16>,
+    rows: Option<u16>,
+    metrics: CellMetrics,
+    scale: f64,
+    snapshot: Option<&eon_workspace_protocol::v4::Snapshot>,
+) -> Result<PhysicalSize<u32>> {
+    let (horizontal, vertical) = snapshot.map_or((0.0, 0.0), |snapshot| {
+        WorkspaceScene::initial_overhead(snapshot, metrics)
+    });
+    let size = PhysicalSize::new(
+        columns.map_or((960.0 * scale).round() as u32, |columns| {
+            (f32::from(columns) * metrics.width + metrics.padding * 2.0 + horizontal).ceil() as u32
+        }),
+        rows.map_or((600.0 * scale).round() as u32, |rows| {
+            (f32::from(rows) * metrics.height + metrics.padding * 2.0 + vertical).ceil() as u32
+        }),
+    );
+    let limit = wgpu::Limits::default().max_texture_dimension_2d;
+    let workspace =
+        snapshot.map(|snapshot| WorkspaceScene::from_snapshot(snapshot, size, metrics, 0.0, 0.0));
+    let terminal = terminal_screen(workspace.as_ref(), size);
+    let admitted = surface_size(terminal, metrics);
+    if size.width > limit
+        || size.height > limit
+        || admitted.is_none_or(|actual| {
+            columns.is_some_and(|columns| columns != actual.cols)
+                || rows.is_some_and(|rows| rows != actual.rows)
+                || ((terminal.width as f32 - metrics.padding * 2.0) / metrics.width).floor()
+                    * ((terminal.height as f32 - metrics.padding * 2.0) / metrics.height).floor()
+                    > MAX_CELLS as f32
+        })
+    {
+        return Err(
+            "initial terminal dimensions exceed the native surface or Orbit grid limits".into(),
+        );
+    }
+    Ok(size)
+}
+
 fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<SurfaceSize> {
     if screen.width == 0
         || screen.height == 0
@@ -2940,6 +3092,9 @@ pub(super) fn run(arguments: LaunchArguments) -> Result {
     }
     let mut application = Application::new(arguments, event_loop.create_proxy());
     event_loop.run_app(&mut application)?;
+    if let Some(error) = application.fatal_error {
+        return Err(error.into());
+    }
     Ok(())
 }
 
@@ -2967,6 +3122,147 @@ mod tests {
     use super::*;
     use crate::launch;
     use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
+
+    #[test]
+    #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
+    fn native_initial_grid_survives_compositor_scale_admission() {
+        use winit::platform::wayland::EventLoopBuilderExtWayland;
+        struct Probe {
+            app: Application,
+            start: Instant,
+            checked: bool,
+        }
+        impl ApplicationHandler<UserEvent> for Probe {
+            fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+                self.app.resumed(event_loop);
+            }
+            fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+                self.app.user_event(event_loop, event);
+            }
+            fn window_event(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+                id: WindowId,
+                event: WindowEvent,
+            ) {
+                if self.app.initial_scale_pending {
+                    assert!(
+                        self.app.transport.is_none(),
+                        "attach only after native size admission"
+                    );
+                }
+                self.app.window_event(event_loop, id, event);
+            }
+            fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+                self.app.about_to_wait(event_loop);
+                if self.start.elapsed() < Duration::from_secs(2) {
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(
+                        self.start + Duration::from_secs(2),
+                    ));
+                    return;
+                }
+                assert!(
+                    !self.app.initial_scale_pending,
+                    "native scale admission completes"
+                );
+                let state = self
+                    .app
+                    .window
+                    .as_ref()
+                    .expect("the configured native window opens");
+                let size = surface_size(state.renderer.size(), state.renderer.metrics()).unwrap();
+                assert_eq!(
+                    (size.cols, size.rows),
+                    (100, 30),
+                    "scale {}",
+                    state.scale_factor
+                );
+                self.checked = true;
+                event_loop.exit();
+            }
+        }
+        let event_loop = EventLoop::<UserEvent>::with_user_event()
+            .with_wayland()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let arguments = launch::launch_arguments(
+            [
+                "--application-id",
+                "venus-typography-proof",
+                "--no-decorations",
+                "--font-size",
+                "20",
+                "--line-height",
+                "1.5",
+                "--columns",
+                "100",
+                "--rows",
+                "30",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .chain([std::env::temp_dir()
+                .join("venus-unavailable-typography.sock")
+                .into_os_string()]),
+            None,
+        )
+        .unwrap();
+        let mut probe = Probe {
+            app: Application::new(arguments, event_loop.create_proxy()),
+            start: Instant::now(),
+            checked: false,
+        };
+        event_loop.run_app(&mut probe).unwrap();
+        assert!(probe.checked);
+    }
+
+    #[test]
+    fn initial_grid_includes_workspace_chrome_at_each_scale() {
+        let mut snapshot = Snapshot {
+            active_tab: "t1".into(),
+            directory_picker: None,
+            tabs: vec![Tab {
+                id: "t1".into(),
+                directory: b"/tmp".to_vec(),
+                selected_pane: Some("p1".into()),
+                panes: (1..=3)
+                    .map(|i| Pane {
+                        id: format!("p{i}"),
+                        session: format!("s{i}"),
+                        endpoint: format!("/tmp/{i}.sock").into_bytes(),
+                        live: true,
+                    })
+                    .collect(),
+            }],
+        };
+        for picker in [false, true] {
+            if picker {
+                snapshot.directory_picker = Some(DirectoryPicker {
+                    tab: "t1".into(),
+                    endpoint: b"/tmp/picker.sock".to_vec(),
+                });
+            }
+            for scale in [1.0, 1.25, 1.5, 2.0] {
+                let metrics = CellMetrics::for_scale(scale);
+                for snapshot in [None, Some(&snapshot)] {
+                    let size =
+                        initial_window_size(Some(100), Some(30), metrics, scale, snapshot).unwrap();
+                    let workspace =
+                        snapshot.map(|s| WorkspaceScene::from_snapshot(s, size, metrics, 0.0, 0.0));
+                    let actual =
+                        surface_size(terminal_screen(workspace.as_ref(), size), metrics).unwrap();
+                    assert_eq!((actual.cols, actual.rows), (100, 30));
+                    let size =
+                        initial_window_size(None, Some(30), metrics, scale, snapshot).unwrap();
+                    assert_eq!(size.width, (960.0 * scale).round() as u32);
+                }
+            }
+        }
+        let metrics = CellMetrics::for_scale(1.0);
+        assert!(initial_window_size(Some(u16::MAX), Some(30), metrics, 1.0, None).is_err());
+        assert!(initial_window_size(Some(500), Some(300), metrics, 1.0, None).is_err());
+    }
 
     #[test]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
@@ -3403,7 +3699,21 @@ mod tests {
             .build()
             .unwrap();
         let mut app = Application::new(
-            launch::launch_arguments([orbit_socket.into_os_string()], None).unwrap(),
+            launch::launch_arguments(
+                [
+                    "--font-family",
+                    "DejaVu Sans Mono",
+                    "--font-size",
+                    "20",
+                    "--line-height",
+                    "1.5",
+                ]
+                .into_iter()
+                .map(OsString::from)
+                .chain([orbit_socket.into_os_string()]),
+                None,
+            )
+            .unwrap(),
             event_loop.create_proxy(),
         );
         app.workspace_model
