@@ -61,10 +61,14 @@ retains accepted user-visible chronology.
   Present and EOF shutdown pass. The final native grid is checked before Ready.
   Reproduction inputs and observations are retained under
   `~/.local/state/eon/proofs/ven-c19-ec80e36625dec73544c0cb64becf4b135c932a63/`.
-  This accepts the child startup boundary; composed Nix/installed Eon acceptance
-  remains with `eon-terminal-typography-geometry-config-b63`. Earlier typography,
-  input, accessibility, fractional-scale and compositor evidence stays scoped
-  to its recorded identities and observations below.
+  Eon `b693a877cd4d630fe15aabf852de4e978fc166dc` accepts the exact Nix artifact
+  `/nix/store/37v7m8kb88fgs4lgwk7ajcbf9hjb8pn7-yazelix-venus-0.1.0` through
+  both refreshed product profiles. Installed configured initial/reopened grids,
+  missing-font rejection before commands, native input, exact selection/copy,
+  IME preedit/commit and accessible text/bounds pass. Eon's EON-C19 index owns
+  exact artifacts, scale observations and unchanged Orbit/command identities.
+  Earlier typography, fractional-scale, compositor and other partial evidence
+  remains qualified by its recorded identities and observations below.
 - **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1` (startup correction).
   Locked fmt/check/test/clippy and Nix package checks pass: 118 ordinary tests
   and five native regressions. Initial explicit-grid and font-only startup
@@ -225,7 +229,7 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
   owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1`
+- **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
@@ -263,7 +267,7 @@ qualified by the identities and boundaries below.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces.
-- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1`
+- **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** Accepted deterministic host coverage plus retained native
@@ -333,7 +337,7 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
-- **Proof:** `1b32e5ba7105d14f654136578a65c97a25b53fc1`
+- **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux deterministic host coverage with retained
