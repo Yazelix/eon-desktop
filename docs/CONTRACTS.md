@@ -8,7 +8,7 @@ retains accepted user-visible chronology.
 
 ## VEN-C19 — Startup typography and terminal geometry
 
-- **Status:** Candidate
+- **Status:** Proved
 - **Consumer:** One direct or caller-launched Venus surface.
 - **Trigger:** Optional `--font-family`, repeatable `--font-fallback`,
   `--font-size`, `--line-height`, `--columns`, and `--rows` startup options.
@@ -42,10 +42,39 @@ retains accepted user-visible chronology.
 - **Compatibility order:** Prove Venus first with unchanged defaults and wire
   contracts, then let the separate Eon configuration issue consume that exact
   accepted source for Eon and EonTerm.
-- **Open proof:** Bounds and actual fallback selection; shared geometry and
-  native default/configured rendering at 1, 1.25, 1.5 and 2 scale; standalone
-  and workspace interaction. Existing fractional/compositor proof gaps remain
-  qualified until exercised by this candidate.
+- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`; x86_64 Linux, isolated Sway 1.12,
+  Mesa 26.1.1 lavapipe, DejaVu Sans Mono and Symbols Nerd Font Mono.
+  - Locked fmt/check/test/clippy passed: 118 ordinary tests. All three ignored
+    native tests passed, including configured live-output input/selection and
+    fractional initial grid admission before attachment. Nix package tests pass.
+  - Default and configured (20 px, 1.5 line height) standalone, plus configured
+    three-pane and picker surfaces, produced exactly 100 by 30 in a real Orbit
+    PTY at 1, 1.25, 1.5 and 2 scale. Latin, Unicode, wide/combining text,
+    regular/bold/italic, Nerd symbols, Braille, boxes and cursor were inspected.
+  - Missing primary/fallback, proportional primary, NaN and physical native-size
+    overflow exited nonzero without any connection to the observed Orbit socket.
+    A later manual resize and scale change retained the user-selected geometry.
+  - Nix artifact `/nix/store/yc8w1y1q4g8m4wwbhvl749pkpa1vcnim-yazelix-venus-0.1.0`
+    passed configured picker dogfood at 1.25 scale: native drag and exact copy
+    of `Regular`, Wayland IME preedit `é界` and exact commit `ime-é界`, and
+    AT-SPI text with terminal bounds `[15, 105, 1530, 1170]`, matching the
+    physical 15 by 38 grid, padding and picker inset. IME cursor requests use
+    the corresponding logical coordinates; the preedit capture was inspected.
+  - **Downstream acceptance:** Eon `0461737272447fa976d13bd3376c8a894cebf324`
+    consumes this exact source. Both installed profiles match their builds and
+    pass isolated native default-geometry/input observations; Eon’s contract
+    index owns the exact artifacts. Persistent typography configuration remains
+    its separate issue.
+  - Reproduction inputs, observations, captures and costly Nix log are retained
+    under `~/.local/state/eon/proofs/ven-c19-9157f7fbed0318d94a0697c01a23de2bed86946a/`.
+- **Limits:** This proves the named typography/geometry slice on Sway; it does
+  not widen earlier fractional/HiDPI, VEN-C8, VEN-C18 or compositor coverage.
+  The pinned winit destroys text input when a seat capability disappears;
+  native IME proof uses a stable keyboard/pointer seat. That pre-existing
+  hot-unplug limitation is outside this typography change.
+
+This source advances `VEN-C1`, `VEN-C2` and `VEN-C4` for the startup slice above.
+Their distinct earlier proof identities and remaining limits stay qualified.
 
 ## Status
 
@@ -155,7 +184,9 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
   owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
+- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`
+  - **Startup slice:** Exact typography, geometry and failure evidence is
+    indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
     evidence from the accepted presentation lineage
   - **Evidence:**
@@ -191,7 +222,9 @@ qualified by the identities and boundaries below.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces.
-- **Proof:** `cf3a9169f2cd95d42c689134a52d51d9147ff37c`
+- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`
+  - **Startup slice:** Exact typography, geometry and failure evidence is
+    indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** Accepted deterministic host coverage plus retained native
     geometry and input evidence
   - **Evidence:** Native Application input-between-frames regression;
@@ -259,7 +292,9 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
-- **Proof:** `d1223463b2b513c04242df50a4bd948d0533cfde`
+- **Proof:** `9157f7fbed0318d94a0697c01a23de2bed86946a`
+  - **Startup slice:** Exact typography, geometry and failure evidence is
+    indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux deterministic host coverage with retained
     native title and supervised-loss evidence
   - **Evidence:** First-renderer-error retention, best-effort diagnostics,

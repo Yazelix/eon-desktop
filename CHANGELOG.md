@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accept startup font family, ordered fallback families, font size, line height,
+  and initial columns/rows through VEN-C19. Preserve defaults, share one physical
+  cell grid, include workspace/picker overhead, and reject invalid settings or
+  impossible native sizing before terminal attachment.
+
 - Capture unidentified native keys during hyperlink inspection, including their
   repeats and releases after dismissal, so inspection cannot leak typing to Orbit.
 
