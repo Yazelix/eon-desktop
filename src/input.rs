@@ -28,7 +28,7 @@ pub struct InputState {
     selection_position: Option<SelectionPosition>,
     copy_pressed: bool,
     paste_shortcuts: Vec<WinitPhysicalKey>,
-    host_shortcuts: Vec<KeyCode>,
+    host_shortcuts: Vec<WinitPhysicalKey>,
 }
 
 impl InputState {
@@ -91,11 +91,7 @@ impl InputState {
         if std::mem::take(&mut self.copy_pressed) {
             retired.push(WinitPhysicalKey::Code(KeyCode::KeyC));
         }
-        retired.extend(
-            std::mem::take(&mut self.host_shortcuts)
-                .into_iter()
-                .map(WinitPhysicalKey::Code),
-        );
+        retired.append(&mut self.host_shortcuts);
         self.retired_keys.extend(retired);
         self.pressed_buttons.clear();
         self.reset_scroll();
@@ -448,7 +444,7 @@ impl InputState {
 
     pub fn consumes_host_shortcut(
         &mut self,
-        key: KeyCode,
+        key: WinitPhysicalKey,
         state: ElementState,
         repeat: bool,
         recognized: bool,
@@ -856,7 +852,12 @@ mod tests {
             Pressed,
             false
         ));
-        assert!(input.consumes_host_shortcut(KeyCode::KeyH, Pressed, false, true));
+        assert!(input.consumes_host_shortcut(
+            WinitPhysicalKey::Code(KeyCode::KeyH),
+            Pressed,
+            false,
+            true
+        ));
 
         assert_eq!(
             input.terminal_focus(false),
@@ -1224,7 +1225,7 @@ mod tests {
 
         let mut input = InputState::default();
         let mut shortcut = |key, state, repeat, recognized| {
-            input.consumes_host_shortcut(key, state, repeat, recognized)
+            input.consumes_host_shortcut(WinitPhysicalKey::Code(key), state, repeat, recognized)
         };
         assert!(!shortcut(KeyH, Pressed, true, true));
         assert!(shortcut(KeyH, Pressed, false, true));

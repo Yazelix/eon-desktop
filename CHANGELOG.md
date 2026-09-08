@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Capture unidentified native keys during hyperlink inspection, including their
+  repeats and releases after dismissal, so inspection cannot leak typing to Orbit.
+
 - Inspect explicit OSC 8 targets through hover or Ctrl+Shift+O; traverse with
   Tab/Shift+Tab, page with Left/Right, copy with Ctrl+Shift+C, and open HTTP/HTTPS
   with Enter or Ctrl+Shift+click. Preserve ordinary terminal mouse behavior,

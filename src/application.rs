@@ -1106,7 +1106,7 @@ impl Application {
             && self.workspace_focus != WorkspaceFocus::Terminal
             && code == KeyCode::Escape;
         if self.input.consumes_host_shortcut(
-            code,
+            event.physical_key,
             event.state,
             event.repeat,
             shortcut.as_ref().is_some_and(|action| {
@@ -1463,27 +1463,25 @@ impl Application {
         })
     }
 
-    fn handle_link_key(&mut self, event: &winit::event::KeyEvent) -> bool {
-        let PhysicalKey::Code(code) = event.physical_key else {
-            return false;
-        };
+    fn handle_link_key(&mut self, key: PhysicalKey, state: ElementState, repeat: bool) -> bool {
         let modifiers = self.input.modifiers();
-        let inspect = code == KeyCode::KeyO
+        let inspect = key == PhysicalKey::Code(KeyCode::KeyO)
             && modifiers == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
             && self.workspace_focus == WorkspaceFocus::Terminal
             && !self.workspace_model.directory_picker_visible()
             && !self.input.pointer_busy();
-        if !self.input.consumes_host_shortcut(
-            code,
-            event.state,
-            event.repeat,
-            inspect || self.links.keyboard,
-        ) {
+        if !self
+            .input
+            .consumes_host_shortcut(key, state, repeat, inspect || self.links.keyboard)
+        {
             return false;
         }
-        if !shortcut_is_ready(event.state, event.repeat) {
+        if !shortcut_is_ready(state, repeat) {
             return true;
         }
+        let PhysicalKey::Code(code) = key else {
+            return true;
+        };
         if code == KeyCode::Escape {
             self.links.keyboard = false;
             self.links.focus = None;
@@ -2102,7 +2100,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 if self
                     .input
                     .suppresses_retired_key(event.physical_key, event.state, event.repeat)
-                    || self.handle_link_key(&event)
+                    || self.handle_link_key(event.physical_key, event.state, event.repeat)
                     || self.handle_workspace_key(&event)
                 {
                 } else if self.input.consumes_paste_shortcut(
@@ -3311,6 +3309,36 @@ mod tests {
                 );
                 app.render();
                 assert_eq!(app.focused_link().unwrap().uri, "https://example.com/7");
+                let unknown = PhysicalKey::Unidentified(winit::keyboard::NativeKeyCode::Xkb(240));
+                app.input.set_modifiers(
+                    winit::keyboard::ModifiersState::CONTROL
+                        | winit::keyboard::ModifiersState::SHIFT,
+                );
+                assert!(app.handle_link_key(
+                    PhysicalKey::Code(KeyCode::KeyO),
+                    ElementState::Pressed,
+                    false
+                ));
+                assert!(app.links.keyboard);
+                assert!(
+                    app.handle_link_key(unknown, ElementState::Pressed, false),
+                    "inspection must capture unidentified native keys"
+                );
+                assert!(app.handle_link_key(
+                    PhysicalKey::Code(KeyCode::Escape),
+                    ElementState::Pressed,
+                    false
+                ));
+                assert!(!app.links.keyboard);
+                assert!(
+                    app.handle_link_key(unknown, ElementState::Pressed, true),
+                    "captured repeats remain captured after dismissal"
+                );
+                assert!(app.handle_link_key(unknown, ElementState::Released, false));
+                assert!(
+                    !app.handle_link_key(unknown, ElementState::Pressed, false),
+                    "fresh keys return to terminal routing"
+                );
                 app.set_orbit_attachment(b"replacement".to_vec(), false);
                 assert_eq!(app.presented_revision(), None);
                 assert!(app.pointer_link().is_none());
