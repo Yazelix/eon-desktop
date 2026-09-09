@@ -243,6 +243,10 @@ fn header_heights(metrics: CellMetrics) -> (f32, f32) {
     )
 }
 
+fn stack_bottom_margin(metrics: CellMetrics) -> f32 {
+    metrics.padding / 3.0
+}
+
 impl WorkspaceScene {
     /// Extra pixels around an initially requested terminal grid.
     #[must_use]
@@ -258,7 +262,7 @@ impl WorkspaceScene {
                 .expect("EONW validates the active tab");
             (
                 0.0,
-                tab_height + pane_height * tab.panes.len() as f32 + metrics.padding,
+                tab_height + pane_height * tab.panes.len() as f32 + stack_bottom_margin(metrics),
             )
         }
     }
@@ -390,7 +394,7 @@ impl WorkspaceScene {
         }
 
         let pane_viewport = SceneRect {
-            height: (pane_viewport.height - metrics.padding).max(0.0),
+            height: (pane_viewport.height - stack_bottom_margin(metrics)).max(0.0),
             ..pane_viewport
         };
         let active = &snapshot.tabs[active_tab];

@@ -1144,6 +1144,15 @@ impl Renderer {
         let mut cursor_vertex_boundary = 0;
         if let Some(workspace) = workspace {
             self.clear = wgpu::Color::TRANSPARENT;
+            let background = scene.map_or(DEFAULT_BACKGROUND, |scene| scene.background);
+            rectangles.push(
+                0.0,
+                workspace.pane_viewport.bottom(),
+                self.config.width as f32,
+                self.config.height as f32 - workspace.pane_viewport.bottom(),
+                background,
+                self.background_opacity,
+            );
             self.build_workspace(workspace, workspace_focus, &mut rectangles);
             if let Some(terminal) = workspace.visible_terminal() {
                 rectangles.push(
@@ -1151,7 +1160,7 @@ impl Renderer {
                     terminal.top,
                     terminal.width,
                     terminal.height,
-                    scene.map_or(DEFAULT_BACKGROUND, |scene| scene.background),
+                    background,
                     self.background_opacity,
                 );
                 if let Some(scene) = scene {
@@ -1569,11 +1578,10 @@ impl Renderer {
                 DEFAULT_BACKGROUND,
                 1.0,
             );
-            let header = pane_chrome_rect(pane.rect, self.metrics);
-            rectangles.clip = Some(workspace.pane_viewport);
+            rectangles.clip = Some(rect);
             if pane.selected || self.header_hovered(WorkspaceFocus::Panes, &pane.id) {
                 rectangles.push_rounded(
-                    header,
+                    pane_chrome_rect(workspace.pane_viewport, self.metrics),
                     self.metrics.padding,
                     if pane.selected { selected } else { idle },
                 );

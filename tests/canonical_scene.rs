@@ -92,7 +92,8 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     );
     assert_eq!(scene.panes.iter().filter(|pane| pane.selected).count(), 1);
     assert_eq!(scene.pane_scroll_limit(), 0.0);
-    assert!(size.height as f32 - scene.pane_viewport.bottom() >= metrics.padding);
+    let bottom_margin = size.height as f32 - scene.pane_viewport.bottom();
+    assert!(bottom_margin > 0.0 && bottom_margin <= metrics.padding / 2.0);
     assert_eq!(
         scene.hit_test(10.0, size.height as f32 - 1.0),
         None,

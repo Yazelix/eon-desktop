@@ -15,8 +15,9 @@ directory. Pill-shaped tabs fit their labels, with middle ellipsis for long name
 and full launch-path previews on hover. Selected tabs use a brighter fill and
 label without an underline; keyboard tab focus adds a rounded outline.
 Pane headers use quiet backgrounds and a lighter selected fill and label. One
-rounded frame connects the pane stack, with full-width separators and bottom
-padding; hover highlights a header and keyboard focus adds a rounded accent outline.
+rounded frame connects the pane stack, with full-width separators and a small
+bottom gap sharing the terminal background. Selection and hover fills follow the
+stack corners; keyboard focus adds a rounded accent outline.
 Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
@@ -337,13 +338,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 349 |
+| README | 350 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,458 |
+| Contracts and references | 1,467 |
 | Memory benchmark report | 158 |
 | Crate decisions | 258 |
-| Changelog | 221 |
-| Rust source, including unit tests | 16,010 |
-| Rust integration tests | 944 |
+| Changelog | 222 |
+| Rust source, including unit tests | 16,022 |
+| Rust integration tests | 945 |
 | Cargo manifest | 24 |
-| **Total** | **19,636** |
+| **Total** | **19,660** |

@@ -473,8 +473,11 @@ qualified by the identities and boundaries below.
     does not rename or resize tabs.
   - Every visible live pane endpoint has one bounded read-only metadata observer.
   - Pane frames connect the visible accordion within one thin rounded outer
-    border, with horizontal separators reaching its sides and a padding-sized
-    gap below the stack. Separators follow the rounded corners during scrolling;
+    border, with horizontal separators reaching its sides and a small gap below
+    the stack (4 logical pixels at default typography). The gap shares terminal
+    background color/opacity and the surface-wide blur request. Selected and
+    hovered header fills follow the stack's corners, with square internal edges.
+    Separators follow the rounded corners during scrolling;
     the shared border stays fixed while overflowing headers scroll within it.
     `--pane-frames true|false` defaults to `true`; `false` removes the shared
     border and separators while retaining headers, a lighter selected fill,

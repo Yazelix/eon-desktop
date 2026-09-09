@@ -34,9 +34,15 @@ The existing Scene viewport/header/body bounds, 1.5-cell header height and paddi
 retain grid sizing, hit targets and AccessKit ownership. A shared rounded outline
 and full-width separators connect the stack without filling the terminal interior;
 one-pixel clips of the existing rounded fill keep separators inside its corners.
-Scene reserves bottom padding and includes it in initial grid overhead. The
-selected header reuses the existing selected fill from Venus `8211e8f`; header
-hover and focus paths suffice. Another shader, dependency, layout model, geometry setting
+Scene reserves a small bottom margin and includes it in initial grid overhead.
+Selected and hovered header bands clip the same shared rounded shape, avoiding
+pill ends inside the stack. The gap uses the existing terminal background and
+opacity. Pinned winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, Wayland
+`window/state.rs::set_blur`, already requests blur over the entire surface; its
+`types/bgr_effects.rs` routes compositor support. An alpha-zero gap on a black
+proof background hid the missing paint, so the regression uses a colored underlay.
+This proves pixel coverage and alpha, not blur on a blur-capable compositor.
+The existing selected palette, header hover and focus paths suffice. Another shader, dependency, layout model, geometry setting
 or persistent Venus configuration is rejected. Strict launch admission,
 unpainted stroke interiors/corners, clipped bounds and isolated native
 default/off interaction are the falsifiers. Eon delivery remains separate.
