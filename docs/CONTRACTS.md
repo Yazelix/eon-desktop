@@ -519,14 +519,14 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
-  - Rounded pane frames and their startup option are implemented and dogfooded
-    in the uncommitted `ven-pane-stack-chrome-suu` candidate over `1b69ef4`.
-    Locked Rust checks pass (123 ordinary tests), plus two existing native
-    regressions and private scale-1 Sway default/on/off, focus, overflow and
-    picker observations. Exact hashes and qualification are retained in
+  - Rounded pane frames and their startup option are accepted at source
+    `bc3a01e0cae503429ab513e81fe2c95ea516b949` (`ven-pane-stack-chrome-suu`).
+    Checks pass: locked Rust (123 ordinary tests), native header/input and Sway
+    scale-1 default/on/off, focus, overflow and picker observations. Rapid changes
+    resize retained PTYs correctly. Exact hashes and qualifications are in
     `~/.local/state/eon/proofs/ven-pane-stack-chrome-suu-2026-09-09/REPORT.md`.
-    Accepted-source publication and installed Eon delivery remain pending;
-    `eon-pane-stack-delivery-jfo` owns the latter. Earlier proofs below do not
+    Installed Eon delivery remains pending in `eon-pane-stack-delivery-jfo`.
+    Source acceptance covers the recorded native boundary; earlier proofs do not
     cover this change or widen its scale/compositor/accessibility evidence.
   - Pill-shaped corners without a selection underline are accepted at source
     `8211e8f773140429398154ca3f2230bd09fed1df`
