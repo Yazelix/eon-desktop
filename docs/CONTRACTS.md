@@ -519,6 +519,14 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Pane-frame review is accepted at source
+    `5c23b0fe206fb2ed9e027603ae61ba366913cbe1`. Selected offline labels stay
+    distinct with frames off; rounded fills and outlines share edge coverage.
+    Locked Rust checks (123 ordinary tests) and the native renderer regression
+    pass. Eight scale-1 Sway captures match the prior live-pane appearance
+    pixel-for-pixel in both modes. Offline selection has native renderer-fixture
+    red/green proof; it is not an installed Eon offline-lifecycle claim. Evidence:
+    `~/.local/state/eon/proofs/ven-pane-stack-chrome-suu-review-2026-09-09/REPORT.md`.
   - Rounded pane frames and their startup option are accepted at source
     `bc3a01e0cae503429ab513e81fe2c95ea516b949` (`ven-pane-stack-chrome-suu`).
     Checks pass: locked Rust (123 ordinary tests), native header/input and Sway
