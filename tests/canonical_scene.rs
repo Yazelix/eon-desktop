@@ -55,11 +55,31 @@ fn scrollback_label_follows_only_current_authoritative_frames()
         }),
     )?;
     assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    model.clear_viewport_preview();
+    assert!(model.scroll_preview().is_none());
     apply_wire(
         &mut model,
         ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { requested_rows: -3 }),
     )?;
     assert_eq!(model.scrollback_label(), None);
+    model.clear_viewport_preview();
+    assert_eq!(
+        model.scrollback_label(),
+        None,
+        "idle cleanup must keep routing evidence"
+    );
+    apply_wire(
+        &mut model,
+        ServerMessage::Failure(Failure {
+            code: FailureCode::InvalidInput,
+            detail: "rejected input".into(),
+        }),
+    )?;
+    assert_eq!(
+        model.scrollback_label(),
+        None,
+        "input rejection is not a new frame"
+    );
     held.revision = 9;
     apply_wire(&mut model, ServerMessage::Frame(Box::new(held.clone())))?;
     assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
@@ -499,7 +519,10 @@ fn canonical_scroll_outcomes_reuse_the_existing_result_and_frame_owners() {
             detail: "stale scroll".into(),
         }))
         .unwrap();
-    assert!(model.scroll_preview().is_none());
+    assert!(matches!(
+        model.scroll_preview(),
+        Some(ScenePreview::TerminalOwned { .. })
+    ));
     assert_eq!(model.scene().unwrap().revision, 1);
 }
 

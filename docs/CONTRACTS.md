@@ -368,7 +368,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proved
+- **Status:** Partially proved — review corrections await exact source acceptance.
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -376,10 +376,13 @@ qualified by the identities and boundaries below.
   - While away from live output, Venus displays `↑ N rows` (`↑ 1 row` for one)
     from the accepted frame's authoritative wrapped display-row distance. Live
     bottom, alternate screen, recovery and known terminal-owned routing hide it.
+    Idle preview cleanup and rejected input preserve routing evidence until a
+    fresh frame or preview replaces it.
     Preview movement never changes the count; accessibility exposes committed
     position as a description rather than an alert. The selected pane header
-    reserves space for the count. Standalone and picker terminals use a small
-    top-right overlay that preserves grid dimensions and yields to selection,
+    reserves space for the count and fits its directory label into the remaining
+    width using the existing cluster-safe header fitter. Standalone and picker
+    terminals use a small top-right overlay that preserves grid dimensions and yields to selection,
     links, notices, picker tab previews and an overlapping terminal cursor.
     Pending reflow hides the old count;
     labels that cannot fit in full remain accessible without clipped digits.

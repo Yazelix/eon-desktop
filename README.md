@@ -275,7 +275,8 @@ require fresh presentation.
 
 While scrolled, `↑ N rows` shows the last committed viewport's wrapped display
 rows above live output (`↑ 1 row` for one). The selected pane header reserves
-space for it. Standalone and picker terminals use a small top-right overlay
+space for it, preserving the directory ending when the label needs shortening.
+Standalone and picker terminals use a small top-right overlay
 without resizing the grid; it yields to selection, link inspection, notices,
 picker tab previews, and an overlapping terminal cursor. Live bottom, alternate screen, recovery, pending reflow,
 and known terminal-owned scrolling hide it. Fractional preview movement never
@@ -349,13 +350,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 361 |
+| README | 362 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,548 |
+| Contracts and references | 1,551 |
 | Memory benchmark report | 158 |
 | Crate decisions | 261 |
 | Changelog | 228 |
-| Rust source, including unit tests | 16,324 |
-| Rust integration tests | 1,013 |
+| Rust source, including unit tests | 16,370 |
+| Rust integration tests | 1,036 |
 | Cargo manifest | 24 |
-| **Total** | **20,131** |
+| **Total** | **20,204** |

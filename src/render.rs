@@ -700,7 +700,7 @@ impl Renderer {
             - self.metrics.padding * 2.0)
             .max(0.0)
             .floor();
-        fit_tab_text(&mut self.fonts.font_system, self.metrics, label, width)
+        fit_header_text(&mut self.fonts.font_system, self.metrics, label, width)
     }
 
     pub fn set_hyperlink(&mut self, hyperlink: Option<(u16, u16)>) {
@@ -1635,12 +1635,22 @@ impl Renderer {
             } else {
                 0.0
             };
+            let width = pane.rect.width - self.metrics.padding * 2.0 - scrollback_width;
+            let label = (scrollback_width > 0.0).then(|| {
+                fit_header_text(
+                    &mut self.fonts.font_system,
+                    self.metrics,
+                    pane.label(),
+                    width,
+                )
+                .0
+            });
             self.push_text_clipped(
-                pane.label(),
+                label.as_deref().unwrap_or(pane.label()),
                 pane.rect.left + self.metrics.padding,
                 pane.rect.top + (pane.rect.height - self.metrics.height) / 2.0,
-                pane.rect.width - self.metrics.padding * 2.0 - scrollback_width,
-                pane.rect.width - self.metrics.padding * 2.0 - scrollback_width,
+                width,
+                width,
                 self.metrics.height,
                 if pane.selected {
                     SceneColor {
@@ -1679,7 +1689,7 @@ impl Renderer {
             return 0.0;
         };
         let padding = self.metrics.padding;
-        let width = fit_tab_text(
+        let width = fit_header_text(
             &mut self.fonts.font_system,
             self.metrics,
             &label,
@@ -2372,7 +2382,7 @@ fn shaping(text: &str) -> Shaping {
     }
 }
 
-fn fit_tab_text(
+fn fit_header_text(
     fonts: &mut FontSystem,
     metrics: CellMetrics,
     text: &str,
@@ -3198,29 +3208,30 @@ mod tests {
                 - metrics.padding * 2.0)
                 .floor();
             for label in ["1  eon", "2  machine_vs_aliens"] {
-                let fitted = fit_tab_text(&mut fonts, metrics, label, available);
+                let fitted = fit_header_text(&mut fonts, metrics, label, available);
                 assert_eq!(fitted.0, label);
                 assert!(fitted.1 > 0.0 && fitted.1 <= available);
             }
             let label = format!("3  {}", "e\u{301}".repeat(80));
-            let (fitted, measured) = fit_tab_text(&mut fonts, metrics, &label, available);
+            let (fitted, measured) = fit_header_text(&mut fonts, metrics, &label, available);
             assert!(measured <= available);
             let (head, tail) = fitted.split_once('…').expect("long label must elide");
             assert!(head.starts_with("3  ") && head.ends_with('\u{301}'));
             assert!(tail.starts_with('e') && tail.ends_with('\u{301}'));
             assert!(label.starts_with(head) && label.ends_with(tail));
-            let exact = fit_tab_text(&mut fonts, metrics, &fitted, f32::INFINITY);
+            let exact = fit_header_text(&mut fonts, metrics, &fitted, f32::INFINITY);
             assert!((exact.1 - measured).abs() < 0.01);
 
-            let identity_width = fit_tab_text(&mut fonts, metrics, "64", f32::INFINITY).1;
-            let fitted = fit_tab_text(&mut fonts, metrics, "64  machine_vs_aliens", identity_width);
+            let identity_width = fit_header_text(&mut fonts, metrics, "64", f32::INFINITY).1;
+            let fitted =
+                fit_header_text(&mut fonts, metrics, "64  machine_vs_aliens", identity_width);
             assert_eq!(
                 fitted.0, "64",
                 "keep a fitting identity when the name cannot fit"
             );
             assert!(fitted.1 <= identity_width);
             assert_eq!(
-                fit_tab_text(&mut fonts, metrics, "64  eon", 0.0),
+                fit_header_text(&mut fonts, metrics, "64  eon", 0.0),
                 (String::new(), 0.0)
             );
         }
@@ -3374,6 +3385,19 @@ mod tests {
                     1,
                 );
                 assert!(renderer.text[1].buffer.layout_runs().count() > 1);
+                snapshot.tabs[1].panes[0].live = true;
+                let metadata = crate::scene::PaneMetadata::Available {
+                    working_directory: format!("/{}mountain/leaf", "W".repeat(46)),
+                };
+                let workspace = WorkspaceScene::from_snapshot_with_metadata(
+                    &snapshot,
+                    PhysicalSize::new(900, 600),
+                    renderer.metrics(),
+                    0.0,
+                    0.0,
+                    |_| Some(&metadata),
+                    |_, label| renderer.fit_tab_text(label),
+                );
                 renderer.set_scrollback_label(Some("↑ 240 rows".into()));
                 renderer.rebuild_if_needed(
                     None,
@@ -3392,14 +3416,30 @@ mod tests {
                     .find(|text| text.buffer.lines[0].text() == "↑ 240 rows")
                     .unwrap();
                 let pane = workspace.panes.iter().find(|pane| pane.selected).unwrap();
+                assert!(
+                    fit_header_text(
+                        &mut renderer.fonts.font_system,
+                        renderer.metrics,
+                        pane.label(),
+                        f32::INFINITY
+                    )
+                    .1 <= pane.rect.width - renderer.metrics.padding * 2.0,
+                    "the label fits before reserving the scrollback count"
+                );
                 assert!(indicator.top >= pane.rect.top);
                 assert!(indicator.bottom as f32 <= pane.rect.bottom());
                 let pane_text = renderer
                     .text
                     .iter()
-                    .find(|text| text.buffer.lines[0].text() == pane.label())
+                    .find(|text| text.buffer.lines[0].text().starts_with("p2  "))
                     .unwrap();
                 assert!(pane_text.right <= indicator.bound_left);
+                let line = pane_text.buffer.layout_runs().next().unwrap();
+                assert!(line.text.ends_with("/leaf"));
+                assert!(
+                    line.line_w <= (pane_text.right - pane_text.bound_left) as f32,
+                    "the scrollback count clips the directory leaf"
+                );
                 renderer.set_scrollback_label(None);
                 assert!(renderer.rebuild_if_needed(
                     None,

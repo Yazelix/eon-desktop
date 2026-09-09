@@ -209,8 +209,11 @@ impl SessionModel {
         self.scroll_preview.as_ref()
     }
 
-    pub fn clear_scroll_preview(&mut self) {
-        self.scroll_preview = None;
+    /// Release preview rows while keeping routing evidence until the next frame.
+    pub fn clear_viewport_preview(&mut self) {
+        if matches!(self.scroll_preview, Some(ScenePreview::Viewport { .. })) {
+            self.scroll_preview = None;
+        }
     }
 
     #[must_use]
@@ -323,7 +326,7 @@ impl SessionModel {
                 self.clear_orbit_notice();
             }
             ServerMessage::Failure(failure) if connecting || attached => {
-                self.scroll_preview = None;
+                self.clear_viewport_preview();
                 let label = match failure.code {
                     FailureCode::InvalidInput => "rejected input",
                     FailureCode::Protocol => "protocol failure",

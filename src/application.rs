@@ -879,7 +879,7 @@ impl Application {
             self.terminal_scroll.reset();
         }
         if !self.terminal_scroll.active() {
-            self.model.clear_scroll_preview();
+            self.model.clear_viewport_preview();
         }
     }
 
@@ -910,10 +910,13 @@ impl Application {
         ))
     }
 
-    fn scrollback_label(&self) -> Option<String> {
+    fn scrollback_label(&self, workspace: Option<&WorkspaceScene>) -> Option<String> {
         let state = self.window.as_ref()?;
         let scene = self.model.scene()?;
-        let size = surface_size(self.terminal_size()?, state.renderer.metrics())?;
+        let size = surface_size(
+            terminal_screen(workspace, state.renderer.size()),
+            state.renderer.metrics(),
+        )?;
         if scene.columns != size.cols || scene.rows != size.rows {
             return None;
         }
@@ -1704,8 +1707,8 @@ impl Application {
             }
         }
         let status = self.status();
-        let scrollback_label = self.scrollback_label();
         let workspace = self.workspace_scene();
+        let scrollback_label = self.scrollback_label(workspace.as_ref());
         let workspace_focus = effective_workspace_focus(
             self.workspace_model.directory_picker_visible(),
             self.workspace_focus,
@@ -2038,7 +2041,7 @@ impl Application {
             )
         });
         let kinetic_active = self.terminal_scroll.velocity != 0.0;
-        let scrollback_label = self.scrollback_label().filter(|_| {
+        let scrollback_label = self.scrollback_label(workspace.as_ref()).filter(|_| {
             workspace
                 .as_ref()
                 .is_some_and(|workspace| !workspace.directory_picker())
