@@ -454,7 +454,7 @@ qualified by the identities and boundaries below.
     active tab around exactly one expanded pane. Each tab shows its numeric
     `tN` prefix plus the leaf, `~`, or `/` derived from Eon's authoritative
     launch directory.
-  - Tabs have rounded corners and separated hit targets. Width follows shaped
+  - Tabs have pill-shaped corners and separated hit targets. Width follows shaped
     label text plus padding, capped near 280 logical pixels at default
     typography. Long labels use a cluster-safe middle ellipsis; when even that
     cannot fit, preserve the numeric identity whenever it fits. Overflow stays
@@ -462,7 +462,9 @@ qualified by the identities and boundaries below.
     selection reveals the active tab. Hover shows
     its control-sanitized launch path within available window space; the
     accessible name retains that path. Selection and keyboard focus remain
-    distinct. Pane shell navigation does not rename or resize tabs.
+    distinct: selected fill and brighter text identify the active tab without
+    an underline; keyboard focus adds a rounded outline. Pane shell navigation
+    does not rename or resize tabs.
   - Every visible live pane endpoint has one bounded read-only metadata observer.
   - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
     and one compact working-directory label.
@@ -508,6 +510,16 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Pill-shaped corners without a selection underline are a dogfooded candidate
+    over `e1eb99dd4fa2daea942b4b06af37f36a331a7b4d`
+    (`ven-pill-workspace-tabs-rg4`). Locked Rust checks pass, including 121
+    ordinary tests. Private Sway 1.12/Vulkan at scale 1 shows selected/idle tabs,
+    rounded focus, hover paths, overflow scrolling and narrow clipping.
+    Exact source/binary hashes, captures and cleanup are retained in
+    `~/.local/state/eon/proofs/ven-pill-workspace-tabs-rg4/REPORT.md`.
+    This substituted debug-child check does not update installed Eon or extend
+    fractional-scale, compositor or accessibility proof. Source acceptance awaits
+    a commit; prior rounded-tab evidence remains scoped to its source below.
   - Rounded adaptive tabs and hover paths are accepted at source
     `f5c679443b2fbda1a7a8f91c98d312811bee2cdf`
     (`ven-rounded-adaptive-tabs-vdf`). Retained evidence is in

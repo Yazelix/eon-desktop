@@ -1442,7 +1442,7 @@ impl Renderer {
             if tab.rect.intersection(workspace.tab_viewport).is_none() {
                 continue;
             }
-            let radius = self.metrics.padding / 2.0;
+            let radius = tab.rect.height / 2.0;
             let fill = if tab.selected {
                 selected
             } else if self.hovered_tab.as_deref() == Some(&tab.id) {
@@ -1455,27 +1455,17 @@ impl Renderer {
                 idle
             };
             rectangles.push_rounded(tab.rect, radius, fill);
-            if tab.selected {
-                if focus == WorkspaceFocus::Tabs {
-                    rectangles.push_rounded(tab.rect, radius, accent);
-                    rectangles.push_rounded(
-                        SceneRect {
-                            left: tab.rect.left + 1.0,
-                            top: tab.rect.top + 1.0,
-                            width: tab.rect.width - 2.0,
-                            height: tab.rect.height - 2.0,
-                        },
-                        radius - 1.0,
-                        fill,
-                    );
-                }
-                rectangles.push(
-                    tab.rect.left + radius,
-                    tab.rect.bottom() - 3.0,
-                    tab.rect.width - radius * 2.0,
-                    2.0,
-                    accent,
-                    1.0,
+            if tab.selected && focus == WorkspaceFocus::Tabs {
+                rectangles.push_rounded(tab.rect, radius, accent);
+                rectangles.push_rounded(
+                    SceneRect {
+                        left: tab.rect.left + 1.0,
+                        top: tab.rect.top + 1.0,
+                        width: tab.rect.width - 2.0,
+                        height: tab.rect.height - 2.0,
+                    },
+                    radius - 1.0,
+                    fill,
                 );
             }
             self.push_text_clipped(

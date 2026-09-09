@@ -11,8 +11,9 @@ standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
 pane accordion. Tab headers show the numeric part of Eon's stable `tN` identity,
 two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
-directory. Rounded tabs fit their labels, with middle ellipsis for long names
-and full launch-path previews on hover.
+directory. Pill-shaped tabs fit their labels, with middle ellipsis for long names
+and full launch-path previews on hover. Selected tabs use a brighter fill and
+label without an underline; keyboard tab focus adds a rounded outline.
 Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
@@ -326,13 +327,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 338 |
+| README | 339 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,350 |
+| Contracts and references | 1,362 |
 | Memory benchmark report | 158 |
 | Crate decisions | 258 |
-| Changelog | 208 |
-| Rust source, including unit tests | 15,734 |
+| Changelog | 211 |
+| Rust source, including unit tests | 15,724 |
 | Rust integration tests | 938 |
 | Cargo manifest | 24 |
-| **Total** | **19,222** |
+| **Total** | **19,228** |

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Give workspace tabs pill-shaped corners and remove the selection underline.
+  Preserve selected fill, bright labels and a distinct rounded focus outline.
+
 - Use rounded, separated workspace tabs sized to their shaped directory labels.
   Cap long tabs with middle ellipsis, expose the launch path on hover, and
   preserve horizontal scrolling, selection reveal and distinct keyboard focus.
