@@ -1574,17 +1574,17 @@ impl Renderer {
                 pane.rect.width - self.metrics.padding * 2.0,
                 pane.rect.width - self.metrics.padding * 2.0,
                 self.metrics.height,
-                if !pane.live {
-                    SceneColor {
-                        r: 221,
-                        g: 126,
-                        b: 126,
-                    }
-                } else if pane.selected {
+                if pane.selected {
                     SceneColor {
                         r: 239,
                         g: 244,
                         b: 248,
+                    }
+                } else if !pane.live {
+                    SceneColor {
+                        r: 221,
+                        g: 126,
+                        b: 126,
                     }
                 } else {
                     SceneColor {
@@ -2447,16 +2447,7 @@ impl RectangleBatch {
             let left = rect.left + inset;
             let right = rect.right() - inset;
             for top in [rect.top + row as f32, rect.bottom() - row as f32 - 1.0] {
-                self.push(
-                    left.ceil(),
-                    top,
-                    right.floor() - left.ceil(),
-                    1.0,
-                    color,
-                    1.0,
-                );
-                self.push(left.floor(), top, 1.0, 1.0, color, left.ceil() - left);
-                self.push(right.floor(), top, 1.0, 1.0, color, right - right.floor());
+                self.push_span(left, right, top, color);
             }
         }
     }
@@ -3189,6 +3180,39 @@ mod tests {
                 assert_eq!(
                     renderer.text[first].buffer.lines[0].text(),
                     "t2  /tmp/machines_vs_aliens"
+                );
+                let mut snapshot = snapshot;
+                snapshot.tabs[1].panes.push(Pane {
+                    id: "p3".into(),
+                    session: "s3".into(),
+                    endpoint: b"/tmp/p3.sock".to_vec(),
+                    live: false,
+                });
+                snapshot.tabs[1].panes[0].live = false;
+                let workspace = WorkspaceScene::from_snapshot(
+                    &snapshot,
+                    PhysicalSize::new(900, 600),
+                    renderer.metrics(),
+                    0.0,
+                    0.0,
+                    |_, label| renderer.fit_tab_text(label),
+                );
+                renderer.pane_frames = false;
+                renderer.set_hovered_header(None);
+                renderer.rebuild_if_needed(
+                    None,
+                    None,
+                    0.0,
+                    Some(&workspace),
+                    WorkspaceFocus::Terminal,
+                    "",
+                    false,
+                    "",
+                    1,
+                );
+                assert_ne!(
+                    renderer.text[2].color, renderer.text[3].color,
+                    "offline pane selection disappears with decorative frames off"
                 );
                 renderer.rebuild_if_needed(
                     None,

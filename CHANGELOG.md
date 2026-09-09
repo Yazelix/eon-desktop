@@ -5,6 +5,7 @@
 - Give each workspace pane a thin rounded frame and quieter header by default.
   Accept `--pane-frames true|false`; hiding frames preserves grid dimensions,
   pane controls, hover feedback and rounded keyboard-focus indicators.
+  Selected offline pane labels stay distinct with decorative frames off.
   Resize the terminal when a pane-list change retains its selected attachment.
 
 - Give workspace tabs pill-shaped corners and remove the selection underline.
