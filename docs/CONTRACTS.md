@@ -368,7 +368,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Partially proved — review corrections await exact source acceptance.
+- **Status:** Proved
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -437,7 +437,24 @@ qualified by the identities and boundaries below.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Scrollback indicator proof:** `2bbb7029a84de783357ef2db0a68a145086b37b2`
+- **Scrollback review proof:** `74d22276e9039dc3ee6151d69b9283114ab02ea1`
+  - Idle cleanup and rejected input preserve terminal-routing evidence; the
+    selected pane label keeps its directory ending beside the count. Existing
+    canonical-model and native shaped-header checks reproduce both regressions
+    before the corrections and pass afterward. Locked Rust checks pass (124
+    ordinary tests), as do the native header and continuous-output checks.
+  - Private Sway 1.12, scale 1 and host lavapipe repeat the real-Orbit scenarios
+    below. Terminal-owned wheel input hides the count at an unchanged distance
+    of 15, and a fresh frame restores it. The narrowed workspace preserves the
+    long path's `/leaf` ending beside counts 10 / 20 / 10 across pane switches.
+    The reused workspace projection preserves geometry and input admission.
+    Source/lock and binary hashes, logs, captures and process-preservation
+    records are retained in
+    `~/.local/state/eon/proofs/ven-scrollback-position-ddo-review-2026-09-09/`.
+    All 19 pre-existing product process identities survive; owned processes
+    are reaped. The source-consumer, accessibility and platform limits below
+    remain unchanged; this does not prove installed Eon delivery.
+- **Initial scrollback indicator proof:** `2bbb7029a84de783357ef2db0a68a145086b37b2`
   - **Environment:** Rust 1.96.0, x86_64 Linux, private Sway 1.12 at native scale
     1 and host lavapipe Vulkan; real exact Orbit sessions with a canonical EONW
     v4 workspace fixture.
@@ -571,6 +588,10 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Scrollback count reservation preserves the selected pane directory ending
+    at source `74d22276e9039dc3ee6151d69b9283114ab02ea1`. The focused shaped-header
+    red/green check and private native pane-switch captures are indexed in the
+    VEN-C7 review proof. Fractional scale and the other limits remain qualified.
   - Small painted bottom spacing and stack-shaped header fills are accepted
     at source `bc5a2bd3b2363abdea69c4cd89953b612bc970e8`. The focused margin
     regression fails on the preceding source and passes on this candidate;

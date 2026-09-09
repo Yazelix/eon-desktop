@@ -7,6 +7,8 @@
   expose committed position as an accessible description. Overlays yield to
   selection, link inspection, notices, tab previews and overlapping cursors.
   Consume exact Orbit ORBF v2 / ORBS v11; older session versions are rejected.
+  Preserve the directory ending beside the count. Idle cleanup and rejected
+  input keep the count hidden during terminal-owned scrolling.
 
 - Connect accordion panes within one rounded outer frame, with full-width
   separators, a small bottom gap with terminal background color/opacity, and a
