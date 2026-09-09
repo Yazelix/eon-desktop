@@ -10,7 +10,7 @@ const DEFAULT_CURSOR_TAIL: (Color, f32) = (
     },
     1.0,
 );
-const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
+const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--pane-frames true|false] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
 
 #[derive(Debug)]
 pub(super) struct LaunchArguments {
@@ -20,6 +20,7 @@ pub(super) struct LaunchArguments {
     pub(super) supervised: bool,
     pub(super) startup_admission: bool,
     pub(super) decorations: bool,
+    pub(super) pane_frames: bool,
     pub(super) background_opacity: f32,
     pub(super) background_blur: bool,
     pub(super) cursor_tail: Option<(Color, f32)>,
@@ -37,6 +38,7 @@ pub(super) fn launch_arguments(
     let mut orbit_socket = None;
     let mut workspace_socket = None;
     let mut decorations = true;
+    let mut pane_frames = None;
     let mut background_opacity = None;
     let mut background_blur = false;
     let mut cursor_effect = None;
@@ -67,6 +69,8 @@ pub(super) fn launch_arguments(
             option_value(&mut columns, arguments.next())?;
         } else if argument == "--rows" {
             option_value(&mut rows, arguments.next())?;
+        } else if argument == "--pane-frames" {
+            option_value(&mut pane_frames, arguments.next())?;
         } else if argument == "--application-id" {
             if application_id.is_some() {
                 return Err(USAGE.into());
@@ -187,6 +191,7 @@ pub(super) fn launch_arguments(
         supervised: startup_admission || presentation_control == Some(OsString::from("stdin")),
         startup_admission,
         decorations,
+        pane_frames: pane_frames.unwrap_or(true),
         background_opacity: background_opacity.unwrap_or(1.0),
         background_blur,
         cursor_tail,
@@ -246,6 +251,31 @@ fn default_socket_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pane_frame_option_is_a_strict_single_boolean() {
+        use std::os::unix::ffi::OsStringExt;
+        let parse = |args: &[&str]| launch_arguments(args.iter().map(OsString::from), None);
+        for value in ["true", "false"] {
+            assert!(parse(&["--pane-frames", value, "--workspace", "eon.sock"]).is_ok());
+        }
+        for args in [
+            vec!["--pane-frames"],
+            vec!["--pane-frames", ""],
+            vec!["--pane-frames", "1"],
+            vec!["--pane-frames", "TRUE"],
+            vec!["--pane-frames", "false", "--pane-frames", "true"],
+        ] {
+            assert!(parse(&args).is_err(), "accepted {args:?}");
+        }
+        assert!(
+            launch_arguments(
+                ["--pane-frames".into(), OsString::from_vec(vec![0xff])],
+                None
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn startup_admission_keeps_presentation_control_enabled() {

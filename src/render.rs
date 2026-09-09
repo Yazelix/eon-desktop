@@ -377,7 +377,7 @@ struct ContentKey {
     preedit: String,
     status: String,
     hyperlink: Option<(u16, u16)>,
-    hovered_tab: Option<String>,
+    hovered_header: Option<(WorkspaceFocus, String)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -666,20 +666,27 @@ pub struct Renderer {
     text: Vec<PlacedText>,
     content_key: Option<ContentKey>,
     hyperlink: Option<(u16, u16)>,
-    hovered_tab: Option<String>,
+    hovered_header: Option<(WorkspaceFocus, String)>,
     cursor_tail: Option<(SceneColor, f32)>,
     cursor_animation: CursorAnimation,
     last_cursor_frame: Option<Instant>,
     clear: wgpu::Color,
     background_opacity: f32,
+    pane_frames: bool,
     metrics: CellMetrics,
     cell_font: CellFont,
     window: Arc<Window>,
 }
 
 impl Renderer {
-    pub fn set_hovered_tab(&mut self, tab: Option<String>) {
-        self.hovered_tab = tab;
+    pub fn set_hovered_header(&mut self, header: Option<(WorkspaceFocus, String)>) {
+        self.hovered_header = header;
+    }
+
+    fn header_hovered(&self, focus: WorkspaceFocus, id: &str) -> bool {
+        self.hovered_header
+            .as_ref()
+            .is_some_and(|(region, target)| *region == focus && target == id)
     }
     /// Fit the scene's canonical label using the same typography as its header.
     pub fn fit_tab_text(&mut self, label: &str) -> (String, f32) {
@@ -721,6 +728,7 @@ impl Renderer {
         event_loop: &ActiveEventLoop,
         background_opacity: f32,
         cursor_tail: Option<(SceneColor, f32)>,
+        pane_frames: bool,
         mut fonts: FontSetup,
     ) -> Result<Self, RenderError> {
         let size = nonzero(window.inner_size());
@@ -883,12 +891,13 @@ impl Renderer {
             text: Vec::new(),
             content_key: None,
             hyperlink: None,
-            hovered_tab: None,
+            hovered_header: None,
             cursor_tail,
             cursor_animation: CursorAnimation::default(),
             last_cursor_frame: None,
             clear: clear_color(DEFAULT_BACKGROUND, background_opacity, srgb_target),
             background_opacity,
+            pane_frames,
             metrics,
             cell_font,
             window,
@@ -1123,7 +1132,7 @@ impl Renderer {
             preedit: preedit.to_owned(),
             status: status.to_owned(),
             hyperlink: self.hyperlink,
-            hovered_tab: self.hovered_tab.clone(),
+            hovered_header: self.hovered_header.clone(),
         };
         if self.content_key.as_ref() == Some(&key) {
             return false;
@@ -1174,7 +1183,44 @@ impl Renderer {
                     rectangles.clip = None;
                 }
             }
-            if workspace_focus == WorkspaceFocus::Terminal
+            rectangles.clip = Some(workspace.pane_viewport);
+            if self.pane_frames {
+                for pane in &workspace.panes {
+                    rectangles.push_rounded_outline(
+                        pane_chrome_rect(workspace.pane_bounds(pane), self.metrics),
+                        self.metrics.padding,
+                        if pane.selected {
+                            SceneColor {
+                                r: 58,
+                                g: 75,
+                                b: 91,
+                            }
+                        } else {
+                            SceneColor {
+                                r: 43,
+                                g: 53,
+                                b: 67,
+                            }
+                        },
+                    );
+                }
+            }
+            if workspace_focus == WorkspaceFocus::Panes
+                && let Some(pane) = workspace.panes.iter().find(|pane| pane.selected)
+            {
+                rectangles.push_rounded_outline(
+                    pane_chrome_rect(pane.rect, self.metrics),
+                    self.metrics.padding,
+                    SceneColor {
+                        r: 126,
+                        g: 231,
+                        b: 185,
+                    },
+                );
+            }
+            rectangles.clip = None;
+            if workspace.directory_picker()
+                && workspace_focus == WorkspaceFocus::Terminal
                 && let Some(terminal) = workspace.visible_terminal()
             {
                 rectangles.push_hollow(
@@ -1338,7 +1384,7 @@ impl Renderer {
         let Some(tab) = workspace
             .tabs
             .iter()
-            .find(|tab| self.hovered_tab.as_deref() == Some(&tab.id))
+            .find(|tab| self.header_hovered(WorkspaceFocus::Tabs, &tab.id))
         else {
             return;
         };
@@ -1445,7 +1491,7 @@ impl Renderer {
             let radius = tab.rect.height / 2.0;
             let fill = if tab.selected {
                 selected
-            } else if self.hovered_tab.as_deref() == Some(&tab.id) {
+            } else if self.header_hovered(WorkspaceFocus::Tabs, &tab.id) {
                 SceneColor {
                     r: 23,
                     g: 34,
@@ -1512,31 +1558,15 @@ impl Renderer {
                 rect.top,
                 rect.width,
                 rect.height,
-                if pane.selected { selected } else { idle },
+                DEFAULT_BACKGROUND,
                 1.0,
             );
-            rectangles.push(
-                rect.left,
-                rect.bottom() - 1.0,
-                rect.width,
-                1.0,
-                SceneColor {
-                    r: 43,
-                    g: 53,
-                    b: 67,
-                },
-                1.0,
-            );
-            if pane.selected && focus == WorkspaceFocus::Panes {
-                rectangles.push_hollow(
-                    rect.left + 2.0,
-                    rect.top + 2.0,
-                    rect.width - 4.0,
-                    rect.height - 4.0,
-                    1.0,
-                    accent,
-                );
+            let header = pane_chrome_rect(pane.rect, self.metrics);
+            rectangles.clip = Some(workspace.pane_viewport);
+            if self.header_hovered(WorkspaceFocus::Panes, &pane.id) {
+                rectangles.push_rounded(header, self.metrics.padding, idle);
             }
+            rectangles.clip = None;
             self.push_text_clipped(
                 pane.label(),
                 pane.rect.left + self.metrics.padding,
@@ -1544,17 +1574,23 @@ impl Renderer {
                 pane.rect.width - self.metrics.padding * 2.0,
                 pane.rect.width - self.metrics.padding * 2.0,
                 self.metrics.height,
-                if pane.live {
-                    SceneColor {
-                        r: 214,
-                        g: 222,
-                        b: 232,
-                    }
-                } else {
+                if !pane.live {
                     SceneColor {
                         r: 221,
                         g: 126,
                         b: 126,
+                    }
+                } else if pane.selected {
+                    SceneColor {
+                        r: 239,
+                        g: 244,
+                        b: 248,
+                    }
+                } else {
+                    SceneColor {
+                        r: 162,
+                        g: 174,
+                        b: 190,
                     }
                 },
                 DrawStyleKind::Status(Wrap::None),
@@ -2313,7 +2349,82 @@ struct RectangleBatch {
     clip: Option<SceneRect>,
 }
 
+fn pane_chrome_rect(rect: SceneRect, metrics: CellMetrics) -> SceneRect {
+    let inset = (metrics.padding / 3.0)
+        .min(rect.width / 4.0)
+        .min(metrics.height / 4.0);
+    SceneRect {
+        left: rect.left + inset,
+        top: rect.top + inset / 2.0,
+        width: (rect.width - inset * 2.0).max(0.0),
+        height: (rect.height - inset).max(0.0),
+    }
+}
+
 impl RectangleBatch {
+    /// A one-physical-pixel stroke, leaving the translucent interior untouched.
+    fn push_rounded_outline(&mut self, rect: SceneRect, radius: f32, color: SceneColor) {
+        if self
+            .clip
+            .is_some_and(|clip| rect.intersection(clip).is_none())
+        {
+            return;
+        }
+        if rect.width <= 2.0 || rect.height <= 2.0 {
+            self.push_rounded(rect, radius, color);
+            return;
+        }
+        let radius = radius
+            .min(rect.width / 2.0)
+            .min(rect.height / 2.0)
+            .max(0.0)
+            .floor();
+        if radius < 1.0 {
+            self.push_hollow(rect.left, rect.top, rect.width, rect.height, 1.0, color);
+            return;
+        }
+        for left in [rect.left, rect.right() - 1.0] {
+            self.push(
+                left,
+                rect.top + radius,
+                1.0,
+                rect.height - radius * 2.0,
+                color,
+                1.0,
+            );
+        }
+        for row in 0..radius as u32 {
+            let dy = radius - row as f32 - 0.5;
+            let outer = radius - (radius * radius - dy * dy).sqrt();
+            for top in [rect.top + row as f32, rect.bottom() - row as f32 - 1.0] {
+                if row == 0 {
+                    self.push_span(rect.left + outer, rect.right() - outer, top, color);
+                } else {
+                    let inner = radius - ((radius - 1.0).powi(2) - dy * dy).sqrt();
+                    self.push_span(rect.left + outer, rect.left + inner, top, color);
+                    self.push_span(rect.right() - inner, rect.right() - outer, top, color);
+                }
+            }
+        }
+    }
+
+    fn push_span(&mut self, left: f32, right: f32, top: f32, color: SceneColor) {
+        if left.floor() == right.floor() {
+            self.push(left.floor(), top, 1.0, 1.0, color, right - left);
+        } else {
+            self.push(left.floor(), top, 1.0, 1.0, color, left.ceil() - left);
+            self.push(
+                left.ceil(),
+                top,
+                right.floor() - left.ceil(),
+                1.0,
+                color,
+                1.0,
+            );
+            self.push(right.floor(), top, 1.0, 1.0, color, right - right.floor());
+        }
+    }
+
     fn push_rounded(&mut self, rect: SceneRect, radius: f32, color: SceneColor) {
         let radius = radius
             .min(rect.width / 2.0)
@@ -2998,6 +3109,7 @@ mod tests {
                     event_loop,
                     1.0,
                     None,
+                    true,
                     FontSetup::new(&FontSettings::default()).unwrap(),
                 ))
                 .unwrap();
@@ -3059,7 +3171,7 @@ mod tests {
                     top >= label.bound_top && top + ink.placement.height as i32 <= label.bottom,
                     "the directory underscore is clipped outside the header"
                 );
-                renderer.set_hovered_tab(Some("t2".into()));
+                renderer.set_hovered_header(Some((WorkspaceFocus::Tabs, "t2".into())));
                 renderer.build_tab_tooltip(&workspace, &mut RectangleBatch::new(900, 600));
                 let (first, overlay) = renderer.tab_tooltip.unwrap();
                 let areas: Vec<_> =
@@ -3146,7 +3258,7 @@ mod tests {
             preedit: String::new(),
             status: String::new(),
             hyperlink: None,
-            hovered_tab: None,
+            hovered_header: None,
         };
 
         assert_ne!(key(1), key(2));
@@ -3794,6 +3906,73 @@ mod tests {
             rectangles.bytes.len(),
             VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize
         );
+    }
+
+    #[test]
+    fn rounded_outline_keeps_corners_and_interior_clear_when_clipped() {
+        let bounds = SceneRect {
+            left: 10.0,
+            top: 20.0,
+            width: 80.0,
+            height: 60.0,
+        };
+        for radius in [0.0, 12.0, 100.0] {
+            for clip in [
+                bounds,
+                SceneRect {
+                    top: 30.0,
+                    height: 40.0,
+                    ..bounds
+                },
+            ] {
+                let mut batch = RectangleBatch::new(100, 100);
+                batch.clip = Some(clip);
+                batch.push_rounded_outline(bounds, radius, SceneColor::default());
+                let quads: Vec<_> = batch
+                    .bytes
+                    .chunks_exact(VERTEX_SIZE as usize * 6)
+                    .map(|quad| {
+                        let value = |vertex: usize, component: usize| {
+                            let offset = vertex * VERTEX_SIZE as usize + component * 4;
+                            f32::from_ne_bytes(quad[offset..offset + 4].try_into().unwrap())
+                        };
+                        let rect = SceneRect {
+                            left: (value(0, 0) + 1.0) * 50.0,
+                            top: (1.0 - value(0, 1)) * 50.0,
+                            width: (value(2, 0) - value(0, 0)) * 50.0,
+                            height: (value(0, 1) - value(2, 1)) * 50.0,
+                        };
+                        let alpha = value(0, 5);
+                        assert!((0.0..=1.0).contains(&alpha));
+                        assert!(
+                            rect.left >= clip.left - 0.001 && rect.right() <= clip.right() + 0.001
+                        );
+                        assert!(
+                            rect.top >= clip.top - 0.001 && rect.bottom() <= clip.bottom() + 0.001
+                        );
+                        (rect, alpha)
+                    })
+                    .collect();
+                let painted = |x, y| {
+                    quads
+                        .iter()
+                        .any(|(rect, alpha)| *alpha > 0.0 && rect.contains(x, y))
+                };
+                assert!(!painted(50.0, 50.0), "outline must not fill the terminal");
+                assert!(painted(10.5, 50.0), "side stroke is missing");
+                if clip == bounds {
+                    assert!(painted(50.0, 20.5), "top stroke is missing");
+                    if radius > 1.0 {
+                        assert!(!painted(10.5, 20.5), "corner is square");
+                    }
+                } else {
+                    assert!(
+                        !painted(50.0, 30.5),
+                        "clipping must not create a new top border"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

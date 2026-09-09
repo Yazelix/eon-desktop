@@ -466,6 +466,15 @@ qualified by the identities and boundaries below.
     an underline; keyboard focus adds a rounded outline. Pane shell navigation
     does not rename or resize tabs.
   - Every visible live pane endpoint has one bounded read-only metadata observer.
+  - Pane frames use thin rounded borders around each collapsed header and the
+    expanded pane's header/body. `--pane-frames true|false` defaults to `true`;
+    `false` removes decorative frames while retaining headers, selected labels,
+    hover feedback and a distinct rounded keyboard-focus outline. Both modes
+    preserve the same terminal grid, header hit targets and AccessKit bounds.
+    Changed pane lists resize the terminal even when the endpoint stays selected.
+    The option has no visual effect in standalone or picker presentation.
+    Missing, duplicate or invalid values fail before window creation. Eon owns
+    persistent configuration and composed-launch policy.
   - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
     and one compact working-directory label.
   - Home displays the packaged home marker; descendants use `~/`; paths outside
@@ -510,6 +519,15 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Rounded pane frames and their startup option are implemented and dogfooded
+    in the uncommitted `ven-pane-stack-chrome-suu` candidate over `1b69ef4`.
+    Locked Rust checks pass (123 ordinary tests), plus two existing native
+    regressions and private scale-1 Sway default/on/off, focus, overflow and
+    picker observations. Exact hashes and qualification are retained in
+    `~/.local/state/eon/proofs/ven-pane-stack-chrome-suu-2026-09-09/REPORT.md`.
+    Accepted-source publication and installed Eon delivery remain pending;
+    `eon-pane-stack-delivery-jfo` owns the latter. Earlier proofs below do not
+    cover this change or widen its scale/compositor/accessibility evidence.
   - Pill-shaped corners without a selection underline are accepted at source
     `8211e8f773140429398154ca3f2230bd09fed1df`
     (`ven-pill-workspace-tabs-rg4`). Locked Rust checks pass, including 121

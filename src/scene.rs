@@ -465,6 +465,18 @@ impl WorkspaceScene {
     }
 
     #[must_use]
+    pub(crate) fn pane_bounds(&self, pane: &WorkspacePane) -> SceneRect {
+        SceneRect {
+            height: if pane.selected {
+                self.terminal.bottom() - pane.rect.top
+            } else {
+                pane.rect.height
+            },
+            ..pane.rect
+        }
+    }
+
+    #[must_use]
     pub fn hit_test(&self, x: f32, y: f32) -> Option<WorkspaceHit<'_>> {
         for tab in &self.tabs {
             if tab

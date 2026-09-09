@@ -615,6 +615,7 @@ struct Application {
     supervised: bool,
     startup_admission: bool,
     decorations: bool,
+    pane_frames: bool,
     background_opacity: f32,
     background_blur: bool,
     cursor_tail: Option<(Color, f32)>,
@@ -665,6 +666,7 @@ impl Application {
             supervised,
             startup_admission,
             decorations,
+            pane_frames,
             background_opacity,
             background_blur,
             cursor_tail,
@@ -683,6 +685,7 @@ impl Application {
             supervised,
             startup_admission,
             decorations,
+            pane_frames,
             background_opacity,
             background_blur,
             cursor_tail,
@@ -765,6 +768,7 @@ impl Application {
             event_loop,
             self.background_opacity,
             self.cursor_tail,
+            self.pane_frames,
             fonts,
         ))?;
         let scale_factor = window.scale_factor();
@@ -1068,6 +1072,7 @@ impl Application {
             {
                 self.set_orbit_attachment(endpoint.to_vec(), live);
             }
+            self.send_resize();
         }
         if received_snapshot {
             self.reconcile_metadata_observers();
@@ -2022,14 +2027,17 @@ impl Application {
         });
         let kinetic_active = self.terminal_scroll.velocity != 0.0;
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
-        let hovered_tab = (self.window_focused
+        let hovered_header = (self.window_focused
             && self.links.pointer_inside
             && !self.input.pointer_busy()
             && !self.links.keyboard)
             .then(|| {
                 workspace.as_ref().and_then(|scene| {
                     match scene.hit_test(self.cursor.x as f32, self.cursor.y as f32) {
-                        Some(WorkspaceHit::Tab(id)) => Some(id.to_owned()),
+                        Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
+                        Some(WorkspaceHit::Pane(id)) => {
+                            Some((WorkspaceFocus::Panes, id.to_owned()))
+                        }
                         _ => None,
                     }
                 })
@@ -2041,7 +2049,7 @@ impl Application {
             return;
         };
         state.renderer.set_hyperlink(highlighted_link);
-        state.renderer.set_hovered_tab(hovered_tab);
+        state.renderer.set_hovered_header(hovered_header);
         match state.renderer.render(
             self.model.scene(),
             self.model.scroll_preview(),
@@ -2289,16 +2297,16 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.refresh_client_view();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let tab_at = |position: PhysicalPosition<f64>| {
+                let header_at = |position: PhysicalPosition<f64>| {
                     workspace.as_ref().and_then(|scene| {
                         match scene.hit_test(position.x as f32, position.y as f32) {
-                            Some(WorkspaceHit::Tab(id)) => Some(id),
+                            hit @ Some(WorkspaceHit::Tab(_) | WorkspaceHit::Pane(_)) => hit,
                             _ => None,
                         }
                     })
                 };
-                if tab_at(self.cursor) != tab_at(position)
-                    || (!self.links.pointer_inside && tab_at(position).is_some())
+                if header_at(self.cursor) != header_at(position)
+                    || (!self.links.pointer_inside && header_at(position).is_some())
                 {
                     state.window.request_redraw();
                 }
@@ -3689,6 +3697,28 @@ mod tests {
                 assert_eq!(app.presented_revision(), Some(4));
                 assert_eq!(app.selection_gate, SelectionGate::Ready);
 
+                // A workspace poll can skip intermediate pane selections.
+                // Extra headers must resize the retained attachment too.
+                let previous_size = app.last_resize.unwrap();
+                let mut snapshot = app.workspace_model.snapshot().unwrap().clone();
+                app.active_endpoint = Some(snapshot.tabs[0].panes[0].endpoint.clone());
+                app.active_endpoint_live = true;
+                snapshot.tabs[0].panes.push(Pane {
+                    id: "p3".into(),
+                    session: "s3".into(),
+                    endpoint: b"/unused/p3.sock".to_vec(),
+                    live: false,
+                });
+                app.handle_workspace(WorkspaceEvent::Response(workspace::Response::Snapshot(
+                    snapshot,
+                )));
+                let resized = surface_size(
+                    app.terminal_size().unwrap(),
+                    app.window.as_ref().unwrap().renderer.metrics(),
+                )
+                .unwrap();
+                assert!(resized.rows < previous_size.rows);
+
                 let stream = self.stream.as_mut().unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(1)))
@@ -3719,6 +3749,10 @@ mod tests {
                     messages
                         .iter()
                         .any(|message| matches!(message, ClientMessage::PreviewVertical { .. }))
+                );
+                assert!(
+                    messages.contains(&ClientMessage::Resize(resized)),
+                    "changed pane geometry did not resize the retained attachment"
                 );
                 let selections: Vec<_> = messages
                     .into_iter()

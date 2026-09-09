@@ -14,6 +14,9 @@ two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
 directory. Pill-shaped tabs fit their labels, with middle ellipsis for long names
 and full launch-path previews on hover. Selected tabs use a brighter fill and
 label without an underline; keyboard tab focus adds a rounded outline.
+Pane headers use quiet backgrounds and brighter selected labels. Rounded frames
+enclose each collapsed header and the expanded pane's header/body by default;
+hover highlights a header and keyboard pane focus adds a rounded accent outline.
 Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
@@ -132,6 +135,13 @@ For an Eon workspace, select workspace mode with only the EONW socket:
 ```sh
 cargo run --locked -- --workspace /path/to/eon.sock
 ```
+
+Pass `--pane-frames false` to hide decorative pane borders. The default is
+`true`; both modes keep the same terminal grid, pane headers, click targets and
+accessible bounds. Keyboard focus and hover remain visible with frames off.
+Missing, duplicate or invalid boolean values fail before window creation.
+Standalone and directory-picker presentation have no pane frames. This is a
+startup option; Eon owns persistent product configuration.
 
 Workspace mode opens the EONW transport first and waits for its accepted
 snapshot before attaching its terminal endpoint. During picker-first startup,
@@ -327,13 +337,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 339 |
+| README | 349 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,367 |
+| Contracts and references | 1,404 |
 | Memory benchmark report | 158 |
 | Crate decisions | 258 |
-| Changelog | 211 |
-| Rust source, including unit tests | 15,724 |
+| Changelog | 216 |
+| Rust source, including unit tests | 15,979 |
 | Rust integration tests | 938 |
 | Cargo manifest | 24 |
-| **Total** | **19,233** |
+| **Total** | **19,540** |

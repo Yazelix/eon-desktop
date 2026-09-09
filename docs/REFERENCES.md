@@ -20,6 +20,25 @@ terminal glyphs out of path previews without another renderer or dependency.
 Different label widths, valid cluster cuts, overflow/reveal, accessible clipped
 bounds and isolated native hover/focus rendering are the falsifiers.
 
+## Rounded pane frames
+
+`ven-pane-stack-chrome-suu` inspects Nova
+`e6c29312fc8ca11da41fe9da1809ea0e9a9116c8`: `defaults/zellij/config.kdl`,
+`layout.swap.kdl`, and the `yzx-config` catalog/model show full pane frames,
+stacked panes and separate frame visibility/rounded-corner settings. Apache-2.0
+inspection only; no source, Zellij configuration or live-update mechanism is
+reused. Eon's selected outcome is rounded frames enabled by default, with one
+startup boolean; radius remains presentation detail.
+
+The existing Scene header/body bounds, 1.5-cell header height and padding retain
+grid sizing, hit targets and AccessKit ownership. Thin rounded strokes replace
+filled bars and dividers without filling the terminal interior; original bounds
+are clipped after rounding. The existing rectangle batch, header hover and
+focus paths suffice. Another shader, dependency, layout model, geometry setting
+or persistent Venus configuration is rejected. Strict launch admission,
+unpainted stroke interiors/corners, clipped bounds and isolated native
+default/off interaction are the falsifiers. Eon delivery remains separate.
+
 ## Explicit hyperlink interaction
 
 `ven-lq4` follows the
