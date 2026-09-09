@@ -520,6 +520,11 @@ qualified by the identities and boundaries below.
     This substituted debug-child check does not update installed Eon or extend
     fractional-scale, compositor or accessibility proof. Prior rounded-tab
     evidence remains scoped to its source below.
+    Installed Eon acceptance at `57fb875cc02c7fe8c2cd1134315e777a17f15f73`
+    verifies this exact child through both package builds/profile identities and
+    one private scale-1 native style/focus observation, without substitution.
+    Evidence is retained in the same archive's `installed/REPORT.md`; wider
+    compositor, fractional-scale and accessibility qualifications remain.
   - Rounded adaptive tabs and hover paths are accepted at source
     `f5c679443b2fbda1a7a8f91c98d312811bee2cdf`
     (`ven-rounded-adaptive-tabs-vdf`). Retained evidence is in
