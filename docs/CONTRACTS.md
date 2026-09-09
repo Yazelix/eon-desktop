@@ -29,7 +29,7 @@ retains accepted user-visible chronology.
   Compositor sizing policy may override the request; actual resize remains
   authoritative. Later user resizing is not constrained to the initial grid.
   Stack bottom-margin accounting is accepted at source
-  `ff426a9f3d6e1acbb7ae1ce2388df7c75f7bb271`: the existing initial-grid check
+  `bc5a2bd3b2363abdea69c4cd89953b612bc970e8`: the existing initial-grid check
   passes for standalone/workspace/picker at simulated scales 1/1.25/1.5/2.
   Native installed proof is indexed with the pane-stack polish below; previous
   typography and fractional-scale qualifications remain in force.
@@ -533,8 +533,32 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
-  - Full-width separators, bottom spacing and lighter selected headers are
-    accepted at source `ff426a9f3d6e1acbb7ae1ce2388df7c75f7bb271`.
+  - Small painted bottom spacing and stack-shaped header fills are accepted
+    at source `bc5a2bd3b2363abdea69c4cd89953b612bc970e8`. The focused margin
+    regression fails on the preceding source and passes on this candidate;
+    all 123 ordinary Rust tests and strict clippy pass. Private Sway 1.12 /
+    Vulkan lavapipe scale-1 compares the rejected `ff426a9` baseline and this
+    source over a colored underlay in both frame modes. Pixels prove a 4px gap
+    matching terminal background color/opacity, top outer corners and square
+    internal selected/hovered edges, and full-width dividers. Pointer/keyboard
+    input, focus, overflow/reveal, picker and actual PTY grids pass. All 33
+    pre-existing runtime identities survive; private process cleanup is empty.
+    Evidence:
+    `~/.local/state/eon/proofs/ven-connected-pane-stack-0ub-corrections-2026-09-09/REPORT.md`.
+    Installed Eon/EonTerm generation `g1-5626ef23db3adb92c987e2c6179a793c` passes
+    default/off pixels, native interaction and real initial/reopened 100x30 PTYs.
+    Reopened workspaces retain the same supervisor, Orbit Sessions and command;
+    standalone retains its grid without workspace chrome. Both profile elements
+    and every observed Venus launch match the new build. All 33 pre-existing
+    runtime identities survive installed proof; private process cleanup is empty.
+    Sway does not prove compositor blur; pinned winit's surface-wide blur request
+    is unchanged. The colored underlay exposes the alpha-zero hole hidden by the
+    earlier black proof background. Fractional native scale, other compositors,
+    screen-reader usage and offline lifecycle remain qualified.
+  - Earlier polish proof at source
+    `ff426a9f3d6e1acbb7ae1ce2388df7c75f7bb271` covered full-width separators,
+    bottom spacing and lighter selected headers. Its margin and highlight
+    design is superseded by the correction above.
     Locked Rust checks pass (123 tests), with a red/green margin/hit regression.
     Private Sway 1.12 / Vulkan lavapipe scale-1 true/false proof covers selection,
     hover, native focus/input, long labels, narrow overflow, picker and PTY grids.
