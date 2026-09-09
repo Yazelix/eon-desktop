@@ -4,7 +4,10 @@ This is the canonical current state of Venus behavior, ownership, proof, and
 remaining limitations. Beads and Git retain execution history; `CHANGELOG.md`
 retains accepted user-visible chronology.
 
-`VEN-C16` owns platform scope.
+`VEN-C16` owns platform scope. The current locked consumer uses ORBF v2 /
+ORBS v11 at Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, with source
+acceptance indexed in `VEN-C7`. Older consumed revisions below identify their
+named proofs; they do not select the current dependency.
 
 ## VEN-C19 — Startup typography and terminal geometry
 
@@ -365,7 +368,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Partially proved — scrollback-indicator candidate in `ven-scrollback-position-ddo`.
+- **Status:** Proved
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -431,7 +434,28 @@ qualified by the identities and boundaries below.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-- **Proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
+- **Scrollback indicator proof:** `2bbb7029a84de783357ef2db0a68a145086b37b2`
+  - **Environment:** Rust 1.96.0, x86_64 Linux, private Sway 1.12 at native scale
+    1 and host lavapipe Vulkan; real exact Orbit sessions with a canonical EONW
+    v4 workspace fixture.
+  - **Evidence:** Locked fmt/check/test/clippy/build pass, including 124 ordinary
+    tests. The canonical codec/model regression covers exact distance, singular
+    wording, the full `u64` range, preview, routing, alternate screen and recovery.
+    The native renderer check covers header spacing, complete counts, clipping
+    and cursor collision; the existing native continuous-output Application
+    regression passes. Real native counts track output (10 to 15), reflow (63),
+    history top (177), pruning (36,135), live bottom and clear (zero), reconnect,
+    and pane switches (10 / 20 / 10). Selection and link inspection hide the
+    standalone overlay. Source/lock hashes, scripts, captures, observations and
+    process-preservation records are retained under
+    `~/.local/state/eon/proofs/ven-scrollback-position-ddo-2026-09-09/` and
+    indexed by `ven-scrollback-position-ddo`.
+  - **Limits:** This is source consumer acceptance. Paired installed Eon delivery
+    belongs to `eon-accept-scrollback-position-j7f`; the workspace topology here
+    is a fixture. AccessKit is tree-verified, not screen-reader dogfood. Native
+    fractional-scale and broader-compositor qualifications remain unchanged;
+    this proof makes no new latency or kinetic-performance claim.
+- **Retained gesture proof:** `e13970e90289d0d86f0adcbf350e4b9c1d5e5219`
   - **Environment:** Locked deterministic checks and optimized x86_64 Linux
     native Wayland dogfood
   - **Evidence:** Complete Rust checks and Nix build; native Application red/green

@@ -351,11 +351,11 @@ and benchmark CSV data.
 | Agent policy inputs | 208 |
 | README | 361 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,524 |
+| Contracts and references | 1,548 |
 | Memory benchmark report | 158 |
 | Crate decisions | 261 |
-| Changelog | 222 |
+| Changelog | 228 |
 | Rust source, including unit tests | 16,324 |
 | Rust integration tests | 1,013 |
 | Cargo manifest | 24 |
-| **Total** | **20,101** |
+| **Total** | **20,131** |

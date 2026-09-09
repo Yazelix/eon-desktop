@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Show authoritative scrollback distance as `↑ N rows` in the selected pane
+  header, or a small standalone/picker overlay. Hide it at live output and
+  expose committed position as an accessible description. Overlays yield to
+  selection, link inspection, notices, tab previews and overlapping cursors.
+  Consume exact Orbit ORBF v2 / ORBS v11; older session versions are rejected.
+
 - Connect accordion panes within one rounded outer frame, with full-width
   separators, a small bottom gap with terminal background color/opacity, and a
   lighter selected header whose fill follows the shared stack corners. Keep hover and focus cues;
