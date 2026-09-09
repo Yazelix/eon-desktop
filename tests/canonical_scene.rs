@@ -14,6 +14,72 @@ use yazelix_venus::{
 };
 
 #[test]
+fn scrollback_label_follows_only_current_authoritative_frames()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut model = SessionModel::new();
+    assert_eq!(model.scrollback_label(), None);
+    apply_wire(&mut model, ServerMessage::Attached)?;
+    for (revision, distance, history, expected) in [
+        (1, 0, 240, None),
+        (2, 1, 240, Some("↑ 1 row")),
+        (3, 240, 240, Some("↑ 240 rows")),
+        (4, 243, 243, Some("↑ 243 rows")),
+        (5, 100, 100, Some("↑ 100 rows")),
+        (6, u64::MAX, u64::MAX, Some("↑ 18446744073709551615 rows")),
+        (7, 0, 0, None),
+    ] {
+        let mut next = frame(revision, Screen::Primary);
+        next.scroll_position = orbit_protocol::ScrollPosition {
+            rows_from_live: distance,
+            history_rows: history,
+        };
+        apply_wire(&mut model, ServerMessage::Frame(Box::new(next)))?;
+        assert_eq!(model.scrollback_label().as_deref(), expected);
+    }
+    let mut held = frame(8, Screen::Primary);
+    held.scroll_position = orbit_protocol::ScrollPosition {
+        rows_from_live: 12,
+        history_rows: 240,
+    };
+    apply_wire(&mut model, ServerMessage::Frame(Box::new(held.clone())))?;
+    apply_wire(
+        &mut model,
+        ServerMessage::VerticalPreview(VerticalPreview {
+            frame_revision: held.revision,
+            direction: VerticalDirection::Up,
+            outcome: PreviewOutcome::Viewport {
+                cols: held.dimensions.cols,
+                edge_reached: false,
+                rows: held.rows.clone(),
+            },
+        }),
+    )?;
+    assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    apply_wire(
+        &mut model,
+        ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { requested_rows: -3 }),
+    )?;
+    assert_eq!(model.scrollback_label(), None);
+    held.revision = 9;
+    apply_wire(&mut model, ServerMessage::Frame(Box::new(held.clone())))?;
+    assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    model.prepare_reconnect();
+    assert!(model.scene().is_some(), "recovery retains old pixels");
+    assert_eq!(model.scrollback_label(), None);
+    apply_wire(&mut model, ServerMessage::Attached)?;
+    assert_eq!(model.scrollback_label(), None);
+    apply_wire(&mut model, ServerMessage::Frame(Box::new(held)))?;
+    assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    apply_wire(
+        &mut model,
+        ServerMessage::Frame(Box::new(frame(10, Screen::Alternate))),
+    )?;
+    assert_eq!(model.scrollback_label(), None);
+    assert_eq!(SessionModel::new().scrollback_label(), None);
+    Ok(())
+}
+
+#[test]
 fn eon_workspace_becomes_one_bounded_native_accordion() {
     let snapshot = Snapshot {
         active_tab: "t1".into(),
@@ -304,11 +370,6 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
     );
     assert_eq!(tiny_picker.terminal, tiny_picker.pane_viewport);
-}
-
-#[test]
-fn canonical_session_revision_is_orbs_v10() {
-    assert_eq!(session::VERSION, 10);
 }
 
 #[test]
@@ -820,6 +881,12 @@ fn invalid_session_and_frame_bytes_never_reach_draw_state() {
             .unwrap();
     encoded[0] ^= 1;
     assert!(session::decode_server_message(&encoded).is_err());
+    encoded[0] ^= 1;
+    encoded[4..6].copy_from_slice(&10_u16.to_le_bytes());
+    assert!(matches!(
+        session::decode_server_message(&encoded),
+        Err(session::Error::UnsupportedVersion { version: 10 })
+    ));
 
     let mut model = SessionModel::new();
     assert_eq!(
@@ -878,6 +945,7 @@ fn frame(revision: u64, screen: Screen) -> Frame {
         revision,
         dimensions: Dimensions { cols: 4, rows: 1 },
         screen,
+        scroll_position: orbit_protocol::ScrollPosition::default(),
         title: "Eon ✦".into(),
         working_directory: "/tmp/venus".into(),
         capabilities: Capabilities {

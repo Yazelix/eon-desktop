@@ -910,6 +910,16 @@ impl Application {
         ))
     }
 
+    fn scrollback_label(&self) -> Option<String> {
+        let state = self.window.as_ref()?;
+        let scene = self.model.scene()?;
+        let size = surface_size(self.terminal_size()?, state.renderer.metrics())?;
+        if scene.columns != size.cols || scene.rows != size.rows {
+            return None;
+        }
+        self.model.scrollback_label()
+    }
+
     fn presentation_candidate(&self, workspace: Option<&WorkspaceScene>) -> PresentationIdentity {
         let revision = self
             .model
@@ -1694,6 +1704,7 @@ impl Application {
             }
         }
         let status = self.status();
+        let scrollback_label = self.scrollback_label();
         let workspace = self.workspace_scene();
         let workspace_focus = effective_workspace_focus(
             self.workspace_model.directory_picker_visible(),
@@ -1739,6 +1750,7 @@ impl Application {
             workspace.as_ref(),
             workspace_focus,
             &status,
+            scrollback_label.as_deref(),
             state.renderer.size(),
             state.renderer.metrics(),
         );
@@ -2026,6 +2038,15 @@ impl Application {
             )
         });
         let kinetic_active = self.terminal_scroll.velocity != 0.0;
+        let scrollback_label = self.scrollback_label().filter(|_| {
+            workspace
+                .as_ref()
+                .is_some_and(|workspace| !workspace.directory_picker())
+                || (!self.input.pointer_busy()
+                    && self.links.focus.is_none()
+                    && !self.links.keyboard
+                    && !self.model.scene().is_some_and(Scene::has_selected_content))
+        });
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
         let hovered_header = (self.window_focused
             && self.links.pointer_inside
@@ -2049,6 +2070,9 @@ impl Application {
             return;
         };
         state.renderer.set_hyperlink(highlighted_link);
+        state
+            .renderer
+            .set_scrollback_label(scrollback_label.clone());
         state.renderer.set_hovered_header(hovered_header);
         match state.renderer.render(
             self.model.scene(),
@@ -2099,6 +2123,7 @@ impl Application {
                         workspace.as_ref(),
                         workspace_focus,
                         notice,
+                        scrollback_label.as_deref(),
                         state.renderer.size(),
                         state.renderer.metrics(),
                     );
@@ -3464,6 +3489,7 @@ mod tests {
                 revision,
                 dimensions: Dimensions { cols: 0, rows: 0 },
                 screen,
+                scroll_position: orbit_protocol::ScrollPosition::default(),
                 title: format!("output {revision}"),
                 working_directory: String::new(),
                 capabilities: Capabilities {

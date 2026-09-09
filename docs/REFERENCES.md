@@ -517,6 +517,28 @@ creation boundary. It rejects direct Wayland ownership, capability caching,
 blur strength, renderer effects, live updates, Eon persistence, and another
 window or event-loop owner.
 
+## Required for numeric scrollback position
+
+`ven-scrollback-position-ddo` consumes Orbit
+`ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`: ORBF v2 / ORBS v11 carries
+`ScrollPosition` with wrapped display-row distance and retained history size.
+Its Ghostty `a887df42c56f6de86c0fe6da9c4eeca37931e083` projection owns
+reflow, pruning and alternate-screen semantics. Venus formats the accepted
+reducer frame directly; wheel deltas and preview pixels cannot update the count.
+
+[foot](https://codeberg.org/dnkl/foot/src/commit/8c2687196647a7593987547ae40586ffc238189d)
+provides the required numeric-versus-percentage and fixed-versus-moving placement
+comparison in `render_scrollback_position` and `foot.ini`. Venus chooses fixed
+placement and explicit distance above live output; percentages would change as
+history grows or prunes. MIT source was inspected without reuse.
+[Ghostty 1.3.0](https://ghostty.org/docs/install/release-notes/1-3-0) is comparison
+only for a small overlay preserving the grid; dragging and a scrollbar are out
+of scope. Existing glyphon 0.12.0 shaping/clipping and AccessKit 0.24.1 terminal
+descriptions suffice; there is no new widget, history cache, live alert or crate.
+FrankenTUI `479436597890a14e82676d0067e3917b2a9de8f5` ADR-002 supplies
+required complete-state projection evidence. Its MIT rider was evaluated for
+independent user-directed inspection; no source was copied, adapted or executed.
+
 ## Watchlist
 
 - [MetalTerm](https://metalterm.dev/) is source-unavailable comparison evidence

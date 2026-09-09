@@ -28,6 +28,9 @@ revision, without changing the protocol package or adding a dependency.
 the sole host and replaces the clipboard adapter's X11 fallback with its
 already-locked Wayland data-control owner.
 
+`ven-scrollback-position-ddo` consumes authoritative display-row distance through
+ORBF v2 / ORBS v11 using the same dependency-free canonical package.
+
 ## Current decisions
 
 ### Native hyperlink dispatch
@@ -44,7 +47,7 @@ already-locked Wayland data-control owner.
 
 ### Eon workspace protocol consumer
 
-- **Selected shape:** Exact Git revision `963bdaf4d9816f27a26c7bdb6ee122855566a222` of the
+- **Selected shape:** Exact Git revision `c305453bba4fe50c29f65e829b9cd65af31ced8a` of the
   dependency-free, publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package
 - **Status:** Active for internal development
 - **Owner consequence:** Eon alone owns EONW v4 values, validation, topology, pending tabs,
@@ -53,10 +56,10 @@ already-locked Wayland data-control owner.
 
 ### Orbit protocol consumer
 
-- **Selected shape:** Exact Git revision `91999d79546422b49bdbc124166a65859d0bd872` of the
+- **Selected shape:** Exact Git revision `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` of the
   dependency-free, publish-false `orbit-protocol` 0.1.0 package
 - **Status:** Active
-- **Owner consequence:** Orbit alone owns ORBS v10, ORBF v1, semantic values, history,
+- **Owner consequence:** Orbit alone owns ORBS v11, ORBF v2, semantic values, history and its display-row position,
   terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel
   outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied
   text, compatible-live-output gesture preservation, terminal clipboard effects, read-only
@@ -123,7 +126,7 @@ already-locked Wayland data-control owner.
   Wayland data-control. Orbit owns paste encoding and terminal text. Missing data-control
   remains a visible bounded failure; there is no X11 fallback.
 
-The ORBS v10 advance keeps one direct package with no transitive, native, build,
+The ORBF v2 / ORBS v11 advance keeps one direct package with no transitive, native, build,
 feature, or Nix change. Orbit's canonical codec owns bounded metadata values,
 read-only observation, scroll preview windows, and routed left-pointer values;
 Venus consumes them without a backport, dual decoder, or adapter. Replacement

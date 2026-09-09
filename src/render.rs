@@ -378,6 +378,7 @@ struct ContentKey {
     status: String,
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
+    scrollback_label: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -662,11 +663,12 @@ pub struct Renderer {
     viewport: Viewport,
     atlas: TextAtlas,
     text_renderer: TextRenderer,
-    tab_tooltip: Option<(usize, TextBounds)>,
+    text_overlay: Option<(usize, TextBounds)>,
     text: Vec<PlacedText>,
     content_key: Option<ContentKey>,
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
+    scrollback_label: Option<String>,
     cursor_tail: Option<(SceneColor, f32)>,
     cursor_animation: CursorAnimation,
     last_cursor_frame: Option<Instant>,
@@ -679,6 +681,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    pub fn set_scrollback_label(&mut self, label: Option<String>) {
+        self.scrollback_label = label;
+    }
+
     pub fn set_hovered_header(&mut self, header: Option<(WorkspaceFocus, String)>) {
         self.hovered_header = header;
     }
@@ -887,11 +893,12 @@ impl Renderer {
             viewport,
             atlas,
             text_renderer,
-            tab_tooltip: None,
+            text_overlay: None,
             text: Vec::new(),
             content_key: None,
             hyperlink: None,
             hovered_header: None,
+            scrollback_label: None,
             cursor_tail,
             cursor_animation: CursorAnimation::default(),
             last_cursor_frame: None,
@@ -995,7 +1002,7 @@ impl Renderer {
                     &mut self.fonts.font_system,
                     &mut self.atlas,
                     &self.viewport,
-                    text_areas(&self.text, self.tab_tooltip),
+                    text_areas(&self.text, self.text_overlay),
                     &mut self.swash_cache,
                 )
                 .is_err()
@@ -1008,7 +1015,7 @@ impl Renderer {
                         &mut self.fonts.font_system,
                         &mut self.atlas,
                         &self.viewport,
-                        text_areas(&self.text, self.tab_tooltip),
+                        text_areas(&self.text, self.text_overlay),
                         &mut self.swash_cache,
                     )
                     .map_err(display_error("the Venus glyph atlas is full"))?;
@@ -1133,13 +1140,36 @@ impl Renderer {
             status: status.to_owned(),
             hyperlink: self.hyperlink,
             hovered_header: self.hovered_header.clone(),
+            scrollback_label: self.scrollback_label.clone(),
         };
         if self.content_key.as_ref() == Some(&key) {
             return false;
         }
 
         self.text.clear();
-        self.tab_tooltip = None;
+        self.text_overlay = None;
+        let viewport = workspace.map_or(
+            SceneRect {
+                left: 0.0,
+                top: 0.0,
+                width: self.config.width as f32,
+                height: self.config.height as f32,
+            },
+            |workspace| workspace.terminal,
+        );
+        let cursor = scene.and_then(|scene| {
+            scene
+                .cursor
+                .filter(|cursor| cursor.visible)
+                .and_then(|cursor| {
+                    cursor_bounds(
+                        scene,
+                        cursor,
+                        self.metrics,
+                        shifted(viewport, scroll_offset),
+                    )
+                })
+        });
         let mut rectangles = RectangleBatch::new(self.config.width, self.config.height);
         let mut cursor_vertex_boundary = 0;
         if let Some(workspace) = workspace {
@@ -1257,18 +1287,19 @@ impl Renderer {
                 self.build_notice(status, &mut rectangles, Some(workspace));
             }
             self.build_tab_tooltip(workspace, &mut rectangles);
+            if workspace.directory_picker()
+                && status.is_empty()
+                && self.text_overlay.is_none()
+                && let Some(terminal) = workspace.visible_terminal()
+            {
+                self.build_scrollback(terminal, terminal, false, cursor, &mut rectangles);
+            }
         } else if let Some(scene) = scene {
             self.clear = clear_color(
                 scene.background,
                 self.background_opacity,
                 self.config.format.is_srgb(),
             );
-            let viewport = SceneRect {
-                left: 0.0,
-                top: 0.0,
-                width: self.config.width as f32,
-                height: self.config.height as f32,
-            };
             let clip = scene_grid(scene, viewport, self.metrics);
             rectangles.clip = Some(clip);
             let origin = shifted(viewport, scroll_offset);
@@ -1295,6 +1326,8 @@ impl Renderer {
             rectangles.clip = None;
             if !status.is_empty() {
                 self.build_notice(status, &mut rectangles, None);
+            } else {
+                self.build_scrollback(viewport, viewport, false, cursor, &mut rectangles);
             }
         } else {
             self.clear = clear_color(
@@ -1446,7 +1479,7 @@ impl Renderer {
         text.right = (left + width - padding).ceil() as i32;
         text.bound_top = (top + padding).floor() as i32;
         text.bottom = (top + height - padding).ceil() as i32;
-        self.tab_tooltip = Some((
+        self.text_overlay = Some((
             before,
             TextBounds {
                 left: left.floor() as i32,
@@ -1587,12 +1620,27 @@ impl Renderer {
                 );
             }
             rectangles.clip = None;
+            let scrollback_width = if pane.selected {
+                self.build_scrollback(
+                    SceneRect {
+                        left: pane.rect.left + self.metrics.width * 4.0,
+                        width: (pane.rect.width - self.metrics.width * 4.0).max(0.0),
+                        ..pane.rect
+                    },
+                    workspace.pane_viewport,
+                    true,
+                    None,
+                    rectangles,
+                )
+            } else {
+                0.0
+            };
             self.push_text_clipped(
                 pane.label(),
                 pane.rect.left + self.metrics.padding,
                 pane.rect.top + (pane.rect.height - self.metrics.height) / 2.0,
-                pane.rect.width - self.metrics.padding * 2.0,
-                pane.rect.width - self.metrics.padding * 2.0,
+                pane.rect.width - self.metrics.padding * 2.0 - scrollback_width,
+                pane.rect.width - self.metrics.padding * 2.0 - scrollback_width,
                 self.metrics.height,
                 if pane.selected {
                     SceneColor {
@@ -1617,6 +1665,86 @@ impl Renderer {
                 workspace.pane_viewport,
             );
         }
+    }
+
+    fn build_scrollback(
+        &mut self,
+        area: SceneRect,
+        clip: SceneRect,
+        in_header: bool,
+        cursor: Option<SceneRect>,
+        rectangles: &mut RectangleBatch,
+    ) -> f32 {
+        let Some(label) = self.scrollback_label.clone() else {
+            return 0.0;
+        };
+        let padding = self.metrics.padding;
+        let width = fit_tab_text(
+            &mut self.fonts.font_system,
+            self.metrics,
+            &label,
+            f32::INFINITY,
+        )
+        .1
+        .ceil()
+            + padding * 2.0;
+        let inset = if in_header { 0.0 } else { padding / 2.0 };
+        let height = self.metrics.height + inset * 2.0;
+        if width > area.width - padding || height > area.height {
+            return 0.0;
+        }
+        let rect = SceneRect {
+            left: area.right() - width - padding,
+            top: if in_header {
+                area.top + (area.height - height) / 2.0
+            } else {
+                area.top + padding
+            },
+            width,
+            height,
+        };
+        if rect.intersection(clip) != Some(rect)
+            || cursor.is_some_and(|cursor| cursor.intersection(rect).is_some())
+        {
+            return 0.0;
+        }
+        let first = self.text.len();
+        self.push_text_clipped(
+            &label,
+            rect.left + padding,
+            rect.top + inset,
+            width - padding * 2.0,
+            width - padding * 2.0,
+            self.metrics.height,
+            SceneColor {
+                r: 162,
+                g: 204,
+                b: 230,
+            },
+            DrawStyleKind::Status(Wrap::None),
+            clip,
+        );
+        if !in_header {
+            rectangles.push_rounded(
+                rect,
+                padding / 2.0,
+                SceneColor {
+                    r: 28,
+                    g: 43,
+                    b: 58,
+                },
+            );
+            self.text_overlay = Some((
+                first,
+                TextBounds {
+                    left: rect.left.floor() as i32,
+                    top: rect.top.floor() as i32,
+                    right: rect.right().ceil() as i32,
+                    bottom: rect.bottom().ceil() as i32,
+                },
+            ));
+        }
+        width
     }
 
     fn build_hyperlink(&self, scene: &Scene, rectangles: &mut RectangleBatch, origin: SceneRect) {
@@ -3184,9 +3312,9 @@ mod tests {
                 );
                 renderer.set_hovered_header(Some((WorkspaceFocus::Tabs, "t2".into())));
                 renderer.build_tab_tooltip(&workspace, &mut RectangleBatch::new(900, 600));
-                let (first, overlay) = renderer.tab_tooltip.unwrap();
+                let (first, overlay) = renderer.text_overlay.unwrap();
                 let areas: Vec<_> =
-                    text_areas(&renderer.text[..first], renderer.tab_tooltip).collect();
+                    text_areas(&renderer.text[..first], renderer.text_overlay).collect();
                 assert!(
                     areas.iter().all(|area| {
                         let b = area.bounds;
@@ -3246,6 +3374,101 @@ mod tests {
                     1,
                 );
                 assert!(renderer.text[1].buffer.layout_runs().count() > 1);
+                renderer.set_scrollback_label(Some("↑ 240 rows".into()));
+                renderer.rebuild_if_needed(
+                    None,
+                    None,
+                    0.0,
+                    Some(&workspace),
+                    WorkspaceFocus::Terminal,
+                    "",
+                    false,
+                    "",
+                    2,
+                );
+                let indicator = renderer
+                    .text
+                    .iter()
+                    .find(|text| text.buffer.lines[0].text() == "↑ 240 rows")
+                    .unwrap();
+                let pane = workspace.panes.iter().find(|pane| pane.selected).unwrap();
+                assert!(indicator.top >= pane.rect.top);
+                assert!(indicator.bottom as f32 <= pane.rect.bottom());
+                let pane_text = renderer
+                    .text
+                    .iter()
+                    .find(|text| text.buffer.lines[0].text() == pane.label())
+                    .unwrap();
+                assert!(pane_text.right <= indicator.bound_left);
+                renderer.set_scrollback_label(None);
+                assert!(renderer.rebuild_if_needed(
+                    None,
+                    None,
+                    0.0,
+                    Some(&workspace),
+                    WorkspaceFocus::Terminal,
+                    "",
+                    false,
+                    "",
+                    2
+                ));
+                assert!(
+                    renderer
+                        .text
+                        .iter()
+                        .all(|text| !text.buffer.lines[0].text().starts_with('↑'))
+                );
+                renderer.set_scrollback_label(Some("↑ 18446744073709551615 rows".into()));
+                let viewport = SceneRect {
+                    left: 0.0,
+                    top: 0.0,
+                    width: 900.0,
+                    height: 600.0,
+                };
+                let mut rectangles = RectangleBatch::new(900, 600);
+                assert!(
+                    renderer.build_scrollback(viewport, viewport, false, None, &mut rectangles)
+                        > 0.0
+                );
+                let (first, overlay) = renderer.text_overlay.unwrap();
+                assert_eq!(
+                    renderer.text[first].buffer.lines[0].text(),
+                    "↑ 18446744073709551615 rows"
+                );
+                assert!(
+                    text_areas(&renderer.text[..first], renderer.text_overlay).all(|area| {
+                        let b = area.bounds;
+                        b.right <= overlay.left
+                            || b.left >= overlay.right
+                            || b.bottom <= overlay.top
+                            || b.top >= overlay.bottom
+                    })
+                );
+                assert_eq!(
+                    renderer.build_scrollback(
+                        viewport,
+                        viewport,
+                        false,
+                        Some(viewport),
+                        &mut rectangles
+                    ),
+                    0.0,
+                    "the indicator must yield to an overlapping terminal cursor"
+                );
+                let narrow = SceneRect {
+                    width: 40.0,
+                    ..viewport
+                };
+                let count = renderer.text.len();
+                assert_eq!(
+                    renderer.build_scrollback(narrow, narrow, false, None, &mut rectangles),
+                    0.0
+                );
+                assert_eq!(
+                    renderer.text.len(),
+                    count,
+                    "never clip digits into a different number"
+                );
                 self.0 = true;
                 event_loop.exit();
             }
@@ -3303,6 +3526,7 @@ mod tests {
             status: String::new(),
             hyperlink: None,
             hovered_header: None,
+            scrollback_label: None,
         };
 
         assert_ne!(key(1), key(2));

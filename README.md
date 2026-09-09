@@ -41,8 +41,8 @@ Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 `c305453bba4fe50c29f65e829b9cd65af31ced8a`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v1, and ORBS v10 at exact Orbit proof
-`91999d79546422b49bdbc124166a65859d0bd872`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
+`ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -273,6 +273,16 @@ refreshing content; Orbit continues parsing output and owns the anchored
 history viewport. Resize, screen, workspace, and attachment changes still
 require fresh presentation.
 
+While scrolled, `↑ N rows` shows the last committed viewport's wrapped display
+rows above live output (`↑ 1 row` for one). The selected pane header reserves
+space for it. Standalone and picker terminals use a small top-right overlay
+without resizing the grid; it yields to selection, link inspection, notices,
+picker tab previews, and an overlapping terminal cursor. Live bottom, alternate screen, recovery, pending reflow,
+and known terminal-owned scrolling hide it. Fractional preview movement never
+changes the number. If the complete label cannot fit, it stays available in the
+terminal's accessible description; digits are never truncated. The description
+is not a live alert.
+
 Precision touchpad movement tracks Orbit-owned retained history at twice its
 native pixel distance, and a complete gesture may continue with bounded momentum
 after release. A bounded Orbit-authored row window keeps multi-row movement
@@ -323,8 +333,9 @@ are outside this slice.
 
 The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
 selects native Wayland and Vulkan only. The exact
-`91999d79546422b49bdbc124166a65859d0bd872` Orbit package revision supplies
-accepted ORBS v10, including authoritative selection completion, routed native
+`ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
+accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
+selection completion, routed native
 left-pointer gestures that survive compatible live output, bounded row-window
 previews, signed scroll batches, and read-only pane metadata. The exact source
 revision must be available in the Git checkout cache or published to GitHub.
@@ -338,13 +349,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 350 |
+| README | 361 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,491 |
+| Contracts and references | 1,524 |
 | Memory benchmark report | 158 |
-| Crate decisions | 258 |
+| Crate decisions | 261 |
 | Changelog | 222 |
-| Rust source, including unit tests | 16,022 |
-| Rust integration tests | 945 |
+| Rust source, including unit tests | 16,324 |
+| Rust integration tests | 1,013 |
 | Cargo manifest | 24 |
-| **Total** | **19,684** |
+| **Total** | **20,101** |

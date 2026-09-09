@@ -365,11 +365,21 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proved
+- **Status:** Partially proved — scrollback-indicator candidate in `ven-scrollback-position-ddo`.
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
 - **Result:**
+  - While away from live output, Venus displays `↑ N rows` (`↑ 1 row` for one)
+    from the accepted frame's authoritative wrapped display-row distance. Live
+    bottom, alternate screen, recovery and known terminal-owned routing hide it.
+    Preview movement never changes the count; accessibility exposes committed
+    position as a description rather than an alert. The selected pane header
+    reserves space for the count. Standalone and picker terminals use a small
+    top-right overlay that preserves grid dimensions and yields to selection,
+    links, notices, picker tab previews and an overlapping terminal cursor.
+    Pending reflow hides the old count;
+    labels that cannot fit in full remain accessible without clipped digits.
   - Precision movement translates and clips an accepted complete Orbit frame
     plus its bounded revision-bound row window at two presented pixels per
     native input pixel.
@@ -413,8 +423,9 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
-- **Consumes:** Orbit `ORB-C5`, `ORB-C8`, and `ORB-C9` through canonical ORBS v10
-  at `91999d79546422b49bdbc124166a65859d0bd872`; exact patched winit
+- **Consumes:** Orbit `ORB-C4`, `ORB-C5`, `ORB-C6`, `ORB-C8`, and `ORB-C9`
+  through canonical ORBF v2 / ORBS v11 at
+  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`; exact patched winit
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,

@@ -1375,6 +1375,7 @@ mod tests {
             revision,
             dimensions: Dimensions { cols: 0, rows: 0 },
             screen: Screen::Primary,
+            scroll_position: orbit_protocol::ScrollPosition::default(),
             title: String::new(),
             working_directory: String::new(),
             capabilities: Capabilities {

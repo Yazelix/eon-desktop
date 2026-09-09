@@ -188,6 +188,22 @@ impl SessionModel {
         self.scene.as_ref()
     }
 
+    /// Position of the accepted viewport, never extrapolated from a preview.
+    #[must_use]
+    pub fn scrollback_label(&self) -> Option<String> {
+        if !self.is_attached()
+            || self.awaiting_current_frame
+            || matches!(
+                self.scroll_preview,
+                Some(ScenePreview::TerminalOwned { .. })
+            )
+        {
+            return None;
+        }
+        let rows = self.reducer.current()?.scroll_position.rows_from_live;
+        (rows > 0).then(|| format!("↑ {rows} row{}", if rows == 1 { "" } else { "s" }))
+    }
+
     #[must_use]
     pub fn scroll_preview(&self) -> Option<&ScenePreview> {
         self.scroll_preview.as_ref()

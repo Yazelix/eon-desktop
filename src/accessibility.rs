@@ -26,6 +26,7 @@ struct Snapshot {
     title: String,
     content: AccessibleText,
     status: String,
+    scrollback_label: Option<String>,
     size: PhysicalSize<u32>,
     metrics: CellMetrics,
     columns: Option<u16>,
@@ -42,6 +43,7 @@ impl Snapshot {
             title: "Venus".into(),
             content: AccessibleText::default(),
             status: "Connecting to Orbit".into(),
+            scrollback_label: None,
             size,
             metrics: CellMetrics::for_scale(1.0),
             columns: None,
@@ -104,6 +106,11 @@ impl Snapshot {
         });
         if terminal {
             content.set_read_only();
+            if let Some(label) = &self.scrollback_label {
+                content.set_description(format!(
+                    "Scrollback: {label} above live output (committed display rows)"
+                ));
+            }
             content.set_children(
                 (0..self.content.rows.len())
                     .map(text_run_id)
@@ -307,6 +314,7 @@ impl Accessibility {
         workspace: Option<&WorkspaceScene>,
         workspace_focus: WorkspaceFocus,
         status: &str,
+        scrollback_label: Option<&str>,
         size: PhysicalSize<u32>,
         metrics: CellMetrics,
     ) {
@@ -315,6 +323,7 @@ impl Accessibility {
             snapshot.size = size;
             snapshot.metrics = metrics;
             snapshot.status = status.to_owned();
+            snapshot.scrollback_label = scrollback_label.map(str::to_owned);
             snapshot.set_workspace(workspace);
             snapshot.workspace_focus = workspace_focus;
             if let Some(scene) = scene {
@@ -976,5 +985,31 @@ mod tests {
         assert_ne!(tree_node_id(&third, "t3  /tmp/t3"), tab_a);
         assert_ne!(tree_node_id(&third, "pane-c unavailable"), pane_a);
         assert_eq!(third.focus, pane_b);
+    }
+
+    #[test]
+    fn scrollback_is_a_terminal_description_without_live_alerts() {
+        let mut snapshot = Snapshot::new(PhysicalSize::new(800, 600));
+        snapshot.columns = Some(80);
+        snapshot.status.clear();
+        for label in [Some("↑ 240 rows"), Some("↑ 1 row"), None] {
+            snapshot.scrollback_label = label.map(str::to_owned);
+            let update = snapshot.tree();
+            assert_eq!(node(&update, CONTENT).role(), Role::Terminal);
+            assert_eq!(
+                node(&update, CONTENT).description(),
+                label
+                    .map(|label| format!(
+                        "Scrollback: {label} above live output (committed display rows)"
+                    ))
+                    .as_deref()
+            );
+            assert!(
+                update
+                    .nodes
+                    .iter()
+                    .all(|(_, node)| node.role() != Role::Alert)
+            );
+        }
     }
 }

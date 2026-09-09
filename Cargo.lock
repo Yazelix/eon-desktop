@@ -1585,7 +1585,7 @@ dependencies = [
 [[package]]
 name = "orbit-protocol"
 version = "0.1.0"
-source = "git+https://github.com/Yazelix/eon-sessions.git?rev=91999d79546422b49bdbc124166a65859d0bd872#91999d79546422b49bdbc124166a65859d0bd872"
+source = "git+https://github.com/Yazelix/eon-sessions.git?rev=ea9fd28ce0908f218cf65d4e6df368f0a4e565f5#ea9fd28ce0908f218cf65d4e6df368f0a4e565f5"
 
 [[package]]
 name = "ordered-float"
