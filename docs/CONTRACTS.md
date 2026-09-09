@@ -28,6 +28,11 @@ retains accepted user-visible chronology.
   Requests must fit Orbit's 100,000-cell limit and native pixel/GPU bounds.
   Compositor sizing policy may override the request; actual resize remains
   authoritative. Later user resizing is not constrained to the initial grid.
+  Stack bottom-margin accounting is accepted at source
+  `ff426a9f3d6e1acbb7ae1ce2388df7c75f7bb271`: the existing initial-grid check
+  passes for standalone/workspace/picker at simulated scales 1/1.25/1.5/2.
+  Native installed proof is indexed with the pane-stack polish below; previous
+  typography and fractional-scale qualifications remain in force.
 - **Important failures:** Invalid values, duplicate singleton options, absent
   named families, a non-monospace primary, or impossible initial dimensions
   fail with bounded diagnostics before terminal presentation/attachment.
@@ -525,6 +530,22 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Full-width separators, bottom spacing and lighter selected headers are
+    accepted at source `ff426a9f3d6e1acbb7ae1ce2388df7c75f7bb271`.
+    Locked Rust checks pass (123 tests), with a red/green margin/hit regression.
+    Private Sway 1.12 / Vulkan lavapipe scale-1 true/false proof covers selection,
+    hover, native focus/input, long labels, narrow overflow, picker and PTY grids.
+    Pixel checks prove side-to-side separators, selected fill in both modes and
+    the 12-logical-pixel bottom gap at default typography. All 30 existing runtime
+    identities survive; private processes stop cleanly. Inputs, captures and
+    limits are in
+    `~/.local/state/eon/proofs/ven-connected-pane-stack-0ub-polish-2026-09-09/REPORT.md`.
+    Installed Eon/EonTerm generation `g1-23256a5c404a78d4a68164edae640415`
+    passes default/off visual and native interaction checks. Reopened 100x30
+    workspace PTYs preserve their supervisor, Orbit Sessions and command;
+    standalone remains 100x30 without workspace chrome. All 28 pre-existing
+    runtime identities survive installed proof. Fractional native scale, other
+    compositors, screen-reader usage and offline lifecycle remain qualified.
   - Connected pane stacks are accepted at source
     `8389cc011adbbf9c390a912d6c93b0040e47e21d`
     (`ven-connected-pane-stack-0ub`). Locked Rust checks (123 ordinary tests)
