@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Connect accordion panes within one rounded outer frame, with thin inset
+  separators. Keep individual hover, selection and keyboard-focus cues;
+  `--pane-frames false` hides the shared frame and separators.
+
 - Give each workspace pane a thin rounded frame and quieter header by default.
   Accept `--pane-frames true|false`; hiding frames preserves grid dimensions,
   pane controls, hover feedback and rounded keyboard-focus indicators.

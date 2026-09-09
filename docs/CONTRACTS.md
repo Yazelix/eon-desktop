@@ -466,9 +466,11 @@ qualified by the identities and boundaries below.
     an underline; keyboard focus adds a rounded outline. Pane shell navigation
     does not rename or resize tabs.
   - Every visible live pane endpoint has one bounded read-only metadata observer.
-  - Pane frames use thin rounded borders around each collapsed header and the
-    expanded pane's header/body. `--pane-frames true|false` defaults to `true`;
-    `false` removes decorative frames while retaining headers, selected labels,
+  - Pane frames connect the visible accordion within one thin rounded outer
+    border, with inset horizontal separators between neighboring panes. The
+    shared border stays fixed while overflowing headers scroll within it.
+    `--pane-frames true|false` defaults to `true`; `false` removes the shared
+    border and separators while retaining headers, selected labels,
     hover feedback and a distinct rounded keyboard-focus outline. Both modes
     preserve the same terminal grid, header hit targets and AccessKit bounds.
     Changed pane lists resize the terminal even when the endpoint stays selected.

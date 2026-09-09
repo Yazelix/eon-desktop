@@ -30,11 +30,11 @@ inspection only; no source, Zellij configuration or live-update mechanism is
 reused. Eon's selected outcome is rounded frames enabled by default, with one
 startup boolean; radius remains presentation detail.
 
-The existing Scene header/body bounds, 1.5-cell header height and padding retain
-grid sizing, hit targets and AccessKit ownership. Thin rounded strokes replace
-filled bars and dividers without filling the terminal interior; original bounds
-are clipped after rounding. The existing rectangle batch, header hover and
-focus paths suffice. Another shader, dependency, layout model, geometry setting
+The existing Scene viewport/header/body bounds, 1.5-cell header height and padding
+retain grid sizing, hit targets and AccessKit ownership. A shared rounded outline
+and inset separators connect the stack without filling the terminal interior;
+separators stay inside its rounded corners. The existing rectangle batch, header
+hover and focus paths suffice. Another shader, dependency, layout model, geometry setting
 or persistent Venus configuration is rejected. Strict launch admission,
 unpainted stroke interiors/corners, clipped bounds and isolated native
 default/off interaction are the falsifiers. Eon delivery remains separate.

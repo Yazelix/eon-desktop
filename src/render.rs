@@ -1184,26 +1184,33 @@ impl Renderer {
                 }
             }
             rectangles.clip = Some(workspace.pane_viewport);
-            if self.pane_frames {
-                for pane in &workspace.panes {
-                    rectangles.push_rounded_outline(
-                        pane_chrome_rect(workspace.pane_bounds(pane), self.metrics),
-                        self.metrics.padding,
-                        if pane.selected {
-                            SceneColor {
-                                r: 58,
-                                g: 75,
-                                b: 91,
-                            }
-                        } else {
-                            SceneColor {
-                                r: 43,
-                                g: 53,
-                                b: 67,
-                            }
+            if self.pane_frames && !workspace.panes.is_empty() {
+                let frame = pane_chrome_rect(workspace.pane_viewport, self.metrics);
+                rectangles.push_rounded_outline(
+                    frame,
+                    self.metrics.padding,
+                    SceneColor {
+                        r: 58,
+                        g: 75,
+                        b: 91,
+                    },
+                );
+                rectangles.clip = Some(frame);
+                for pane in workspace.panes.iter().skip(1) {
+                    rectangles.push(
+                        frame.left + self.metrics.padding,
+                        pane.rect.top,
+                        frame.width - self.metrics.padding * 2.0,
+                        1.0,
+                        SceneColor {
+                            r: 43,
+                            g: 53,
+                            b: 67,
                         },
+                        1.0,
                     );
                 }
+                rectangles.clip = Some(workspace.pane_viewport);
             }
             if workspace_focus == WorkspaceFocus::Panes
                 && let Some(pane) = workspace.panes.iter().find(|pane| pane.selected)
