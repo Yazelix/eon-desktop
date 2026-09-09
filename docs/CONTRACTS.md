@@ -22,8 +22,9 @@ retains accepted user-visible chronology.
   and specialty handling; no overrides preserve 10 by 18 logical cells and the
   960 by 600 logical initial window.
 - **Initial geometry:** Optional positive `u16` columns/rows request terminal
-  dimensions, with workspace headers and picker inset supplied by the existing
-  Scene owner. Omitted dimensions retain the existing initial window dimension.
+  dimensions, with workspace headers, stack bottom margin and picker inset
+  supplied by the existing Scene owner. Omitted dimensions retain the existing
+  initial window dimension.
   Requests must fit Orbit's 100,000-cell limit and native pixel/GPU bounds.
   Compositor sizing policy may override the request; actual resize remains
   authoritative. Later user resizing is not constrained to the initial grid.
@@ -467,12 +468,15 @@ qualified by the identities and boundaries below.
     does not rename or resize tabs.
   - Every visible live pane endpoint has one bounded read-only metadata observer.
   - Pane frames connect the visible accordion within one thin rounded outer
-    border, with inset horizontal separators between neighboring panes. The
-    shared border stays fixed while overflowing headers scroll within it.
+    border, with horizontal separators reaching its sides and a padding-sized
+    gap below the stack. Separators follow the rounded corners during scrolling;
+    the shared border stays fixed while overflowing headers scroll within it.
     `--pane-frames true|false` defaults to `true`; `false` removes the shared
-    border and separators while retaining headers, selected labels,
+    border and separators while retaining headers, a lighter selected fill,
     hover feedback and a distinct rounded keyboard-focus outline. Both modes
     preserve the same terminal grid, header hit targets and AccessKit bounds.
+    Initial requested grids include the bottom gap in their window overhead;
+    the gap accepts no pane or terminal input.
     Changed pane lists resize the terminal even when the endpoint stays selected.
     The option has no visual effect in standalone or picker presentation.
     Missing, duplicate or invalid values fail before window creation. Eon owns

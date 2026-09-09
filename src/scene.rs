@@ -256,7 +256,10 @@ impl WorkspaceScene {
                 .iter()
                 .find(|tab| tab.id == snapshot.active_tab)
                 .expect("EONW validates the active tab");
-            (0.0, tab_height + pane_height * tab.panes.len() as f32)
+            (
+                0.0,
+                tab_height + pane_height * tab.panes.len() as f32 + metrics.padding,
+            )
         }
     }
     #[must_use]
@@ -386,6 +389,10 @@ impl WorkspaceScene {
             };
         }
 
+        let pane_viewport = SceneRect {
+            height: (pane_viewport.height - metrics.padding).max(0.0),
+            ..pane_viewport
+        };
         let active = &snapshot.tabs[active_tab];
         let pane_height = pane_height.min(pane_viewport.height);
         let selected = active

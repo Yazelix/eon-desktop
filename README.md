@@ -14,9 +14,9 @@ two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
 directory. Pill-shaped tabs fit their labels, with middle ellipsis for long names
 and full launch-path previews on hover. Selected tabs use a brighter fill and
 label without an underline; keyboard tab focus adds a rounded outline.
-Pane headers use quiet backgrounds and brighter selected labels. One rounded
-frame connects the pane stack, with thin separators between panes by default;
-hover highlights a header and keyboard pane focus adds a rounded accent outline.
+Pane headers use quiet backgrounds and a lighter selected fill and label. One
+rounded frame connects the pane stack, with full-width separators and bottom
+padding; hover highlights a header and keyboard focus adds a rounded accent outline.
 Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
@@ -339,11 +339,11 @@ and benchmark CSV data.
 | Agent policy inputs | 208 |
 | README | 349 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,431 |
+| Contracts and references | 1,437 |
 | Memory benchmark report | 158 |
 | Crate decisions | 258 |
 | Changelog | 221 |
-| Rust source, including unit tests | 15,998 |
-| Rust integration tests | 938 |
+| Rust source, including unit tests | 16,010 |
+| Rust integration tests | 944 |
 | Cargo manifest | 24 |
-| **Total** | **19,591** |
+| **Total** | **19,615** |

@@ -1186,6 +1186,23 @@ impl Renderer {
             rectangles.clip = Some(workspace.pane_viewport);
             if self.pane_frames && !workspace.panes.is_empty() {
                 let frame = pane_chrome_rect(workspace.pane_viewport, self.metrics);
+                for pane in workspace.panes.iter().skip(1) {
+                    rectangles.clip = Some(SceneRect {
+                        top: pane.rect.top,
+                        height: 1.0,
+                        ..frame
+                    });
+                    rectangles.push_rounded(
+                        frame,
+                        self.metrics.padding,
+                        SceneColor {
+                            r: 43,
+                            g: 53,
+                            b: 67,
+                        },
+                    );
+                }
+                rectangles.clip = Some(workspace.pane_viewport);
                 rectangles.push_rounded_outline(
                     frame,
                     self.metrics.padding,
@@ -1195,22 +1212,6 @@ impl Renderer {
                         b: 91,
                     },
                 );
-                rectangles.clip = Some(frame);
-                for pane in workspace.panes.iter().skip(1) {
-                    rectangles.push(
-                        frame.left + self.metrics.padding,
-                        pane.rect.top,
-                        frame.width - self.metrics.padding * 2.0,
-                        1.0,
-                        SceneColor {
-                            r: 43,
-                            g: 53,
-                            b: 67,
-                        },
-                        1.0,
-                    );
-                }
-                rectangles.clip = Some(workspace.pane_viewport);
             }
             if workspace_focus == WorkspaceFocus::Panes
                 && let Some(pane) = workspace.panes.iter().find(|pane| pane.selected)
@@ -1570,8 +1571,12 @@ impl Renderer {
             );
             let header = pane_chrome_rect(pane.rect, self.metrics);
             rectangles.clip = Some(workspace.pane_viewport);
-            if self.header_hovered(WorkspaceFocus::Panes, &pane.id) {
-                rectangles.push_rounded(header, self.metrics.padding, idle);
+            if pane.selected || self.header_hovered(WorkspaceFocus::Panes, &pane.id) {
+                rectangles.push_rounded(
+                    header,
+                    self.metrics.padding,
+                    if pane.selected { selected } else { idle },
+                );
             }
             rectangles.clip = None;
             self.push_text_clipped(

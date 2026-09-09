@@ -32,8 +32,10 @@ startup boolean; radius remains presentation detail.
 
 The existing Scene viewport/header/body bounds, 1.5-cell header height and padding
 retain grid sizing, hit targets and AccessKit ownership. A shared rounded outline
-and inset separators connect the stack without filling the terminal interior;
-separators stay inside its rounded corners. The existing rectangle batch, header
+and full-width separators connect the stack without filling the terminal interior;
+one-pixel clips of the existing rounded fill keep separators inside its corners.
+Scene reserves bottom padding and includes it in initial grid overhead. The
+selected header reuses the existing selected fill from Venus `8211e8f`; header
 hover and focus paths suffice. Another shader, dependency, layout model, geometry setting
 or persistent Venus configuration is rejected. Strict launch admission,
 unpainted stroke interiors/corners, clipped bounds and isolated native
