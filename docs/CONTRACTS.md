@@ -521,6 +521,22 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Connected pane stacks are accepted at source
+    `8389cc011adbbf9c390a912d6c93b0040e47e21d`
+    (`ven-connected-pane-stack-0ub`). Locked Rust checks (123 ordinary tests)
+    and the native header regression pass. Private Sway 1.12 / Vulkan lavapipe
+    at scale 1 proves top/middle/bottom selection, native focus/input, long
+    labels, overflow, picker and unchanged PTY grids. Five frame-off captures
+    and the single-pane frame-on capture match the prior renderer exactly;
+    multi-pane captures show a continuous side border and two inset separators.
+    Exact inputs, captures and limits are retained in
+    `~/.local/state/eon/proofs/ven-connected-pane-stack-0ub-2026-09-09/REPORT.md`.
+    Installed Eon and EonTerm delivery passes with generation
+    `g1-216b179a560fe9af5c70a15dce222bf1`: exact profiles, default/off,
+    connected border pixels, focus/input, overflow, picker and real PTY grids.
+    All 25 existing runtime processes survive; private processes are reaped.
+    Fractional native scale, other compositors and actual screen-reader use
+    remain qualified.
   - Pane-frame review is accepted at source
     `5c23b0fe206fb2ed9e027603ae61ba366913cbe1`. Selected offline labels stay
     distinct with frames off; rounded fills and outlines share edge coverage.
@@ -535,7 +551,8 @@ qualified by the identities and boundaries below.
     scale-1 default/on/off, focus, overflow and picker observations. Rapid changes
     resize retained PTYs correctly. Exact hashes and qualifications are in
     `~/.local/state/eon/proofs/ven-pane-stack-chrome-suu-2026-09-09/REPORT.md`.
-    Installed Eon delivery remains pending in `eon-pane-stack-delivery-jfo`.
+    Initial Eon delivery is recorded in
+    `~/.local/state/eon/proofs/eon-pane-stack-delivery-jfo-2026-09-09/REPORT.md`.
     Source acceptance covers the recorded native boundary; earlier proofs do not
     cover this change or widen its scale/compositor/accessibility evidence.
   - Pill-shaped corners without a selection underline are accepted at source
