@@ -350,8 +350,8 @@ qualified by the identities and boundaries below.
   worker-start, and persistent-renderer failures remain terminal and withdraw
   presented input.
 - **Owner:** Venus connection state, notice projection, and renderer lifecycle.
-- **Consumes:** Orbit `ORB-C3`, `ORB-C4`, and `ORB-C7` through canonical ORBS v4
-  at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
+- **Consumes:** Orbit `ORB-C3`, `ORB-C4`, and `ORB-C7` through canonical ORBS v11
+  at `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
 - **Quiet workspace proof:** `b7404dae6c59a8e6de6ca9efbf2c907eedf1262b`.
@@ -364,6 +364,9 @@ qualified by the identities and boundaries below.
   Consumes accepted Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`
   (ORBF v2 / ORBS v11). This does not widen VEN-C8 fractional-scale,
   compositor, screen-reader or earlier distinct failure evidence.
+  Eon `07dc210a49cd30f3b58fa65fd9e9a45b421e9b36` accepts this source through
+  both refreshed products. Its contract index owns installed identities,
+  navigation observations and the retained intermittent headless-capture limits.
 - **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
