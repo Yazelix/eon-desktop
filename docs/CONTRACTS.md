@@ -335,14 +335,16 @@ qualified by the identities and boundaries below.
 
 ## VEN-C4 — Bounded explicit failure UX
 
-- **Status:** Proved
+- **Status:** Partially proved — quiet workspace transitions await source acceptance.
 - **Consumer:** A Venus user observing connection, protocol, model, renderer, or
   Orbit failure.
 - **Trigger:** Attachment rejection, incompatibility, invalid frame, Orbit loss,
   renderer failure, or retry transition.
-- **Result:** Venus exposes one bounded truthful notice instead of hanging or
-  inventing state; retryable loss retains its failure during backoff, reports an
-  active attempt, and clears only after a fresh coherent frame.
+- **Result:** Venus exposes bounded truthful failure notices without inventing
+  state. Retryable loss remains visible during backoff. Routine connection and
+  first-frame progress is quiet inside an accepted workspace; standalone
+  attachment retains progress messages. Actual attachment and rendering failures
+  remain visible in both modes.
 - **Important failures:** Standalone Busy is terminal; only supervised
   replacement retries it. Incompatible, Exited, model, queue, invalid-input,
   worker-start, and persistent-renderer failures remain terminal and withdraw

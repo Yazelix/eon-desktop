@@ -130,6 +130,8 @@ retries after 250 ms, 500 ms, 1 s, 2 s, 4 s, and then every 5 s. Venus retains
 the last coherent scene during recovery and replaces it only with a fresh
 complete frame. Busy, incompatible, exited, invalid protocol or model, resource,
 queue, input, and worker-start failures remain terminal and visible.
+Routine workspace attachment and first-frame progress are silent; standalone
+attachment retains progress messages.
 
 For an Eon workspace, select workspace mode with only the EONW socket:
 
@@ -350,13 +352,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 362 |
+| README | 364 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,572 |
+| Contracts and references | 1,574 |
 | Memory benchmark report | 158 |
 | Crate decisions | 261 |
 | Changelog | 230 |
-| Rust source, including unit tests | 16,370 |
+| Rust source, including unit tests | 16,385 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 24 |
-| **Total** | **20,227** |
+| **Total** | **20,246** |

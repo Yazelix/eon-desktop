@@ -1987,6 +1987,11 @@ impl Application {
             return format!("Connecting to Eon workspace at {}", socket.display());
         }
         match self.model.connection() {
+            ConnectionState::Connecting | ConnectionState::Attached
+                if self.workspace_model.snapshot().is_some() =>
+            {
+                String::new()
+            }
             ConnectionState::Connecting => {
                 format!(
                     "Connecting to Orbit at {}",
@@ -3574,6 +3579,10 @@ mod tests {
                 self.stream = Some(self.listener.accept().unwrap().0);
                 self.app
                     .handle_transport(TransportEvent::Server(ServerMessage::Attached));
+                assert!(
+                    self.app.status().is_empty(),
+                    "normal workspace attachment must not announce its first-frame wait"
+                );
                 self.app.handle_transport(frame(1, Screen::Primary));
             }
 
@@ -3912,6 +3921,7 @@ mod tests {
                     );
                 }
                 app.set_orbit_attachment(b"replacement".to_vec(), false);
+                assert!(app.status().contains("selected Eon pane is offline"));
                 assert_eq!(app.presented_revision(), None);
                 assert!(app.pointer_link().is_none());
                 self.checked = true;
@@ -3995,8 +4005,13 @@ mod tests {
         // This input fixture supplies its own attachment and frames; native
         // startup admission has separate coverage.
         app.initial_scale_pending = false;
+        assert!(app.status().starts_with("Connecting to Orbit"));
         app.workspace_model
             .apply(workspace::Response::Snapshot(snapshot));
+        assert!(
+            app.status().is_empty(),
+            "normal workspace attachment must not announce its connection"
+        );
         app.workspace_transport = Some(WorkspaceTransport::start(workspace_socket, || {}));
         let mut probe = Probe {
             app,
