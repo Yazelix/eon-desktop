@@ -335,7 +335,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C4 — Bounded explicit failure UX
 
-- **Status:** Partially proved — quiet workspace transitions await source acceptance.
+- **Status:** Proved
 - **Consumer:** A Venus user observing connection, protocol, model, renderer, or
   Orbit failure.
 - **Trigger:** Attachment rejection, incompatibility, invalid frame, Orbit loss,
@@ -354,6 +354,16 @@ qualified by the identities and boundaries below.
   at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
+- **Quiet workspace proof:** `b7404dae6c59a8e6de6ca9efbf2c907eedf1262b`.
+  Locked fmt/check/test/clippy/build pass (124 ordinary tests). The existing
+  native Application input/presentation check goes red for routine connection
+  progress, then passes with silent workspace Connecting and first-frame wait,
+  visible offline failure and retained standalone progress on x86_64 Linux,
+  private Sway 1.12 / host lavapipe at scale 1. Source and native evidence lives
+  under `~/.local/state/eon/proofs/eon-quiet-workspace-navigation-y7a/venus/`.
+  Consumes accepted Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`
+  (ORBF v2 / ORBS v11). This does not widen VEN-C8 fractional-scale,
+  compositor, screen-reader or earlier distinct failure evidence.
 - **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.

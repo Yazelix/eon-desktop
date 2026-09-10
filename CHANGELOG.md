@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep routine workspace attachment and first-frame progress silent while
+  retaining actual failures and standalone connection progress.
+
 - Show authoritative scrollback distance as `↑ N rows` in the selected pane
   header, or a small standalone/picker overlay. Hide it at live output and
   expose committed position as an accessible description. Overlays yield to
