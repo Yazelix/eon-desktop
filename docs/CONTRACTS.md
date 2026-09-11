@@ -898,22 +898,30 @@ qualified by the identities and boundaries below.
 - **Open proof:** A populated current Eon workspace was not re-dogfooded; this
   proof reuses accepted VEN-C11 composition evidence.
 
-## VEN-C16 — Native Linux Wayland platform
+## VEN-C16 — Native Linux Wayland and Apple Silicon macOS platforms
 
-- **Status:** Proved
+- **Status:** Proved for x86_64 Linux native Wayland; Apple Silicon macOS is
+  planned and unproved.
 - **Consumer:** Every packaged Venus application launch.
-- **Trigger:** Build or launch the native application.
-- **Result:** Venus supports only Linux on native Wayland with Vulkan, selects no
-  X11 or Metal backend, rejects non-Linux builds, and reaches attachment only
-  with a usable Wayland display.
-- **Important failures:** Launch without Wayland fails before presentation
-  attachment with a bounded explicit error.
+- **Trigger:** Build or launch the native application on an approved target.
+- **Result:** Venus uses native Wayland with Vulkan on Linux and will use the
+  native application/window lifecycle with Metal on `aarch64-darwin`. Both
+  targets share protocol validation, model, scene, draw inputs, renderer,
+  accessibility tree, semantic actions, and workspace composition; only native
+  host mechanics vary.
+- **Important failures:** An unavailable native host or graphics backend,
+  invalid platform mapping, or unsupported target fails before presentation
+  attachment with a bounded explicit error. Evaluation or compilation alone is
+  not native runtime proof.
 - **Owner:** Venus native host and dependency feature selection.
-- **Consumes:** User-approved `EON-C7`; exact winit 0.30.13 at
-  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; wgpu 30.0.0;
-  wl-clipboard-rs 0.9.3; unchanged ORBS v4 and EONW v3.
-- **Boundary:** X11, Xwayland, macOS, and other native platforms are unsupported.
-- **Proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
+- **Consumes:** User-approved `EON-C7`; proved Linux uses exact winit 0.30.13 at
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and
+  wl-clipboard-rs 0.9.3 with unchanged ORBS v4 and EONW v3. The macOS path must
+  consume accepted Orbit `ORB-C14` at `0233f4d34b294a50c5bc7f373859cf4ec04d2414`;
+  native feature or crate changes remain gated on the stack qualification.
+- **Boundary:** X11, Xwayland, Intel macOS, signing, notarization, packaging,
+  distribution, and other native platforms remain unsupported.
+- **Linux proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
   - **Environment:** x86_64 Linux native Wayland
   - **Evidence:** Locked format/check/test/Clippy, exact dependency features,
     no-Wayland failure, and live native event-loop launch.
@@ -925,6 +933,9 @@ qualified by the identities and boundaries below.
     primary clipboards. VEN-C10 native-paste and VEN-C13 terminal-authored
     clipboard gaps remain separate; this does not prove non-systemd delivery
     or broader compositor coverage.
+- **Open macOS proof:** `ven-prove-venus-apple-silicon-macos-nm7` must record
+  exact hardware, OS, toolchain, artifacts, automated checks, interactive
+  observations, failures, and limitations.
 
 ## VEN-C17 — Caller-owned native application identity
 

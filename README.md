@@ -45,8 +45,8 @@ Venus consumes EONW v5 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 `0cc8f477298681ae3945903e8fdb5852d487c5ab`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 popup catalog, geometry settings, commands, lifecycle, actions, and Session mappings.
-This consumer precedes Eon's v5 runtime activation; the installed Eon composition
-still uses its accepted v4 Venus pin. Venus consumes
+This consumer is active in Eon's current v5 runtime, whose component graph pins
+Venus source `d212ff911c18cf0c1cd0f6b7e3f48a2e01d78d86`. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -68,7 +68,9 @@ cargo run --locked -- /path/to/orbit.sock
 ```
 
 Venus requires a native Wayland display and fails before presentation
-attachment when one is unavailable. X11, Xwayland, and macOS are unsupported.
+attachment when one is unavailable. This is the only proved host. Apple Silicon
+macOS is the active Nix-only expansion and remains unsupported until VEN-C16's
+native proof succeeds; X11, Xwayland, and Intel macOS remain unsupported.
 
 ### Typography and initial size
 
@@ -342,8 +344,9 @@ popup command/lifetime policy, persistent Venus configuration, blur strength or 
 background images, plugins, remote and web access, packaging, and distribution
 are outside this slice.
 
-The Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs. It
-selects native Wayland and Vulkan only. The exact
+The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
+with native Wayland and Vulkan. The approved but unproved Apple Silicon host
+must reuse the same renderer/model path with narrow native mechanics. The exact
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
 accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
 selection completion, routed native
@@ -359,14 +362,14 @@ and benchmark CSV data.
 
 | Surface | Lines |
 |---|---:|
-| Agent policy inputs | 208 |
-| README | 372 |
+| Agent policy inputs | 216 |
+| README | 375 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,632 |
+| Contracts and references | 1,644 |
 | Memory benchmark report | 158 |
 | Crate decisions | 263 |
 | Changelog | 241 |
 | Rust source, including unit tests | 16,696 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **20,634** |
+| **Total** | **20,657** |

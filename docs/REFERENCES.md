@@ -68,7 +68,8 @@ command is the native seam; no crate or packaged dependency is added.
 `xdg-open` was rejected because some paths wait for the browser process itself;
 opener crates and direct portal bindings would add an unnecessary owner here.
 Official Apple `NSWorkspace.open` documentation was inspected as the Bead's
-required platform comparison; `VEN-C16` excludes macOS implementation.
+required platform comparison; that proof remains Linux-only. Any macOS opener
+mapping belongs to the separately gated `VEN-C16` Apple Silicon proof.
 
 Foot is MIT and GLib LGPL-2.1-or-later. This is mechanism inspection, with no
 source copied into Venus. Native GIO, exact clipboard bytes, pointer/keyboard

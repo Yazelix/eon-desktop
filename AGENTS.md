@@ -226,7 +226,10 @@ with fractional native scale still open. `VEN-C18` is proved through Venus
 `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` with
 Eon's distinct-picker-endpoint acceptance at
 `4298fbb8868752e3d6c8eb4fd79fae067ab3e2a1`. Native Linux Wayland is the sole
-platform; broader compositor coverage remains unproved.
+proved platform; broader compositor coverage remains unproved. Orbit `ORB-C14`
+is proved at `0233f4d34b294a50c5bc7f373859cf4ec04d2414`. On 2026-09-11 the user
+activated one Nix-only Apple Silicon macOS expansion under `VEN-C16`, which
+remains unsupported until Venus's native proof succeeds.
 
 ## Product boundary
 
@@ -246,9 +249,10 @@ local Orbit session or Eon-authored horizontal tabs and ordered per-active-tab
 vertical accordion pane headers around exactly one expanded Orbit surface. It
 does not include arbitrary split trees, simultaneous expanded panes, sidebars,
 popups, settings, visual effects, configuration, remote or web access, plugins,
-shell integration, compatibility windows, packaging, or distribution. X11,
-Xwayland, macOS, and other native platforms are unsupported product surfaces,
-not compatibility targets.
+shell integration, compatibility windows, packaging, or distribution. Apple
+Silicon macOS is an approved but unproved next platform. X11, Xwayland, Intel
+macOS, and other native platforms are unsupported product surfaces, not
+compatibility targets.
 
 A new Venus module is product scope, not an implementation detail.
 
@@ -354,13 +358,17 @@ accessibility, and lifecycle.
 
 ## Platform discipline
 
-Native Linux Wayland is the sole implementation and verification target. Venus
-selects Wayland and Vulkan only; X11, Xwayland, macOS, and other native platforms
-are unsupported. Keep the existing Wayland host owner narrow, and do not add a
-compatibility backend, portability layer, or direct protocol copy without an
-explicit product decision.
+Native Linux Wayland with Vulkan is the only proved target. `aarch64-darwin`
+with Metal is the only approved expansion. Keep one shared protocol validator,
+model, scene, draw-input, renderer, accessibility,
+and semantic-action path. Isolate event-loop, window, graphics-surface,
+clipboard, IME, accessibility-host, shortcut, and application-lifecycle
+mechanics at the existing native host boundary. Add no generic portability
+framework, duplicate renderer, direct protocol copy, X11 backend, Intel macOS
+target, signing, notarization, or distribution surface.
 
-Every implementation Bead records `neutral` or `isolated Wayland dependency`.
+Every implementation Bead records `neutral`, `isolated Wayland dependency`,
+`isolated Darwin dependency`, or an explicit platform blocker.
 
 ## Protocol exceptions
 
