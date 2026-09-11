@@ -25,8 +25,8 @@ only the selected endpoint receives presentation and input. A fresh workspace
 and every new tab may begin with no pane while Eon publishes a Project popup.
 Tool popups and the project chooser share one rounded terminal surface covering
 the stack. Its outer frame keeps the pane stack's exact edges while Eon-supplied
-logical margins inset terminal content and its compact label. Tabs remain visible
-and actionable. A tab containing only hidden popups has an empty body
+logical margins inset terminal content beneath its compact border label. Tabs
+remain visible and actionable. A tab containing only hidden popups has an empty body
 and keeps keyboard/accessibility focus on its selected tab until it reopens
 retained work through the catalog shortcut. Venus
 automatically recovers that attachment after retryable local socket loss, detaches
@@ -362,11 +362,11 @@ and benchmark CSV data.
 | Agent policy inputs | 208 |
 | README | 372 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,631 |
+| Contracts and references | 1,632 |
 | Memory benchmark report | 158 |
 | Crate decisions | 263 |
-| Changelog | 240 |
-| Rust source, including unit tests | 16,678 |
+| Changelog | 241 |
+| Rust source, including unit tests | 16,696 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **20,614** |
+| **Total** | **20,634** |

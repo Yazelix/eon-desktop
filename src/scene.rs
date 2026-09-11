@@ -248,6 +248,10 @@ fn stack_inset(metrics: CellMetrics) -> f32 {
     metrics.padding / 3.0
 }
 
+fn popup_title_gutter(metrics: CellMetrics) -> f32 {
+    metrics.padding / 2.0
+}
+
 pub(crate) fn pane_chrome_rect(rect: SceneRect, metrics: CellMetrics) -> SceneRect {
     let inset = stack_inset(metrics)
         .min(rect.width / 4.0)
@@ -268,7 +272,9 @@ impl WorkspaceScene {
         if active_popup(snapshot).is_some() {
             (
                 snapshot.geometry.side_margin * metrics.scale * 2.0,
-                tab_height + snapshot.geometry.vertical_margin * metrics.scale * 2.0,
+                tab_height
+                    + snapshot.geometry.vertical_margin * metrics.scale * 2.0
+                    + popup_title_gutter(metrics),
             )
         } else {
             let tab = snapshot
@@ -394,19 +400,30 @@ impl WorkspaceScene {
             let vertical_inset = (snapshot.geometry.vertical_margin * metrics.scale).min(
                 (pane_viewport.height - metrics.padding * 2.0 - metrics.height).max(0.0) / 2.0,
             );
+            let title_gutter = if popup.is_some() {
+                popup_title_gutter(metrics).min(
+                    (pane_viewport.height
+                        - vertical_inset * 2.0
+                        - metrics.padding * 2.0
+                        - metrics.height)
+                        .max(0.0),
+                )
+            } else {
+                0.0
+            };
             return Self {
                 tabs,
                 panes: Vec::new(),
                 terminal: SceneRect {
                     left: horizontal_inset,
-                    top: pane_viewport.top + vertical_inset,
+                    top: pane_viewport.top + vertical_inset + title_gutter,
                     width: if popup.is_some() {
                         (pane_viewport.width - horizontal_inset * 2.0).max(0.0)
                     } else {
                         0.0
                     },
                     height: if popup.is_some() {
-                        (pane_viewport.height - vertical_inset * 2.0).max(0.0)
+                        (pane_viewport.height - vertical_inset * 2.0 - title_gutter).max(0.0)
                     } else {
                         0.0
                     },

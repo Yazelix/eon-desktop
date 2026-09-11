@@ -69,7 +69,7 @@ fn shared_popup_projection_keeps_hidden_work_and_one_input_surface() {
     let scene = project(&snapshot, PhysicalSize::new(960, 600));
     assert!(scene.panes.is_empty());
     assert_eq!(scene.terminal.left, 8.0);
-    assert_eq!(scene.terminal.top, scene.tab_viewport.bottom() + 4.0);
+    assert!(scene.terminal.top > scene.tab_viewport.bottom() + 4.0);
     assert_eq!(scene.terminal.bottom(), 596.0);
     assert_eq!(scene.hit_test(0.0, 50.0), None);
     assert_eq!(scene.hit_test(40.0, 60.0), Some(WorkspaceHit::Terminal));

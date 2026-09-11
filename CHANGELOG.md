@@ -6,7 +6,8 @@
   rounded stack-covering geometry, compact labels, translucent margins, catalog
   shortcuts with exact targets, actionable tabs, and empty popup-only bodies.
   Popup outlines retain the pane stack's exact edges across toggles. Empty bodies
-  keep keyboard and accessibility focus on the selected tab.
+  keep keyboard and accessibility focus on the selected tab. A small top gutter
+  separates each border label from the first terminal row.
   Eon command/lifetime policy and composed v5 activation remain downstream.
 
 - Keep routine workspace attachment and first-frame progress silent while

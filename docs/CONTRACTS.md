@@ -971,13 +971,14 @@ qualified by the identities and boundaries below.
   input. Popup entry labels also name the accessible tab panel.
 - **Geometry:** A selected popup reuses the pane stack's exact outer rounded
   frame, so toggling preserves every chrome edge. Shared Eon-supplied logical
-  margins inset the popup terminal content within that stable shell; a compact
-  label occupies existing terminal padding. Scene owns both rectangles: chrome
-  drives the outline, while terminal drives resize, clipping, pointer input,
-  IME and accessibility. Margins shrink to preserve a usable cell grid; tiny
-  surfaces omit the label. Exposed margins share the terminal default
-  background and opacity, with the existing best-effort surface-wide compositor
-  blur request. Pane-frame configuration has no effect on the popup outline.
+  margins inset the popup terminal content within that stable shell. A compact
+  border label keeps a small top gutter before terminal padding. Scene owns
+  both rectangles: chrome drives the outline, while terminal drives resize,
+  clipping, pointer input, IME and accessibility. Margins and the title gutter
+  shrink to preserve a usable cell grid; tiny surfaces omit the label. Exposed
+  margins share the terminal default background and opacity, with the existing
+  best-effort surface-wide compositor blur request. Pane-frame configuration
+  has no effect on the popup outline.
 - **Important failures:** Hidden or replaced endpoints retain no active
   presentation or input. Stale popup actions carry exact instance guards;
   canonical EONW validation and failure responses preserve the last coherent

@@ -1274,16 +1274,17 @@ impl Renderer {
                         b: 124,
                     },
                 );
-                // The label occupies existing top padding, never a terminal cell.
                 let label_height = 12.0 * self.metrics.scale;
-                if self.metrics.padding >= label_height
+                let label_top = workspace.chrome.top;
+                if terminal.top + self.metrics.padding
+                    >= label_top + label_height + self.metrics.scale * 2.0
                     && terminal.height >= self.metrics.padding * 2.0 + self.metrics.height
                     && terminal.width >= self.metrics.padding * 2.0 + self.metrics.width * 4.0
                 {
                     self.push_text_clipped(
                         label,
                         terminal.left + self.metrics.padding,
-                        terminal.top,
+                        label_top,
                         terminal.width - self.metrics.padding * 2.0,
                         terminal.width - self.metrics.padding * 2.0,
                         label_height,
@@ -1293,7 +1294,7 @@ impl Renderer {
                             b: 190,
                         },
                         DrawStyleKind::PopupLabel,
-                        terminal,
+                        workspace.chrome,
                     );
                 }
             }
