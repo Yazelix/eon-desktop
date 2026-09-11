@@ -5,7 +5,8 @@
 - Consume exact EONW v5 through one shared popup surface for tools and Project:
   rounded stack-covering geometry, compact labels, translucent margins, catalog
   shortcuts with exact targets, actionable tabs, and empty popup-only bodies.
-  Empty bodies keep keyboard and accessibility focus on the selected tab.
+  Popup outlines retain the pane stack's exact edges across toggles. Empty bodies
+  keep keyboard and accessibility focus on the selected tab.
   Eon command/lifetime policy and composed v5 activation remain downstream.
 
 - Keep routine workspace attachment and first-frame progress silent while

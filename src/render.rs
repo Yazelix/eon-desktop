@@ -1,6 +1,6 @@
 use crate::{
     Color as SceneColor, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene, ScenePreview, SceneRect,
-    WorkspaceFocus, WorkspaceScene,
+    WorkspaceFocus, WorkspaceScene, scene::pane_chrome_rect,
 };
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
@@ -1220,7 +1220,7 @@ impl Renderer {
             }
             rectangles.clip = Some(workspace.pane_viewport);
             if self.pane_frames && !workspace.panes.is_empty() {
-                let frame = pane_chrome_rect(workspace.pane_viewport, self.metrics);
+                let frame = workspace.chrome;
                 for pane in workspace.panes.iter().skip(1) {
                     rectangles.clip = Some(SceneRect {
                         top: pane.rect.top,
@@ -1266,7 +1266,7 @@ impl Renderer {
                 && let Some(terminal) = workspace.visible_terminal()
             {
                 rectangles.push_rounded_outline(
-                    terminal,
+                    workspace.chrome,
                     self.metrics.padding,
                     SceneColor {
                         r: 82,
@@ -2518,18 +2518,6 @@ struct RectangleBatch {
     width: u32,
     height: u32,
     clip: Option<SceneRect>,
-}
-
-fn pane_chrome_rect(rect: SceneRect, metrics: CellMetrics) -> SceneRect {
-    let inset = (metrics.padding / 3.0)
-        .min(rect.width / 4.0)
-        .min(metrics.height / 4.0);
-    SceneRect {
-        left: rect.left + inset,
-        top: rect.top + inset / 2.0,
-        width: (rect.width - inset * 2.0).max(0.0),
-        height: (rect.height - inset).max(0.0),
-    }
 }
 
 impl RectangleBatch {

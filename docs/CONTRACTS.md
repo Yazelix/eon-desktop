@@ -969,13 +969,15 @@ qualified by the identities and boundaries below.
   Escape returns chrome focus to the terminal. While the terminal is focused,
   Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit
   input. Popup entry labels also name the accessible tab panel.
-- **Geometry:** Shared Eon-supplied logical margins surround a rounded frame
-  with a compact label inside existing terminal padding. Scene owns the single
-  rectangle used for resize, rendering, clipping, pointer input, IME and
-  accessibility. Margins shrink to preserve a usable cell grid; tiny surfaces
-  omit the label. Exposed margins share the terminal default background and
-  opacity, with the existing best-effort surface-wide compositor blur request.
-  Pane-frame configuration has no effect on the popup outline.
+- **Geometry:** A selected popup reuses the pane stack's exact outer rounded
+  frame, so toggling preserves every chrome edge. Shared Eon-supplied logical
+  margins inset the popup terminal content within that stable shell; a compact
+  label occupies existing terminal padding. Scene owns both rectangles: chrome
+  drives the outline, while terminal drives resize, clipping, pointer input,
+  IME and accessibility. Margins shrink to preserve a usable cell grid; tiny
+  surfaces omit the label. Exposed margins share the terminal default
+  background and opacity, with the existing best-effort surface-wide compositor
+  blur request. Pane-frame configuration has no effect on the popup outline.
 - **Important failures:** Hidden or replaced endpoints retain no active
   presentation or input. Stale popup actions carry exact instance guards;
   canonical EONW validation and failure responses preserve the last coherent

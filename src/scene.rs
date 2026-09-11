@@ -227,6 +227,7 @@ pub struct WorkspaceScene {
     pub terminal: SceneRect,
     pub tab_viewport: SceneRect,
     pub pane_viewport: SceneRect,
+    pub(crate) chrome: SceneRect,
     tab_scroll: f32,
     pane_scroll: f32,
     tab_scroll_limit: f32,
@@ -243,8 +244,20 @@ fn header_heights(metrics: CellMetrics) -> (f32, f32) {
     )
 }
 
-fn stack_bottom_margin(metrics: CellMetrics) -> f32 {
+fn stack_inset(metrics: CellMetrics) -> f32 {
     metrics.padding / 3.0
+}
+
+pub(crate) fn pane_chrome_rect(rect: SceneRect, metrics: CellMetrics) -> SceneRect {
+    let inset = stack_inset(metrics)
+        .min(rect.width / 4.0)
+        .min(metrics.height / 4.0);
+    SceneRect {
+        left: rect.left + inset,
+        top: rect.top + inset / 2.0,
+        width: (rect.width - inset * 2.0).max(0.0),
+        height: (rect.height - inset).max(0.0),
+    }
 }
 
 impl WorkspaceScene {
@@ -270,7 +283,7 @@ impl WorkspaceScene {
                     + if tab.panes.is_empty() {
                         0.0
                     } else {
-                        stack_bottom_margin(metrics)
+                        stack_inset(metrics)
                     },
             )
         }
@@ -370,6 +383,11 @@ impl WorkspaceScene {
         }
         let active = &snapshot.tabs[active_tab];
         let popup = active_popup(snapshot);
+        let stack_viewport = SceneRect {
+            height: (pane_viewport.height - stack_inset(metrics)).max(0.0),
+            ..pane_viewport
+        };
+        let chrome = pane_chrome_rect(stack_viewport, metrics);
         if popup.is_some() || active.panes.is_empty() {
             let horizontal_inset = (snapshot.geometry.side_margin * metrics.scale)
                 .min((pane_viewport.width - metrics.padding * 2.0 - metrics.width).max(0.0) / 2.0);
@@ -395,6 +413,7 @@ impl WorkspaceScene {
                 },
                 tab_viewport,
                 pane_viewport,
+                chrome,
                 tab_scroll,
                 pane_scroll: 0.0,
                 tab_scroll_limit,
@@ -413,10 +432,7 @@ impl WorkspaceScene {
             };
         }
 
-        let pane_viewport = SceneRect {
-            height: (pane_viewport.height - stack_bottom_margin(metrics)).max(0.0),
-            ..pane_viewport
-        };
+        let pane_viewport = stack_viewport;
         let active = &snapshot.tabs[active_tab];
         let pane_height = pane_height.min(pane_viewport.height);
         let selected = active
@@ -484,6 +500,7 @@ impl WorkspaceScene {
             terminal,
             tab_viewport,
             pane_viewport,
+            chrome,
             tab_scroll,
             pane_scroll,
             tab_scroll_limit,
@@ -1082,6 +1099,64 @@ fn resolve_color(color: StyleColor, default: Rgb, palette: &[Rgb; 256]) -> Color
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn popup_outer_chrome_reuses_the_pane_stack_rectangle() {
+        use eon_workspace_protocol::v5::{
+            ALT, Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Tab,
+        };
+
+        let mut snapshot = Snapshot {
+            active_tab: "t1".into(),
+            geometry: PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: vec![PopupEntry {
+                id: "agent".into(),
+                label: "Agent".into(),
+                shortcut: Shortcut {
+                    modifiers: ALT,
+                    key: "KeyA".into(),
+                },
+            }],
+            tabs: vec![Tab {
+                id: "t1".into(),
+                directory: b"/work".to_vec(),
+                pending: false,
+                selected_pane: Some("p1".into()),
+                selected_popup: None,
+                panes: vec![Pane {
+                    id: "p1".into(),
+                    session: "session-1".into(),
+                    endpoint: b"/run/pane.sock".to_vec(),
+                    live: true,
+                }],
+                popups: vec![Popup {
+                    id: "u1".into(),
+                    entry: "agent".into(),
+                    session: "session-2".into(),
+                    endpoint: b"/run/popup.sock".to_vec(),
+                }],
+            }],
+        };
+        let project = |snapshot: &Snapshot| {
+            WorkspaceScene::from_snapshot(
+                snapshot,
+                PhysicalSize::new(960, 600),
+                CellMetrics::for_scale(1.0),
+                0.0,
+                0.0,
+                |_, text| (text.into(), text.len() as f32 * 10.0),
+            )
+        };
+        let stack = project(&snapshot);
+        snapshot.tabs[0].selected_popup = Some("u1".into());
+        let popup = project(&snapshot);
+
+        assert_eq!(popup.chrome, stack.chrome);
+        assert_ne!(popup.terminal, popup.chrome);
+    }
 
     #[test]
     fn tab_directory_labels_keep_identity_and_bounded_path_context() {
