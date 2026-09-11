@@ -959,6 +959,8 @@ qualified by the identities and boundaries below.
   pane stack while tabs remain visible and actionable. Each inactive tab's
   selection and hidden popup instances remain Eon-owned. A popup-only tab may
   have an empty body: no placeholder pane, attachment, resize failure, or alert.
+  Its selected tab remains the only keyboard and accessibility focus target;
+  reopening work restores terminal focus.
   A catalog shortcut names the exact tab, entry and current instance, with
   Toggle intent from terminal focus and Focus intent from workspace chrome.
   Structural repeats remain consumed without sending duplicate actions.
@@ -991,20 +993,21 @@ qualified by the identities and boundaries below.
 - **Boundary:** No local command launch, chooser-mode recognition, cwd or
   dismissal policy, second schema, simultaneous terminals, compatibility
   negotiation, Eon runtime activation, or additional platform.
-- **Proof:** `f7fb5a071edc446d04e629837b6e277f28d93709`.
+- **Proof:** `2d81d50d6decb4e3702e5cd7ff84e0a7c5642c00`.
   - **Environment:** x86_64 Linux, isolated Sway 1.12 scale 1 and Nix Mesa
     26.1.2 lavapipe; bounded canonical EONW v5 producer with real Orbit Sessions.
   - **Evidence:** Locked fmt/check/test/Clippy/build and the affected Nix build
     pass all 125 ordinary tests. Canonical projection, targeted shortcuts,
-    AccessKit actions/focus and empty-body regressions pass. The native Nix
-    artifact `/nix/store/b94b86aixc1jyymj2cn8i2qr5ns3ad30-venus-popup-proof-0.1.0`
+    AccessKit actions/focus, empty-body focus and failure-alert regressions pass.
+    The native Nix artifact
+    `/nix/store/88k1kx4ilckx3yk841zp2rlc21rb9i2j-venus-popup-proof-0.1.0`
     passes ordinary/Agent/Project switching, Focus/Toggle, application-owned
     Escape/Tab/Ctrl+C, normal/narrow/tiny geometry, replacement endpoints and
     supervised empty-body startup/reopen. The existing native application
     regression passes. Margins share background/opacity; final captures have
     no stale empty-body terminal or resize notice. All 12 observed live product
     process identities survive. Reproduction inputs, logs and captures:
-    `~/.local/state/eon/proofs/ven-shared-popup-surface-ehk-f7fb5a0/REPORT.md`.
+    `~/.local/state/eon/proofs/ven-shared-popup-surface-ehk-2d81d50/REPORT.md`.
 - **Open proof:** Full Eon command/lifetime and installed popup acceptance
   remain downstream in `eon-tool-popups-e13.2`.
   Native fractional scale, other compositors, actual compositor blur and
