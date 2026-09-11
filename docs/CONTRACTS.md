@@ -608,6 +608,10 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - EONW v5 shared-popup and empty-body projection is accepted at
+    `f7fb5a071edc446d04e629837b6e277f28d93709`; VEN-C18 indexes its exact
+    Rust/Nix and isolated native checks. This consumer proof does not widen
+    fractional-scale or full-Eon acceptance.
   - Scrollback count reservation preserves the selected pane directory ending
     at source `74d22276e9039dc3ee6151d69b9283114ab02ea1`. The focused shaped-header
     red/green check and private native pane-switch captures are indexed in the
@@ -946,7 +950,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C18 — Shared popup and picker-first presentation
 
-- **Status:** Implemented; exact v5 consumer acceptance pending
+- **Status:** Proved for the v5 Venus consumer; full-Eon activation pending
 - **Consumer:** One person using a Venus workspace supplied through EONW v5.
 - **Trigger:** The active tab selects a popup, its selection changes, or the
   person invokes an Eon-supplied catalog shortcut.
@@ -987,8 +991,22 @@ qualified by the identities and boundaries below.
 - **Boundary:** No local command launch, chooser-mode recognition, cwd or
   dismissal policy, second schema, simultaneous terminals, compatibility
   negotiation, Eon runtime activation, or additional platform.
-- **Proof:** Candidate checks are recorded in `ven-shared-popup-surface-ehk`.
-  Full Eon command/lifetime and installed popup acceptance remain downstream.
+- **Proof:** `f7fb5a071edc446d04e629837b6e277f28d93709`.
+  - **Environment:** x86_64 Linux, isolated Sway 1.12 scale 1 and Nix Mesa
+    26.1.2 lavapipe; bounded canonical EONW v5 producer with real Orbit Sessions.
+  - **Evidence:** Locked fmt/check/test/Clippy/build and the affected Nix build
+    pass all 125 ordinary tests. Canonical projection, targeted shortcuts,
+    AccessKit actions/focus and empty-body regressions pass. The native Nix
+    artifact `/nix/store/b94b86aixc1jyymj2cn8i2qr5ns3ad30-venus-popup-proof-0.1.0`
+    passes ordinary/Agent/Project switching, Focus/Toggle, application-owned
+    Escape/Tab/Ctrl+C, normal/narrow/tiny geometry, replacement endpoints and
+    supervised empty-body startup/reopen. The existing native application
+    regression passes. Margins share background/opacity; final captures have
+    no stale empty-body terminal or resize notice. All 12 observed live product
+    process identities survive. Reproduction inputs, logs and captures:
+    `~/.local/state/eon/proofs/ven-shared-popup-surface-ehk-f7fb5a0/REPORT.md`.
+- **Open proof:** Full Eon command/lifetime and installed popup acceptance
+  remain downstream in `eon-tool-popups-e13.2`.
   Native fractional scale, other compositors, actual compositor blur and
   screen-reader interaction remain qualified by their separately indexed proof.
   Previous v4 picker acceptance is retained in Git and
