@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Consume exact EONW v5 through one shared popup surface for tools and Project:
+  rounded stack-covering geometry, compact labels, translucent margins, catalog
+  shortcuts with exact targets, actionable tabs, and empty popup-only bodies.
+  Eon command/lifetime policy and composed v5 activation remain downstream.
+
 - Keep routine workspace attachment and first-frame progress silent while
   retaining actual failures and standalone connection progress.
 

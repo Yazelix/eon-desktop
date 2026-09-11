@@ -1,7 +1,10 @@
 use crate::{Result, launch::LaunchArguments};
 use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::v4::{Action as WorkspaceAction, Direction as WorkspaceDirection};
+use eon_workspace_protocol::v5::{
+    Action as WorkspaceAction, Direction as WorkspaceDirection, InvokeIntent, Snapshot,
+    WorkspaceAction as CommonAction,
+};
 use orbit_protocol::{
     MAX_CELLS,
     session::{
@@ -36,7 +39,7 @@ use yazelix_venus::{
     FontSettings, FontSetup, Hyperlink, InputState, LocalNoticeSource, MetadataEvent,
     MetadataTransport, ModelError, PaneMetadata, PresentOutcome, Renderer, Scene, ScenePreview,
     SceneRect, SessionModel, Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus,
-    WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, directory_picker_visible,
+    WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, active_popup,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -798,7 +801,7 @@ impl Application {
         self.reveal_workspace_selection();
         if self.workspace_socket.is_some() {
             if let Some((endpoint, live)) = self.workspace_model.active_attachment() {
-                self.set_orbit_attachment(endpoint.to_vec(), live);
+                self.set_orbit_attachment(Some(endpoint.to_vec()), live);
             }
         } else {
             self.start_orbit(
@@ -903,6 +906,11 @@ impl Application {
     }
 
     fn terminal_size(&self) -> Option<PhysicalSize<u32>> {
+        if self.workspace_model.snapshot().is_some()
+            && self.workspace_model.active_attachment().is_none()
+        {
+            return None;
+        }
         let state = self.window.as_ref()?;
         Some(terminal_screen(
             self.workspace_scene().as_ref(),
@@ -961,7 +969,7 @@ impl Application {
     }
 
     fn set_workspace_focus(&mut self, focus: WorkspaceFocus) {
-        if self.workspace_model.directory_picker_visible() || self.workspace_focus == focus {
+        if self.workspace_focus == focus {
             return;
         }
         let was_focused = terminal_focused(self.window_focused, self.workspace_focus);
@@ -978,7 +986,7 @@ impl Application {
         self.refresh_client_view();
     }
 
-    fn set_orbit_attachment(&mut self, endpoint: Vec<u8>, live: bool) {
+    fn set_orbit_attachment(&mut self, endpoint: Option<Vec<u8>>, live: bool) {
         self.terminal_scroll.reset();
         self.deferred_selection.clear();
         self.selection_gate = SelectionGate::Ready;
@@ -986,8 +994,8 @@ impl Application {
             self.send(message);
         }
         self.reset_cursor_animation();
-        let same_endpoint = self.active_endpoint.as_ref() == Some(&endpoint);
-        self.active_endpoint = Some(endpoint.clone());
+        let same_endpoint = self.active_endpoint == endpoint;
+        self.active_endpoint = endpoint.clone();
         self.active_endpoint_live = live;
         self.transport = None;
         self.orbit_retry.reset();
@@ -997,13 +1005,15 @@ impl Application {
         } else {
             self.model = SessionModel::new();
         }
-        if !live {
+        if !live && endpoint.is_some() {
             self.model.mark_lost("The selected Eon pane is offline");
         }
         self.last_resize = None;
         self.presentation.invalidate();
-        if live {
+        if let Some(endpoint) = endpoint.filter(|_| live) {
             self.start_orbit(PathBuf::from(OsString::from_vec(endpoint)));
+        } else if self.active_endpoint.is_none() {
+            self.orbit_socket = None;
         }
     }
 
@@ -1038,10 +1048,9 @@ impl Application {
     }
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
-        let picker_was_visible = self.workspace_model.directory_picker_visible();
         let received_snapshot = matches!(
             &event,
-            WorkspaceEvent::Response(eon_workspace_protocol::v4::Response::Snapshot(_))
+            WorkspaceEvent::Response(eon_workspace_protocol::v5::Response::Snapshot(_))
         );
         let unavailable = matches!(&event, WorkspaceEvent::Unavailable(_));
         let (view_changed, snapshot_changed) = match event {
@@ -1064,26 +1073,20 @@ impl Application {
             self.cancel_terminal_scroll();
             self.reveal_workspace_selection();
             self.presentation.invalidate();
-            let picker_visible = self.workspace_model.directory_picker_visible();
-            let was_focused = terminal_focused(
-                self.window_focused,
-                effective_workspace_focus(picker_was_visible, self.workspace_focus),
-            );
-            let is_focused = terminal_focused(
-                self.window_focused,
-                effective_workspace_focus(picker_visible, self.workspace_focus),
-            );
-            if was_focused != is_focused {
-                let message = self.input.terminal_focus(is_focused);
-                if was_focused {
-                    self.send(message);
-                }
-            }
-            if let Some((endpoint, live)) = self.workspace_model.active_attachment()
-                && (self.active_endpoint.as_deref() != Some(endpoint)
-                    || self.active_endpoint_live != live)
+            let attachment = self.workspace_model.active_attachment();
+            if attachment
+                != self
+                    .active_endpoint
+                    .as_deref()
+                    .map(|endpoint| (endpoint, self.active_endpoint_live))
             {
-                self.set_orbit_attachment(endpoint.to_vec(), live);
+                let (endpoint, live) = attachment.map_or((None, false), |(endpoint, live)| {
+                    (Some(endpoint.to_vec()), live)
+                });
+                self.set_orbit_attachment(endpoint, live);
+                if self.workspace_model.popup_visible() {
+                    self.set_workspace_focus(WorkspaceFocus::Terminal);
+                }
             }
             self.send_resize();
         }
@@ -1150,8 +1153,9 @@ impl Application {
         }
     }
 
-    fn send_workspace(&mut self, action: WorkspaceAction) -> bool {
-        self.presentation.has_presented_geometry() && self.queue_workspace(action)
+    fn send_workspace(&mut self, action: CommonAction) -> bool {
+        self.presentation.has_presented_geometry()
+            && self.queue_workspace(WorkspaceAction::Workspace(action))
     }
 
     fn queue_workspace(&mut self, action: WorkspaceAction) -> bool {
@@ -1176,59 +1180,65 @@ impl Application {
         let Some(snapshot) = self.workspace_model.snapshot() else {
             return false;
         };
-        let picker_visible = directory_picker_visible(snapshot);
+        let focus = self.workspace_focus;
         let code = match event.physical_key {
             PhysicalKey::Code(code) => code,
-            PhysicalKey::Unidentified(_) => {
-                return !picker_visible && self.workspace_focus != WorkspaceFocus::Terminal;
-            }
+            PhysicalKey::Unidentified(_) => return focus != WorkspaceFocus::Terminal,
         };
-        if code == KeyCode::F6 && !picker_visible {
-            if event.state == ElementState::Pressed && !event.repeat {
-                let focus = match self.workspace_focus {
-                    WorkspaceFocus::Terminal => WorkspaceFocus::Tabs,
-                    WorkspaceFocus::Tabs => WorkspaceFocus::Panes,
-                    WorkspaceFocus::Panes => WorkspaceFocus::Terminal,
-                };
-                self.set_workspace_focus(focus);
-            }
-            return true;
-        }
-        let shortcut = workspace_shortcut(code, self.input.modifiers(), &snapshot.active_tab);
-        let returns_to_terminal = !picker_visible
-            && self.workspace_focus != WorkspaceFocus::Terminal
-            && code == KeyCode::Escape;
+        let modifiers = self.input.modifiers();
+        let cycles_focus =
+            code == KeyCode::F6 && modifiers == orbit_protocol::session::Modifiers::empty();
+        let returns_to_terminal = code == KeyCode::Escape
+            && modifiers == orbit_protocol::session::Modifiers::empty()
+            && focus != WorkspaceFocus::Terminal;
+        let action = popup_shortcut(
+            code,
+            modifiers,
+            snapshot,
+            terminal_focused(self.window_focused, focus),
+        )
+        .or_else(|| {
+            workspace_shortcut(code, modifiers, &snapshot.active_tab)
+                .map(WorkspaceAction::Workspace)
+        });
+        let has_panes = active_popup(snapshot).is_none()
+            && snapshot
+                .tabs
+                .iter()
+                .find(|tab| tab.id == snapshot.active_tab)
+                .is_some_and(|tab| !tab.panes.is_empty());
         if self.input.consumes_host_shortcut(
             event.physical_key,
             event.state,
             event.repeat,
-            shortcut.as_ref().is_some_and(|action| {
-                workspace_shortcut_is_sendable(action, picker_visible)
-                    || matches!(
-                        action,
-                        WorkspaceAction::PickTabDirectory
-                            | WorkspaceAction::Move(_)
-                            | WorkspaceAction::CloseTab { .. }
-                    )
-            }) || returns_to_terminal,
+            cycles_focus || returns_to_terminal || action.is_some(),
         ) {
-            if returns_to_terminal && event.state == ElementState::Pressed {
-                self.set_workspace_focus(WorkspaceFocus::Terminal);
-            } else if let Some(action) = shortcut.filter(|action| {
-                sends_workspace_shortcut(action, picker_visible, event.state, event.repeat)
-            }) {
-                self.send_workspace(action);
+            if event.state == ElementState::Pressed {
+                if cycles_focus && !event.repeat {
+                    self.set_workspace_focus(match focus {
+                        WorkspaceFocus::Terminal => WorkspaceFocus::Tabs,
+                        WorkspaceFocus::Tabs if has_panes => WorkspaceFocus::Panes,
+                        _ => WorkspaceFocus::Terminal,
+                    });
+                } else if returns_to_terminal {
+                    self.set_workspace_focus(WorkspaceFocus::Terminal);
+                } else if let Some(action) = action
+                    .filter(|action| sends_workspace_shortcut(action, event.state, event.repeat))
+                    && self.presentation.has_presented_geometry()
+                {
+                    let popup = matches!(action, WorkspaceAction::InvokePopup { .. });
+                    if self.queue_workspace(action) && popup {
+                        self.set_workspace_focus(WorkspaceFocus::Terminal);
+                    }
+                }
             }
             return true;
         }
-        if picker_visible {
-            return false;
-        }
-        if self.workspace_focus == WorkspaceFocus::Terminal {
+        if focus == WorkspaceFocus::Terminal {
             return false;
         }
         if event.state == ElementState::Pressed {
-            let direction = match (self.workspace_focus, code) {
+            let direction = match (focus, code) {
                 (WorkspaceFocus::Tabs, KeyCode::ArrowLeft) => Some(WorkspaceDirection::Left),
                 (WorkspaceFocus::Tabs, KeyCode::ArrowRight) => Some(WorkspaceDirection::Right),
                 (WorkspaceFocus::Panes, KeyCode::ArrowUp) => Some(WorkspaceDirection::Up),
@@ -1236,7 +1246,7 @@ impl Application {
                 _ => None,
             };
             if let Some(direction) = direction {
-                self.send_workspace(WorkspaceAction::Focus(direction));
+                self.send_workspace(CommonAction::Focus(direction));
             }
         }
         true
@@ -1439,7 +1449,6 @@ impl Application {
         (self.window_focused
             && !self.window_occluded
             && self.workspace_focus == WorkspaceFocus::Terminal
-            && !self.workspace_model.directory_picker_visible()
             && self.workspace_model.notice().is_none()
             && !self.terminal_scroll.active()
             && self.links.unshifted
@@ -1561,7 +1570,6 @@ impl Application {
         let inspect = key == PhysicalKey::Code(KeyCode::KeyO)
             && modifiers == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
             && self.workspace_focus == WorkspaceFocus::Terminal
-            && !self.workspace_model.directory_picker_visible()
             && !self.input.pointer_busy();
         if !self
             .input
@@ -1709,10 +1717,7 @@ impl Application {
         let status = self.status();
         let workspace = self.workspace_scene();
         let scrollback_label = self.scrollback_label(workspace.as_ref());
-        let workspace_focus = effective_workspace_focus(
-            self.workspace_model.directory_picker_visible(),
-            self.workspace_focus,
-        );
+        let workspace_focus = self.workspace_focus;
         let ime_allowed = !self.links.keyboard
             && ime_allowed(
                 self.window_focused,
@@ -2034,10 +2039,7 @@ impl Application {
         };
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
-        let workspace_focus = effective_workspace_focus(
-            self.workspace_model.directory_picker_visible(),
-            self.workspace_focus,
-        );
+        let workspace_focus = self.workspace_focus;
         let candidate = self.presentation_candidate(workspace.as_ref());
         let scroll_offset = self.window.as_ref().map_or(0.0, |state| {
             self.terminal_scroll.offset(
@@ -2049,7 +2051,7 @@ impl Application {
         let scrollback_label = self.scrollback_label(workspace.as_ref()).filter(|_| {
             workspace
                 .as_ref()
-                .is_some_and(|workspace| !workspace.directory_picker())
+                .is_some_and(|workspace| workspace.popup_label().is_none())
                 || (!self.input.pointer_busy()
                     && self.links.focus.is_none()
                     && !self.links.keyboard
@@ -2187,10 +2189,7 @@ impl ApplicationHandler<UserEvent> for Application {
         event: WindowEvent,
     ) {
         let workspace = self.workspace_scene();
-        let workspace_focus = effective_workspace_focus(
-            self.workspace_model.directory_picker_visible(),
-            self.workspace_focus,
-        );
+        let workspace_focus = self.workspace_focus;
         let candidate = self.presentation_candidate(workspace.as_ref());
         let presentation_current = self.presentation.has_presented_geometry();
         let presented_revision = self.presentation.presented_revision();
@@ -2403,9 +2402,6 @@ impl ApplicationHandler<UserEvent> for Application {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
                 if presentation_current
-                    && !workspace
-                        .as_ref()
-                        .is_some_and(|scene| scene.directory_picker())
                     && button_state == ElementState::Pressed
                     && button == MouseButton::Left
                 {
@@ -2421,7 +2417,7 @@ impl ApplicationHandler<UserEvent> for Application {
                         None => None,
                     };
                     if let Some((focus, id)) = target {
-                        if self.send_workspace(WorkspaceAction::FocusId(id)) {
+                        if self.send_workspace(CommonAction::FocusId(id)) {
                             self.set_workspace_focus(focus);
                         }
                         return;
@@ -2466,14 +2462,6 @@ impl ApplicationHandler<UserEvent> for Application {
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
-                if workspace
-                    .as_ref()
-                    .is_some_and(|scene| scene.directory_picker())
-                    && !matches!(hit, Some(WorkspaceHit::Terminal))
-                {
-                    self.terminal_scroll.cancel();
-                    return;
-                }
                 if !matches!(hit, Some(WorkspaceHit::Terminal)) && workspace.is_some() {
                     self.terminal_scroll.cancel();
                     state.renderer.reset_cursor_animation();
@@ -2595,7 +2583,7 @@ impl ApplicationHandler<UserEvent> for Application {
                         let target = state.accessibility.workspace_target(request.target_node);
                         if let Some(focus) = target.and_then(|target| {
                             accessibility_workspace_focus(target, |action| {
-                                self.queue_workspace(action)
+                                self.queue_workspace(WorkspaceAction::Workspace(action))
                             })
                         }) {
                             self.set_workspace_focus(focus);
@@ -2620,6 +2608,8 @@ impl ApplicationHandler<UserEvent> for Application {
         {
             self.initial_scale_pending = false;
             if self.startup_admission
+                && (self.workspace_socket.is_none()
+                    || self.workspace_model.active_attachment().is_some())
                 && self
                     .terminal_size()
                     .and_then(|size| {
@@ -2747,11 +2737,11 @@ fn retry_is_allowed(
 }
 
 fn visible_metadata_endpoints(
-    snapshot: &eon_workspace_protocol::v4::Snapshot,
+    snapshot: &eon_workspace_protocol::v5::Snapshot,
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
-    if directory_picker_visible(snapshot) {
+    if active_popup(snapshot).is_some() {
         return HashSet::new();
     }
     let mut endpoints = snapshot
@@ -2902,60 +2892,48 @@ fn terminal_focused(window_focused: bool, workspace_focus: WorkspaceFocus) -> bo
     window_focused && workspace_focus == WorkspaceFocus::Terminal
 }
 
-fn effective_workspace_focus(
-    directory_picker: bool,
-    workspace_focus: WorkspaceFocus,
-) -> WorkspaceFocus {
-    if directory_picker {
-        WorkspaceFocus::Terminal
-    } else {
-        workspace_focus
-    }
-}
-
 fn accessibility_workspace_focus(
     target: AccessibilityTarget,
-    queue: impl FnOnce(WorkspaceAction) -> bool,
+    queue: impl FnOnce(CommonAction) -> bool,
 ) -> Option<WorkspaceFocus> {
     let (focus, id) = match target {
         AccessibilityTarget::Terminal => return Some(WorkspaceFocus::Terminal),
         AccessibilityTarget::Tab(id) => (WorkspaceFocus::Tabs, id),
         AccessibilityTarget::Pane(id) => (WorkspaceFocus::Panes, id),
     };
-    queue(WorkspaceAction::FocusId(id)).then_some(focus)
+    queue(CommonAction::FocusId(id)).then_some(focus)
 }
 
 fn workspace_shortcut(
     code: KeyCode,
     modifiers: orbit_protocol::session::Modifiers,
     active_tab: &str,
-) -> Option<WorkspaceAction> {
+) -> Option<CommonAction> {
     use orbit_protocol::session::Modifiers;
 
     match (modifiers, code) {
-        (Modifiers::ALT, KeyCode::KeyH) => Some(WorkspaceAction::Focus(WorkspaceDirection::Left)),
-        (Modifiers::ALT, KeyCode::KeyL) => Some(WorkspaceAction::Focus(WorkspaceDirection::Right)),
-        (Modifiers::ALT, KeyCode::KeyK) => Some(WorkspaceAction::Focus(WorkspaceDirection::Up)),
-        (Modifiers::ALT, KeyCode::KeyJ) => Some(WorkspaceAction::Focus(WorkspaceDirection::Down)),
-        (Modifiers::ALT, KeyCode::KeyM) => Some(WorkspaceAction::CreatePane),
-        (Modifiers::ALT, KeyCode::KeyZ) => Some(WorkspaceAction::PickTabDirectory),
+        (Modifiers::ALT, KeyCode::KeyH) => Some(CommonAction::Focus(WorkspaceDirection::Left)),
+        (Modifiers::ALT, KeyCode::KeyL) => Some(CommonAction::Focus(WorkspaceDirection::Right)),
+        (Modifiers::ALT, KeyCode::KeyK) => Some(CommonAction::Focus(WorkspaceDirection::Up)),
+        (Modifiers::ALT, KeyCode::KeyJ) => Some(CommonAction::Focus(WorkspaceDirection::Down)),
+        (Modifiers::ALT, KeyCode::KeyM) => Some(CommonAction::CreatePane),
         (modifiers, KeyCode::KeyT) if modifiers == Modifiers::ALT.union(Modifiers::SHIFT) => {
-            Some(WorkspaceAction::CreateTab)
+            Some(CommonAction::CreateTab)
         }
         (modifiers, KeyCode::KeyH) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(WorkspaceAction::Move(WorkspaceDirection::Left))
+            Some(CommonAction::Move(WorkspaceDirection::Left))
         }
         (modifiers, KeyCode::KeyL) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(WorkspaceAction::Move(WorkspaceDirection::Right))
+            Some(CommonAction::Move(WorkspaceDirection::Right))
         }
         (modifiers, KeyCode::KeyK) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(WorkspaceAction::Move(WorkspaceDirection::Up))
+            Some(CommonAction::Move(WorkspaceDirection::Up))
         }
         (modifiers, KeyCode::KeyJ) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(WorkspaceAction::Move(WorkspaceDirection::Down))
+            Some(CommonAction::Move(WorkspaceDirection::Down))
         }
         (modifiers, KeyCode::KeyW) if modifiers == Modifiers::ALT.union(Modifiers::SHIFT) => {
-            Some(WorkspaceAction::CloseTab {
+            Some(CommonAction::CloseTab {
                 tab: active_tab.into(),
             })
         }
@@ -2963,24 +2941,54 @@ fn workspace_shortcut(
     }
 }
 
-fn sends_workspace_shortcut(
-    action: &WorkspaceAction,
-    directory_picker_visible: bool,
-    state: ElementState,
-    repeat: bool,
-) -> bool {
-    workspace_shortcut_is_sendable(action, directory_picker_visible)
-        && state == ElementState::Pressed
-        && (!repeat || matches!(action, WorkspaceAction::Focus(_)))
+fn popup_shortcut(
+    code: KeyCode,
+    modifiers: orbit_protocol::session::Modifiers,
+    snapshot: &Snapshot,
+    terminal_focused: bool,
+) -> Option<WorkspaceAction> {
+    use eon_workspace_protocol::v5 as wire;
+    use orbit_protocol::session::Modifiers;
+    let normalized = [
+        (Modifiers::SHIFT, wire::SHIFT),
+        (Modifiers::CTRL, wire::CTRL),
+        (Modifiers::ALT, wire::ALT),
+        (Modifiers::SUPER, wire::SUPER),
+    ]
+    .into_iter()
+    .fold(0, |bits, (native, shared)| {
+        bits | if modifiers.contains(native) {
+            shared
+        } else {
+            0
+        }
+    });
+    // winit's physical KeyCode names are the canonical names in EONW v5.
+    let key = format!("{code:?}");
+    let entry = snapshot
+        .entries
+        .iter()
+        .find(|entry| entry.shortcut.modifiers == normalized && entry.shortcut.key == key)?;
+    let tab = snapshot
+        .tabs
+        .iter()
+        .find(|tab| tab.id == snapshot.active_tab)?;
+    let instance = tab.popups.iter().find(|popup| popup.entry == entry.id);
+    Some(WorkspaceAction::InvokePopup {
+        tab: tab.id.clone(),
+        entry: entry.id.clone(),
+        expected_instance: instance.map(|popup| popup.id.clone()),
+        intent: if terminal_focused {
+            InvokeIntent::Toggle
+        } else {
+            InvokeIntent::Focus
+        },
+    })
 }
 
-fn workspace_shortcut_is_sendable(action: &WorkspaceAction, picker_visible: bool) -> bool {
-    !picker_visible
-        || matches!(
-            action,
-            WorkspaceAction::Focus(WorkspaceDirection::Left | WorkspaceDirection::Right)
-                | WorkspaceAction::CloseTab { .. }
-        )
+fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repeat: bool) -> bool {
+    state == ElementState::Pressed
+        && (!repeat || matches!(action, WorkspaceAction::Workspace(CommonAction::Focus(_))))
 }
 
 fn clipboard_notice<E: std::fmt::Display>(
@@ -3132,7 +3140,7 @@ fn initial_window_size(
     rows: Option<u16>,
     metrics: CellMetrics,
     scale: f64,
-    snapshot: Option<&eon_workspace_protocol::v4::Snapshot>,
+    snapshot: Option<&eon_workspace_protocol::v5::Snapshot>,
 ) -> Result<PhysicalSize<u32>> {
     let (horizontal, vertical) = snapshot.map_or((0.0, 0.0), |snapshot| {
         WorkspaceScene::initial_overhead(snapshot, metrics)
@@ -3152,7 +3160,19 @@ fn initial_window_size(
             (String::new(), 0.0)
         })
     });
-    let terminal = terminal_screen(workspace.as_ref(), size);
+    let terminal = workspace
+        .as_ref()
+        .filter(|workspace| workspace.panes.is_empty() && workspace.popup_label().is_none())
+        .map_or_else(
+            || terminal_screen(workspace.as_ref(), size),
+            |workspace| {
+                // Admit space for later work without creating or attaching a placeholder.
+                PhysicalSize::new(
+                    workspace.pane_viewport.width as u32,
+                    workspace.pane_viewport.height as u32,
+                )
+            },
+        );
     let admitted = surface_size(terminal, metrics);
     if size.width > limit
         || size.height > limit
@@ -3214,7 +3234,7 @@ pub(super) fn run(arguments: LaunchArguments) -> Result {
     let mut application = Application::new(arguments, event_loop.create_proxy());
     if application.startup_admission && application.workspace_socket.is_some() {
         let response = yazelix_venus::read_workspace_response(&mut io::stdin().lock())?;
-        if !matches!(response, eon_workspace_protocol::v4::Response::Snapshot(_)) {
+        if !matches!(response, eon_workspace_protocol::v5::Response::Snapshot(_)) {
             return Err("Venus startup admission requires an Eon workspace snapshot".into());
         }
         application.workspace_model.apply(response);
@@ -3252,7 +3272,25 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
-    use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v5::{Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab};
+
+    fn show_test_popup(snapshot: &mut Snapshot) {
+        snapshot.entries = vec![PopupEntry {
+            id: "project".into(),
+            label: "Project".into(),
+            shortcut: Shortcut {
+                modifiers: eon_workspace_protocol::v5::ALT,
+                key: "KeyZ".into(),
+            },
+        }];
+        snapshot.tabs[0].popups = vec![Popup {
+            id: "u1".into(),
+            entry: "project".into(),
+            session: "popup-session".into(),
+            endpoint: b"/tmp/picker.sock".to_vec(),
+        }];
+        snapshot.tabs[0].selected_popup = Some("u1".into());
+    }
 
     #[test]
     #[ignore = "requires an isolated native Wayland display"]
@@ -3265,10 +3303,17 @@ mod tests {
                 assert!(self.0.window.is_none(), "wait for workspace geometry");
                 self.0
                     .workspace_model
-                    .apply(eon_workspace_protocol::v4::Response::Snapshot(Snapshot {
+                    .apply(eon_workspace_protocol::v5::Response::Snapshot(Snapshot {
                         active_tab: "t1".into(),
-                        directory_picker: None,
+                        geometry: eon_workspace_protocol::v5::PopupGeometry {
+                            side_margin: 8.0,
+                            vertical_margin: 4.0,
+                        },
+                        entries: Vec::new(),
                         tabs: vec![Tab {
+                            pending: false,
+                            selected_popup: None,
+                            popups: Vec::new(),
                             id: "t1".into(),
                             directory: b"/tmp".to_vec(),
                             selected_pane: Some("p1".into()),
@@ -3433,8 +3478,15 @@ mod tests {
     fn initial_grid_includes_workspace_chrome_at_each_scale() {
         let mut snapshot = Snapshot {
             active_tab: "t1".into(),
-            directory_picker: None,
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: Vec::new(),
             tabs: vec![Tab {
+                pending: false,
+                selected_popup: None,
+                popups: Vec::new(),
                 id: "t1".into(),
                 directory: b"/tmp".to_vec(),
                 selected_pane: Some("p1".into()),
@@ -3450,10 +3502,7 @@ mod tests {
         };
         for picker in [false, true] {
             if picker {
-                snapshot.directory_picker = Some(DirectoryPicker {
-                    tab: "t1".into(),
-                    endpoint: b"/tmp/picker.sock".to_vec(),
-                });
+                show_test_popup(&mut snapshot);
             }
             for scale in [1.0, 1.25, 1.5, 2.0] {
                 let metrics = CellMetrics::for_scale(scale);
@@ -3475,6 +3524,10 @@ mod tests {
             }
         }
         let metrics = CellMetrics::for_scale(1.0);
+        snapshot.tabs[0].panes.clear();
+        snapshot.tabs[0].selected_pane = None;
+        snapshot.tabs[0].selected_popup = None;
+        assert!(initial_window_size(Some(100), Some(30), metrics, 1.0, Some(&snapshot)).is_ok());
         assert!(initial_window_size(Some(u16::MAX), Some(30), metrics, 1.0, None).is_err());
         assert!(initial_window_size(Some(500), Some(300), metrics, 1.0, None).is_err());
     }
@@ -3482,7 +3535,7 @@ mod tests {
     #[test]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn live_output_keeps_application_input_admitted_before_repaint() {
-        use eon_workspace_protocol::v4 as workspace;
+        use eon_workspace_protocol::v5 as workspace;
         use orbit_protocol::{
             Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         };
@@ -3642,10 +3695,10 @@ mod tests {
                     !app.terminal_scroll.phase_active,
                     "gesture End was dropped after output"
                 );
-                assert!(app.send_workspace(WorkspaceAction::Focus(WorkspaceDirection::Right)));
+                assert!(app.send_workspace(CommonAction::Focus(WorkspaceDirection::Right)));
                 assert_eq!(
                     self.actions.recv_timeout(Duration::from_secs(2)).unwrap(),
-                    WorkspaceAction::Focus(WorkspaceDirection::Right)
+                    WorkspaceAction::Workspace(CommonAction::Focus(WorkspaceDirection::Right))
                 );
                 app.window_event(
                     event_loop,
@@ -3669,7 +3722,7 @@ mod tests {
                 );
                 assert_eq!(
                     self.actions.recv_timeout(Duration::from_secs(2)).unwrap(),
-                    WorkspaceAction::FocusId("t2".into())
+                    WorkspaceAction::Workspace(CommonAction::FocusId("t2".into()))
                 );
                 app.window_event(
                     event_loop,
@@ -3817,7 +3870,7 @@ mod tests {
                 // Geometry and attachment transitions still require a real presentation.
                 app.handle_transport(frame(5, Screen::Alternate));
                 assert_eq!(app.presented_revision(), None);
-                assert!(!app.send_workspace(WorkspaceAction::Focus(WorkspaceDirection::Right)));
+                assert!(!app.send_workspace(CommonAction::Focus(WorkspaceDirection::Right)));
                 app.render();
                 assert_eq!(app.presented_revision(), Some(5));
                 app.window_event(
@@ -3920,10 +3973,25 @@ mod tests {
                         "wheel over tab-strip gaps must scroll tabs"
                     );
                 }
-                app.set_orbit_attachment(b"replacement".to_vec(), false);
+                app.set_orbit_attachment(Some(b"replacement".to_vec()), false);
                 assert!(app.status().contains("selected Eon pane is offline"));
                 assert_eq!(app.presented_revision(), None);
                 assert!(app.pointer_link().is_none());
+                let mut empty = app.workspace_model.snapshot().unwrap().clone();
+                show_test_popup(&mut empty);
+                empty.tabs[0].panes.clear();
+                empty.tabs[0].selected_pane = None;
+                empty.tabs[0].selected_popup = None;
+                app.handle_workspace(WorkspaceEvent::Response(
+                    eon_workspace_protocol::v5::Response::Snapshot(empty),
+                ));
+                assert!(app.transport.is_none());
+                assert!(app.model.scene().is_none());
+                assert!(app.terminal_size().is_none());
+                assert!(
+                    app.status().is_empty(),
+                    "an empty body has no resize failure"
+                );
                 self.checked = true;
                 event_loop.exit();
             }
@@ -3937,9 +4005,16 @@ mod tests {
         let workspace_listener = UnixListener::bind(&workspace_socket).unwrap();
         let snapshot = Snapshot {
             active_tab: "t1".into(),
-            directory_picker: None,
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: Vec::new(),
             tabs: (1..=2)
                 .map(|index| Tab {
+                    pending: false,
+                    selected_popup: None,
+                    popups: Vec::new(),
                     id: format!("t{index}"),
                     directory: b"/tmp".to_vec(),
                     selected_pane: Some(format!("p{index}")),
@@ -3972,7 +4047,7 @@ mod tests {
                     stream
                         .write_all(&workspace::encode_response(&response).unwrap())
                         .unwrap();
-                    if action != WorkspaceAction::Inspect {
+                    if action != WorkspaceAction::Workspace(CommonAction::Inspect) {
                         sender.send(action).unwrap();
                         break;
                     }
@@ -4324,6 +4399,9 @@ mod tests {
             active_tab: "t1".into(),
             tabs: vec![
                 Tab {
+                    pending: false,
+                    selected_popup: None,
+                    popups: Vec::new(),
                     id: "t1".into(),
                     directory: b"/tmp/eon".to_vec(),
                     selected_pane: Some("pane-1".into()),
@@ -4343,6 +4421,9 @@ mod tests {
                     ],
                 },
                 Tab {
+                    pending: false,
+                    selected_popup: None,
+                    popups: Vec::new(),
                     id: "t2".into(),
                     directory: b"/tmp/nova".to_vec(),
                     selected_pane: Some("pane-3".into()),
@@ -4354,7 +4435,11 @@ mod tests {
                     }],
                 },
             ],
-            directory_picker: None,
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: Vec::new(),
         };
 
         assert_eq!(
@@ -4366,13 +4451,8 @@ mod tests {
             [b"one".to_vec()].into()
         );
 
-        let picker = Snapshot {
-            directory_picker: Some(DirectoryPicker {
-                tab: "t1".into(),
-                endpoint: b"picker".to_vec(),
-            }),
-            ..snapshot
-        };
+        let mut picker = snapshot;
+        show_test_popup(&mut picker);
         assert_eq!(
             visible_metadata_endpoints(&picker, Some(b"picker"), true),
             HashSet::new()
@@ -4828,13 +4908,13 @@ mod tests {
                 AccessibilityTarget::Tab("t2".into()),
                 true,
                 Some(WorkspaceFocus::Tabs),
-                WorkspaceAction::FocusId("t2".into()),
+                CommonAction::FocusId("t2".into()),
             ),
             (
                 AccessibilityTarget::Pane("pane-3".into()),
                 false,
                 None,
-                WorkspaceAction::FocusId("pane-3".into()),
+                CommonAction::FocusId("pane-3".into()),
             ),
         ] {
             let mut queued = None;
@@ -4876,58 +4956,53 @@ mod tests {
             (
                 KeyCode::KeyH,
                 Modifiers::ALT,
-                WorkspaceAction::Focus(WorkspaceDirection::Left),
+                CommonAction::Focus(WorkspaceDirection::Left),
             ),
             (
                 KeyCode::KeyL,
                 Modifiers::ALT,
-                WorkspaceAction::Focus(WorkspaceDirection::Right),
+                CommonAction::Focus(WorkspaceDirection::Right),
             ),
             (
                 KeyCode::KeyK,
                 Modifiers::ALT,
-                WorkspaceAction::Focus(WorkspaceDirection::Up),
+                CommonAction::Focus(WorkspaceDirection::Up),
             ),
             (
                 KeyCode::KeyJ,
                 Modifiers::ALT,
-                WorkspaceAction::Focus(WorkspaceDirection::Down),
+                CommonAction::Focus(WorkspaceDirection::Down),
             ),
-            (KeyCode::KeyM, Modifiers::ALT, WorkspaceAction::CreatePane),
-            (
-                KeyCode::KeyZ,
-                Modifiers::ALT,
-                WorkspaceAction::PickTabDirectory,
-            ),
+            (KeyCode::KeyM, Modifiers::ALT, CommonAction::CreatePane),
             (
                 KeyCode::KeyT,
                 Modifiers::ALT.union(Modifiers::SHIFT),
-                WorkspaceAction::CreateTab,
+                CommonAction::CreateTab,
             ),
             (
                 KeyCode::KeyH,
                 Modifiers::CTRL.union(Modifiers::ALT),
-                WorkspaceAction::Move(WorkspaceDirection::Left),
+                CommonAction::Move(WorkspaceDirection::Left),
             ),
             (
                 KeyCode::KeyL,
                 Modifiers::CTRL.union(Modifiers::ALT),
-                WorkspaceAction::Move(WorkspaceDirection::Right),
+                CommonAction::Move(WorkspaceDirection::Right),
             ),
             (
                 KeyCode::KeyK,
                 Modifiers::CTRL.union(Modifiers::ALT),
-                WorkspaceAction::Move(WorkspaceDirection::Up),
+                CommonAction::Move(WorkspaceDirection::Up),
             ),
             (
                 KeyCode::KeyJ,
                 Modifiers::CTRL.union(Modifiers::ALT),
-                WorkspaceAction::Move(WorkspaceDirection::Down),
+                CommonAction::Move(WorkspaceDirection::Down),
             ),
             (
                 KeyCode::KeyW,
                 Modifiers::ALT.union(Modifiers::SHIFT),
-                WorkspaceAction::CloseTab { tab: "t2".into() },
+                CommonAction::CloseTab { tab: "t2".into() },
             ),
         ] {
             assert_eq!(workspace_shortcut(key, modifiers, "t2"), Some(action));
@@ -4951,68 +5026,89 @@ mod tests {
     }
 
     #[test]
-    fn creation_shortcuts_ignore_repeat_while_traversal_may_repeat() {
-        assert!(!sends_workspace_shortcut(
-            &WorkspaceAction::CreateTab,
-            false,
-            ElementState::Pressed,
-            true
-        ));
-        assert!(sends_workspace_shortcut(
-            &WorkspaceAction::Focus(WorkspaceDirection::Right),
-            false,
-            ElementState::Pressed,
-            true
-        ));
-        for direction in [WorkspaceDirection::Left, WorkspaceDirection::Right] {
+    fn structural_shortcuts_do_not_repeat_and_popup_focus_is_explicit() {
+        let actions = [
+            CommonAction::CreateTab,
+            CommonAction::CreatePane,
+            CommonAction::Move(WorkspaceDirection::Left),
+            CommonAction::CloseTab { tab: "t1".into() },
+        ];
+        for action in actions {
+            let action = WorkspaceAction::Workspace(action);
             assert!(sends_workspace_shortcut(
-                &WorkspaceAction::Focus(direction),
-                true,
+                &action,
                 ElementState::Pressed,
                 false
             ));
-        }
-        assert!(!sends_workspace_shortcut(
-            &WorkspaceAction::Focus(WorkspaceDirection::Up),
-            true,
-            ElementState::Pressed,
-            false
-        ));
-        assert!(!sends_workspace_shortcut(
-            &WorkspaceAction::CreatePane,
-            false,
-            ElementState::Released,
-            false
-        ));
-        assert!(!sends_workspace_shortcut(
-            &WorkspaceAction::PickTabDirectory,
-            true,
-            ElementState::Pressed,
-            false
-        ));
-        for action in [
-            WorkspaceAction::Move(WorkspaceDirection::Left),
-            WorkspaceAction::CloseTab { tab: "t2".into() },
-        ] {
             assert!(!sends_workspace_shortcut(
                 &action,
-                false,
+                ElementState::Pressed,
+                true
+            ));
+            assert!(!sends_workspace_shortcut(
+                &action,
+                ElementState::Released,
+                false
+            ));
+        }
+        assert!(sends_workspace_shortcut(
+            &WorkspaceAction::Workspace(CommonAction::Focus(WorkspaceDirection::Right)),
+            ElementState::Pressed,
+            true
+        ));
+        let mut snapshot = Snapshot {
+            active_tab: "t1".into(),
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: vec![],
+            tabs: vec![Tab {
+                id: "t1".into(),
+                directory: b"/tmp".to_vec(),
+                pending: true,
+                selected_pane: None,
+                selected_popup: None,
+                panes: vec![],
+                popups: vec![],
+            }],
+        };
+        show_test_popup(&mut snapshot);
+        for (focused, intent) in [(true, InvokeIntent::Toggle), (false, InvokeIntent::Focus)] {
+            let action = popup_shortcut(
+                KeyCode::KeyZ,
+                orbit_protocol::session::Modifiers::ALT,
+                &snapshot,
+                focused,
+            )
+            .unwrap();
+            assert_eq!(
+                action,
+                WorkspaceAction::InvokePopup {
+                    tab: "t1".into(),
+                    entry: "project".into(),
+                    expected_instance: Some("u1".into()),
+                    intent
+                }
+            );
+            snapshot.check_popup_action(&action).unwrap();
+            assert!(!sends_workspace_shortcut(
+                &action,
                 ElementState::Pressed,
                 true
             ));
         }
-        assert!(!sends_workspace_shortcut(
-            &WorkspaceAction::Move(WorkspaceDirection::Left),
-            true,
-            ElementState::Pressed,
-            false
-        ));
-        assert!(sends_workspace_shortcut(
-            &WorkspaceAction::CloseTab { tab: "t2".into() },
-            true,
-            ElementState::Pressed,
-            false
-        ));
+        for key in [KeyCode::Escape, KeyCode::Tab, KeyCode::Enter, KeyCode::KeyC] {
+            assert!(
+                popup_shortcut(
+                    key,
+                    orbit_protocol::session::Modifiers::empty(),
+                    &snapshot,
+                    true
+                )
+                .is_none()
+            );
+        }
     }
 
     #[test]
@@ -5057,14 +5153,6 @@ mod tests {
         assert!(!terminal_focused(false, WorkspaceFocus::Terminal));
         assert!(!terminal_focused(true, WorkspaceFocus::Tabs));
         assert!(!terminal_focused(true, WorkspaceFocus::Panes));
-        assert_eq!(
-            effective_workspace_focus(true, WorkspaceFocus::Panes),
-            WorkspaceFocus::Terminal
-        );
-        assert_eq!(
-            effective_workspace_focus(false, WorkspaceFocus::Panes),
-            WorkspaceFocus::Panes
-        );
     }
 
     #[test]

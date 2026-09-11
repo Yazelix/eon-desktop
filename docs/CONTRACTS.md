@@ -25,7 +25,7 @@ named proofs; they do not select the current dependency.
   and specialty handling; no overrides preserve 10 by 18 logical cells and the
   960 by 600 logical initial window.
 - **Initial geometry:** Optional positive `u16` columns/rows request terminal
-  dimensions, with workspace headers, stack bottom margin and picker inset
+  dimensions, with workspace headers, stack bottom margin and popup margins
   supplied by the existing Scene owner. Omitted dimensions retain the existing
   initial window dimension.
   Requests must fit Orbit's 100,000-cell limit and native pixel/GPU bounds.
@@ -44,23 +44,26 @@ named proofs; they do not select the current dependency.
   promise every Unicode glyph or style variant. No live reload is provided.
 - **Owner:** Venus launch, font fitter, `CellMetrics`, and workspace Scene;
   Orbit retains terminal authority and Eon retains product configuration.
-- **Consumes:** ORBF v1 / ORBS v10 at Orbit
-  `91999d79546422b49bdbc124166a65859d0bd872`, EONW v4 at Eon
-  `c305453bba4fe50c29f65e829b9cd65af31ced8a`, and the selected glyphon 0.12.0 /
+- **Consumes:** ORBF v2 / ORBS v11 at Orbit
+  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, EONW v5 at Eon
+  `0cc8f477298681ae3945903e8fdb5852d487c5ab`, and the selected glyphon 0.12.0 /
   cosmic-text 0.19.0 APIs with exact unicode-script 0.5.8.
 - **Compatibility order:** Prove Venus first with unchanged defaults and wire
   contracts, then let the separate Eon configuration issue consume that exact
   accepted source for Eon and EonTerm.
 - **Supervised startup admission:**
   `EON_VENUS_PRESENTATION_CONTROL=stdin-ready-v1` uses private stdin/stdout.
-  Workspace mode first reads one bounded canonical EONW v4 Snapshot from stdin;
+  Workspace mode first reads one bounded canonical EONW v5 Snapshot from stdin;
   standalone mode has no snapshot prefix. After font/renderer initialization
   and real-window initial native-scale admission, Venus writes exactly
   `ready-v1` (eight bytes) and starts attachment. The caller may then start
   Orbit and the user command. Invalid fonts, geometry or snapshot produce no
   readiness; the caller bounds startup and closes a failed attempt. Existing
   `present\n` and EOF control retain their meanings. Later user/compositor
-  resizing is outside this initial admission. EONW and ORBS remain unchanged.
+  resizing is outside this initial admission. An empty popup-only tab admits
+  usable body space without requiring or inventing an attachment. The v5
+  consumer refinement is indexed in VEN-C18; older startup proofs remain scoped
+  to their exact snapshots and component revisions.
 - **Startup-admission proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`.
   Locked fmt/check/test/clippy pass (120 ordinary tests); five existing native
   checks pass in separate processes on x86_64 Linux, Sway 1.12 / lavapipe
@@ -522,7 +525,7 @@ qualified by the identities and boundaries below.
 
 - **Status:** Partially proved
 - **Consumer:** One Venus surface controlled by an Eon workspace.
-- **Trigger:** Outside visible `VEN-C18` picker presentation, Eon supplies
+- **Trigger:** Outside visible `VEN-C18` popup presentation, Eon supplies
   durable topology or a workspace action changes tab, pane, focus, order,
   lifetime, liveness, endpoint, or metadata.
 - **Result:**
@@ -556,7 +559,7 @@ qualified by the identities and boundaries below.
     Initial requested grids include the bottom gap in their window overhead;
     the gap accepts no pane or terminal input.
     Changed pane lists resize the terminal even when the endpoint stays selected.
-    The option has no visual effect in standalone or picker presentation.
+    The option has no visual effect in standalone or popup presentation.
     Missing, duplicate or invalid values fail before window creation. Eon owns
     persistent configuration and composed-launch policy.
   - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
@@ -573,8 +576,10 @@ qualified by the identities and boundaries below.
   - Pointer input, Alt+H/L tab traversal, Alt+K/J pane traversal, Alt+M pane
     creation, Alt+Shift+T tab requests, focused arrow traversal, and
     selected-terminal attachment retain their existing owners. Alt+H/L remains
-    admitted while a picker is visible, and a picker bound to another tab does
-    not replace the active tab's durable projection.
+    admitted while a popup is visible; inactive popup selections do not replace
+    the active tab's projection. Popup-only tabs may have no pane or selected
+    pane. Hiding their last visible popup yields an empty body with actionable
+    tabs and catalog shortcuts (VEN-C18).
   - Ctrl+Alt+H/L sends one non-repeating semantic move for the active tab;
     Ctrl+Alt+K/J does the same for its selected pane. Alt+Shift+W sends one
     non-repeating close naming the snapshot's active stable `tN`. Venus consumes
@@ -593,11 +598,11 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus workspace materialization, bounded metadata observation,
   clipping, and accessibility projection; Eon owns topology and Orbit owns
   terminal metadata and Session lifetime.
-- **Consumes:** Eon `EON-C10`, `EON-C17`, `EON-C18`, EONW v4, and
+- **Consumes:** Eon `EON-C10`, `EON-C17`, `EON-C18`, EONW v5, and
   `eon-workspace-protocol` 0.1.0 at
-  `c305453bba4fe50c29f65e829b9cd65af31ced8a`; Orbit metadata observation in
-  ORBS v5 and `orbit-protocol` 0.1.0 at
-  `69c402737799f03e615473956954a043647a4713`.
+  `0cc8f477298681ae3945903e8fdb5852d487c5ab`; Orbit metadata observation in
+  ORBS v11 and `orbit-protocol` 0.1.0 at
+  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Other Linux Wayland compositors remain outside the current
   proof.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
@@ -939,71 +944,57 @@ qualified by the identities and boundaries below.
   - **Evidence:** Locked format/check/test/Clippy and exact live
     `--application-id eonova` grouping without Session duplication
 
-## VEN-C18 — Picker-first tab directory presentation
+## VEN-C18 — Shared popup and picker-first presentation
 
-- **Status:** Proved
-- **Consumer:** One person starting or using a live full-Eon Venus workspace.
-- **Trigger:** Venus is launched with `--workspace EON_WORKSPACE_SOCKET` and
-  EONW v4 publishes one directory picker bound to an existing tab, including a
-  pending tab with no panes and no selected pane, or the person presses Alt+Z
-  in a durable tab.
-- **Result:** The explicit option starts workspace mode with no Orbit endpoint
-  and establishes the EONW transport before any terminal attachment. The first
-  accepted snapshot selects its picker endpoint as the sole tab-body terminal
-  only while the picker-owning tab is active, including during picker-first
-  startup. Venus admits existing Alt+H/L traversal while the picker is visible;
-  another active tab presents its selected durable pane, and returning presents
-  the identical picker. Alt+Shift+W names the active stable `tN`; Eon accepts
-  it during a picker only when that picker owns a non-final pending tab. All
-  other structural shortcuts remain unavailable while the picker is visible.
-  Venus sends one semantic `PickTabDirectory` action on an Alt+Z press, keeps
-  the tab bar visible, hides pane headers, and uses one cell of Eon-background
-  inset on every side when a usable terminal grid fits.
-  Visible picker input, IME, pointer routing, and AccessKit focus become
-  terminal-owned without overwriting the prior workspace focus; hiding or
-  removing picker state restores ordinary active-tab projection and focus.
-- **Important failures:** Standalone Venus preserves raw Alt+Z and Alt+Shift+T/W.
-  Repeats, duplicate invocation, gutter input, unavailable endpoints, and
-  undersized grids create no second picker, inferred pane or selection, invalid
-  geometry, eager attachment, or hidden workspace action. Missing, duplicate,
-  mixed, or obsolete two-positional workspace launch arguments fail before the
-  window or transport starts. EONW rejects invalid pending tabs, missing picker
-  tabs, and aliased endpoints before Venus.
-- **Owner:** Venus owns shortcut precedence and modal presentation. Eon owns
-  picker creation, command, lifecycle, mutation, validation, and cleanup. Orbit
-  owns the picker terminal Session and PTY.
-- **Consumes:** Eon `EON-C18`, EONW v4, and `eon-workspace-protocol` 0.1.0 at
-  `c305453bba4fe50c29f65e829b9cd65af31ced8a`; unchanged Orbit ORBS v10 at
-  `91999d79546422b49bdbc124166a65859d0bd872`.
-- **Boundary:** No Yazi path, native ranking, generic popup or modal framework,
-  simultaneous terminal composition, configurable geometry, arbitrary command,
-  application-ID/path inference, compatibility launch form, placeholder pane,
-  selection sentinel, Orbit change, Eon runtime producer, or additional
-  platform.
-- **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
-  `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for picker lifecycle
-  - **Environment:** Exact-source x86_64 Linux checks and isolated Sway;
-    COSMIC observations belong to the retained prior proof.
-  - **Evidence:** Complete locked Rust checks against exact EONW v4; explicit
-    workspace-only launch admission; attachment to the picker while visible and
-    to the active durable pane while inactive; traversal and stable-target close
-    admission, geometry, focus, metadata, and AccessKit checks; isolated native
-    picker-to-durable-to-identical-picker presentation, AT-SPI projection, and
-    installed Eon Ctrl+Shift+W pending-tab close at retained Venus proof
-    `d2d798099934dcf8037bfad6ab856e40c9b989fe`; prior EONW v3 picker proof
-    `df88b2867d50c59a316418471abd000da02940bc`.
-    Eon `4298fbb8868752e3d6c8eb4fd79fae067ab3e2a1` closes the rapid-reopen
-    gap by assigning each picker a distinct endpoint through unchanged EONW v4.
-    `eon-investigate-picker-directory-discovery-ly9`, comment 791, records
-    exact installed artifact `/nix/store/008jbiqsprwvyn2w7bfnc7rqhd1vk36x-eon-0.1.0`
-    with this Venus source on isolated Sway 1.12: immediate cancel/reopen and
-    two same-tab native Alt+Z/Ctrl+C cycles stay attached to the current picker
-    without refocus and preserve durable panes. Older Eon compositions that
-    reuse a picker endpoint retain the known missed-transition failure.
-    Fractional native scale remains open under VEN-C8.
-  - **Tab shortcut evidence:** `ven-yp4` and VEN-C8 record native Alt+Shift+T
-    pending-tab creation and Alt+Shift+W pending/durable close with unchanged
-    EONW v4, inherited directory, and surviving Session identity.
+- **Status:** Implemented; exact v5 consumer acceptance pending
+- **Consumer:** One person using a Venus workspace supplied through EONW v5.
+- **Trigger:** The active tab selects a popup, its selection changes, or the
+  person invokes an Eon-supplied catalog shortcut.
+- **Result:** Workspace-only startup waits for a canonical snapshot before
+  attaching its sole terminal endpoint. A selected popup replaces the entire
+  pane stack while tabs remain visible and actionable. Each inactive tab's
+  selection and hidden popup instances remain Eon-owned. A popup-only tab may
+  have an empty body: no placeholder pane, attachment, resize failure, or alert.
+  A catalog shortcut names the exact tab, entry and current instance, with
+  Toggle intent from terminal focus and Focus intent from workspace chrome.
+  Structural repeats remain consumed without sending duplicate actions.
+  Tab traversal and structural actions use the existing semantic workspace
+  path; Eon decides their admission. F6 cycles visible focus regions, and
+  Escape returns chrome focus to the terminal. While the terminal is focused,
+  Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit
+  input. Popup entry labels also name the accessible tab panel.
+- **Geometry:** Shared Eon-supplied logical margins surround a rounded frame
+  with a compact label inside existing terminal padding. Scene owns the single
+  rectangle used for resize, rendering, clipping, pointer input, IME and
+  accessibility. Margins shrink to preserve a usable cell grid; tiny surfaces
+  omit the label. Exposed margins share the terminal default background and
+  opacity, with the existing best-effort surface-wide compositor blur request.
+  Pane-frame configuration has no effect on the popup outline.
+- **Important failures:** Hidden or replaced endpoints retain no active
+  presentation or input. Stale popup actions carry exact instance guards;
+  canonical EONW validation and failure responses preserve the last coherent
+  snapshot. Invalid frames, aliased endpoints, missing selections and malformed
+  catalog values fail in the owner codec. Unavailable attachments retain the
+  existing bounded recovery/failure path. Standalone Venus preserves raw
+  workspace and catalog keys. Invalid or mixed launch forms fail before a
+  window or transport starts.
+- **Owner:** Venus owns native projection, shortcut dispatch and focus. Eon owns
+  catalog, geometry settings, commands, cwd, popup/tab lifecycle, selection,
+  action admission and cleanup. Orbit owns terminal Sessions and PTYs.
+- **Consumes:** EONW v5 and `eon-workspace-protocol` 0.1.0 at exact Eon source
+  `0cc8f477298681ae3945903e8fdb5852d487c5ab`; ORBF v2 / ORBS v11 at unchanged
+  Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
+- **Boundary:** No local command launch, chooser-mode recognition, cwd or
+  dismissal policy, second schema, simultaneous terminals, compatibility
+  negotiation, Eon runtime activation, or additional platform.
+- **Proof:** Candidate checks are recorded in `ven-shared-popup-surface-ehk`.
+  Full Eon command/lifetime and installed popup acceptance remain downstream.
+  Native fractional scale, other compositors, actual compositor blur and
+  screen-reader interaction remain qualified by their separately indexed proof.
+  Previous v4 picker acceptance is retained in Git and
+  `ven-consume-picker-first-eonw-v4-zd1`: Venus
+  `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` and Eon distinct-endpoint
+  acceptance `4298fbb8868752e3d6c8eb4fd79fae067ab3e2a1` do not prove v5.
 
 ## Rules
 

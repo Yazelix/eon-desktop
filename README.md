@@ -22,9 +22,11 @@ Visible live pane headers show Eon's opaque pane identity, a
 two-space gutter, and a compact label for Orbit's working directory, using a home
 marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
 only the selected endpoint receives presentation and input. A fresh workspace
-and every new tab may begin with no pane while Eon publishes one tab-bound
-directory-picker endpoint; Venus keeps the tab bar visible and replaces the tab
-body with that terminal inside a one-cell inset. It
+and every new tab may begin with no pane while Eon publishes a Project popup.
+Tool popups and the project chooser share one rounded terminal surface covering
+the stack, with Eon-supplied logical margins and a compact label. Tabs remain
+visible and actionable. A tab containing only hidden popups has an empty body
+and can reopen its retained work through the catalog shortcut. Venus
 automatically recovers that attachment after retryable local socket loss, detaches
 without ending any Session, and does not own a PTY, terminal emulator, or
 workspace topology.
@@ -37,10 +39,12 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v4 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`c305453bba4fe50c29f65e829b9cd65af31ced8a`. Eon alone owns workspace order,
+Venus consumes EONW v5 through `eon-workspace-protocol` 0.1.0 at exact Eon source
+`0cc8f477298681ae3945903e8fdb5852d487c5ab`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
-directory-picker lifecycle, actions, and pane-to-Session mappings. Venus consumes
+popup catalog, geometry settings, commands, lifecycle, actions, and Session mappings.
+This consumer precedes Eon's v5 runtime activation; the installed Eon composition
+still uses its accepted v4 Venus pin. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -49,7 +53,7 @@ no terminal state.
 
 An Eon Workspace is composition, not another Session. Each pane references an
 independent Orbit Session. Venus keeps the EONW connection for workspace state
-and actions, one presentation connection to the selected pane, and one read-only
+and actions, one presentation connection to the selected popup or pane, and one read-only
 metadata observer for each visible live pane. Hidden and offline Sessions have no
 Venus observer and remain alive independently.
 
@@ -88,7 +92,7 @@ cells. One rounded physical cell grid drives text, cursor, pointer, selection,
 scrolling, IME and accessibility.
 
 Positive `--columns` and `--rows` request a terminal grid, including space for
-workspace headers or picker gutters. An omitted dimension retains its existing
+workspace headers or popup margins. An omitted dimension retains its existing
 initial window dimension; the default window is 960 by 600 logical pixels.
 Requests must fit Orbit's 100,000-cell and native surface limits. The compositor
 may override initial sizing, and later user resizing remains unconstrained.
@@ -143,13 +147,14 @@ Pass `--pane-frames false` to hide decorative pane borders. The default is
 `true`; both modes keep the same terminal grid, pane headers, click targets and
 accessible bounds. Keyboard focus and hover remain visible with frames off.
 Missing, duplicate or invalid boolean values fail before window creation.
-Standalone and directory-picker presentation have no pane frames. This is a
+Standalone and popup presentation have no pane frames; popups retain their own
+rounded outline. This is a
 startup option; Eon owns persistent product configuration.
 
 Workspace mode opens the EONW transport first and waits for its accepted
-snapshot before attaching its terminal endpoint. During picker-first startup,
-the first snapshot supplies the picker endpoint; no initial Orbit endpoint,
-durable pane, or placeholder Session is required.
+snapshot before attaching its terminal endpoint. The first snapshot may select
+a popup or have no visible terminal; no initial Orbit endpoint, durable pane,
+or placeholder Session is required.
 
 Pass `--application-id ID` before the launch target when the caller owns a
 distinct desktop identity. The bounded ASCII token becomes the Wayland app ID
@@ -176,7 +181,7 @@ cargo run --locked -- --background-opacity 0.88 /path/to/orbit.sock
 ```
 
 The opacity follows Orbit-authored default background changes and covers empty
-terminal padding. Explicit cell backgrounds, selection, inverse video,
+terminal padding and exposed popup margins. Explicit cell backgrounds, selection, inverse video,
 workspace chrome, notices, focus borders, text, and cursors retain their
 existing presentation. Visual transparency does not change pointer or keyboard
 input. Venus rejects invalid values during launch and rejects translucent
@@ -221,7 +226,7 @@ resolution and Eon owns serialization and persistence for composed launches;
 that Eon producer is tracked separately and is not part of the current launcher.
 
 In Eon's supervised mode, Venus reads one private bounded presentation stream.
-The `stdin-ready-v1` mode consumes one canonical EONW v4 startup snapshot for
+The `stdin-ready-v1` mode consumes one canonical EONW v5 startup snapshot for
 workspace launches, then reports `ready-v1` on stdout after admitting fonts and
 the actual window's initial native geometry, before terminal attachment. Eon
 bounds that exchange and starts new commands only after readiness.
@@ -234,8 +239,8 @@ terminal. Direct focus and unminimize are unavailable through winit on Wayland;
 xdg activation remains compositor-controlled.
 
 The accepted Eon snapshot supplies the authoritative terminal endpoint: the
-directory picker when it is bound to the active tab, otherwise that tab's
-selected Orbit pane.
+active tab's selected popup, otherwise its selected Orbit pane. An empty body
+detaches the presentation without stopping hidden Sessions.
 While the window is open, Venus re-inspects Eon every 250 ms so accepted
 workspace changes from another client appear without a click or restart.
 Recovery continues only while that exact attachment remains current and live;
@@ -244,16 +249,17 @@ state.
 Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
 Ctrl+Alt+H/L moves the active tab, Ctrl+Alt+K/J moves the selected pane,
 Alt+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
-Alt+Shift+T opens a pending tab in Eon's directory picker, and Alt+Z requests that
-picker for an existing tab. While the picker is visible,
-its terminal receives input and Alt+H/L can traverse to another tab without
-ending it; returning restores the same picker. Alt+Shift+W may discard the
-active non-final pending tab; other structural shortcuts remain blocked. The
-prior workspace focus is
-restored while the picker is hidden or after it closes. Press F6 to cycle
-terminal, tab, and pane keyboard focus; Left/Right on
-tabs, Up/Down on panes, and Escape remain
-available. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
+Alt+Shift+T requests a pending tab. Eon's catalog supplies popup shortcuts,
+including Alt+Z for Project. A shortcut invokes its exact tab, entry and current
+instance: Toggle from terminal focus, Focus from workspace chrome. Repeated
+press events do not create duplicate structural actions. Eon decides whether
+each action is available and owns dismissal, cwd changes and command lifetime.
+Switching tabs retains each tab's popup selection. F6 cycles terminal and tabs,
+plus panes when visible; Left/Right on tabs and Up/Down on panes traverse them.
+Escape returns chrome focus to the terminal. While the terminal has focus,
+Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit input.
+Popup margins shrink to preserve a usable cell grid; tiny surfaces omit the
+label before clipping terminal content. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
 directory while hit testing and actions retain `tN`; accessibility pairs `tN`
 with its full launch path. Tab widths follow shaped text plus padding up to
 280 logical pixels at default typography; larger fonts scale that limit.
@@ -278,9 +284,9 @@ require fresh presentation.
 While scrolled, `↑ N rows` shows the last committed viewport's wrapped display
 rows above live output (`↑ 1 row` for one). The selected pane header reserves
 space for it, preserving the directory ending when the label needs shortening.
-Standalone and picker terminals use a small top-right overlay
+Standalone and popup terminals use a small top-right overlay
 without resizing the grid; it yields to selection, link inspection, notices,
-picker tab previews, and an overlapping terminal cursor. Live bottom, alternate screen, recovery, pending reflow,
+popup tab previews, and an overlapping terminal cursor. Live bottom, alternate screen, recovery, pending reflow,
 and known terminal-owned scrolling hide it. Fractional preview movement never
 changes the number. If the complete label cannot fit, it stays available in the
 terminal's accessible description; digits are never truncated. The description
@@ -330,7 +336,7 @@ timeout 30s cargo test --locked --bin yazelix-venus live_output_keeps_applicatio
 ## Exclusions
 
 Arbitrary split trees, simultaneous expanded panes, sidebars,
-popups, persistent Venus configuration, blur strength or live blur changes,
+popup command/lifetime policy, persistent Venus configuration, blur strength or live blur changes,
 background images, plugins, remote and web access, packaging, and distribution
 are outside this slice.
 
@@ -352,13 +358,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 208 |
-| README | 364 |
+| README | 370 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,587 |
+| Contracts and references | 1,608 |
 | Memory benchmark report | 158 |
-| Crate decisions | 261 |
-| Changelog | 233 |
-| Rust source, including unit tests | 16,385 |
-| Rust integration tests | 1,036 |
+| Crate decisions | 263 |
+| Changelog | 238 |
+| Rust source, including unit tests | 16,572 |
+| Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **20,262** |
+| **Total** | **20,481** |

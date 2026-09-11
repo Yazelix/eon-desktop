@@ -96,11 +96,15 @@ impl Snapshot {
 
         let mut content = Node::new(if terminal {
             Role::Terminal
+        } else if self.status.is_empty() {
+            Role::GenericContainer
         } else {
             Role::Alert
         });
         content.set_label(if terminal {
             self.title.as_str()
+        } else if self.status.is_empty() {
+            "Tab content"
         } else {
             "Venus status"
         });
@@ -164,24 +168,18 @@ impl Snapshot {
                 if let Some(bounds) = tab.rect.intersection(workspace.tab_viewport) {
                     node.set_bounds(rect(bounds));
                 }
-                if !workspace.directory_picker() {
-                    node.add_action(Action::Click);
-                    node.add_action(Action::Focus);
-                }
+                node.add_action(Action::Click);
+                node.add_action(Action::Focus);
                 nodes.push((self.tab_ids[tab.id.as_str()], node));
             }
 
             let mut panel = Node::new(Role::TabPanel);
-            panel.set_label(if workspace.directory_picker() {
-                "Directory picker"
-            } else {
-                "Active tab panes"
-            });
+            panel.set_label(workspace.popup_label().unwrap_or("Active tab panes"));
             panel.set_orientation(Orientation::Vertical);
             panel.set_bounds(rect(workspace.pane_viewport));
             panel.set_clips_children();
             let mut children = Vec::with_capacity(workspace.panes.len() + 1);
-            if workspace.directory_picker() {
+            if workspace.panes.is_empty() {
                 children.push(CONTENT);
             }
             for pane in &workspace.panes {
@@ -235,9 +233,6 @@ impl Snapshot {
             tree: Some(Tree::new(WINDOW)),
             tree_id: TreeId::ROOT,
             focus: self.workspace.as_ref().map_or(CONTENT, |workspace| {
-                if workspace.directory_picker() {
-                    return CONTENT;
-                }
                 match self.workspace_focus {
                     WorkspaceFocus::Terminal => CONTENT,
                     WorkspaceFocus::Tabs => workspace
@@ -258,12 +253,9 @@ impl Snapshot {
     }
 
     fn workspace_target(&self, target: NodeId) -> Option<AccessibilityTarget> {
-        let workspace = self.workspace.as_ref()?;
+        self.workspace.as_ref()?;
         if target == CONTENT {
             return Some(AccessibilityTarget::Terminal);
-        }
-        if workspace.directory_picker() {
-            return None;
         }
         if let Some((id, _)) = self.tab_ids.iter().find(|(_, node)| **node == target) {
             return Some(AccessibilityTarget::Tab(id.clone()));
@@ -425,10 +417,15 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use crate::PaneMetadata;
-    use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot as WorkspaceSnapshot, Tab};
+    use eon_workspace_protocol::v5::{
+        Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Snapshot as WorkspaceSnapshot, Tab,
+    };
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
         Tab {
+            pending: false,
+            selected_popup: None,
+            popups: Vec::new(),
             id: id.into(),
             directory: format!("/tmp/{id}").into_bytes(),
             selected_pane: Some(selected_pane.into()),
@@ -449,7 +446,11 @@ mod tests {
             &WorkspaceSnapshot {
                 active_tab: active_tab.into(),
                 tabs,
-                directory_picker: None,
+                geometry: eon_workspace_protocol::v5::PopupGeometry {
+                    side_margin: 8.0,
+                    vertical_margin: 4.0,
+                },
+                entries: Vec::new(),
             },
             PhysicalSize::new(800, 600),
             CellMetrics::for_scale(1.0),
@@ -653,7 +654,11 @@ mod tests {
                 workspace_tab("t2", &["pane-7"], "pane-7"),
                 workspace_tab("t3", &["pane-8"], "pane-8"),
             ],
-            directory_picker: None,
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: Vec::new(),
         };
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
@@ -759,6 +764,9 @@ mod tests {
                 active_tab: "t1".into(),
                 tabs: vec![
                     Tab {
+                        pending: false,
+                        selected_popup: None,
+                        popups: Vec::new(),
                         id: "t1".into(),
                         directory: b"/tmp/eon".to_vec(),
                         selected_pane: Some("p2".into()),
@@ -778,6 +786,9 @@ mod tests {
                         ],
                     },
                     Tab {
+                        pending: false,
+                        selected_popup: None,
+                        popups: Vec::new(),
                         id: "t2".into(),
                         directory: b"/tmp/nova".to_vec(),
                         selected_pane: Some("p3".into()),
@@ -789,7 +800,11 @@ mod tests {
                         }],
                     },
                 ],
-                directory_picker: None,
+                geometry: eon_workspace_protocol::v5::PopupGeometry {
+                    side_margin: 8.0,
+                    vertical_margin: 4.0,
+                },
+                entries: Vec::new(),
             },
             PhysicalSize::new(800, 600),
             CellMetrics::for_scale(1.0),
@@ -843,25 +858,42 @@ mod tests {
     #[test]
     fn directory_picker_is_the_only_actionable_tab_body_content() {
         let size = PhysicalSize::new(800, 600);
-        let workspace = WorkspaceScene::from_snapshot(
-            &WorkspaceSnapshot {
-                active_tab: "t1".into(),
-                tabs: vec![Tab {
-                    id: "t1".into(),
-                    directory: b"/tmp/t1".to_vec(),
-                    selected_pane: None,
-                    panes: Vec::new(),
-                }],
-                directory_picker: Some(DirectoryPicker {
-                    tab: "t1".into(),
-                    endpoint: b"/run/eon/picker.sock".to_vec(),
-                }),
+        let mut state = WorkspaceSnapshot {
+            active_tab: "t1".into(),
+            geometry: PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
             },
+            entries: vec![PopupEntry {
+                id: "project".into(),
+                label: "Project".into(),
+                shortcut: Shortcut {
+                    modifiers: eon_workspace_protocol::v5::ALT,
+                    key: "KeyZ".into(),
+                },
+            }],
+            tabs: vec![Tab {
+                id: "t1".into(),
+                directory: b"/tmp/t1".to_vec(),
+                pending: true,
+                selected_pane: None,
+                panes: Vec::new(),
+                selected_popup: Some("u1".into()),
+                popups: vec![Popup {
+                    id: "u1".into(),
+                    entry: "project".into(),
+                    session: "s1".into(),
+                    endpoint: b"/run/picker.sock".to_vec(),
+                }],
+            }],
+        };
+        let workspace = WorkspaceScene::from_snapshot(
+            &state,
             size,
             CellMetrics::for_scale(1.0),
             0.0,
             0.0,
-            |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
+            |_, text| (text.into(), text.len() as f32 * 10.0),
         );
         let mut snapshot = Snapshot {
             content: AccessibleText {
@@ -879,34 +911,49 @@ mod tests {
         let tab = snapshot.tab_ids["t1"];
         let update = snapshot.tree();
 
-        assert_eq!(node(&update, PANE_PANEL).label(), Some("Directory picker"));
+        assert_eq!(node(&update, PANE_PANEL).label(), Some("Project"));
         assert_eq!(node(&update, PANE_PANEL).children(), &[CONTENT]);
         assert_eq!(update.focus, CONTENT);
-        assert!(!node(&update, tab).supports_action(Action::Click));
-        assert!(!node(&update, tab).supports_action(Action::Focus));
-        assert_eq!(snapshot.workspace_target(tab), None);
+        assert!(node(&update, tab).supports_action(Action::Click));
+        assert!(node(&update, tab).supports_action(Action::Focus));
+        assert_eq!(
+            snapshot.workspace_target(tab),
+            Some(AccessibilityTarget::Tab("t1".into()))
+        );
+        snapshot.workspace_focus = WorkspaceFocus::Tabs;
+        assert_eq!(snapshot.tree().focus, tab);
+        state.tabs[0].pending = false;
+        state.tabs[0].selected_popup = None;
+        snapshot.columns = None;
+        snapshot.content = AccessibleText::default();
+        snapshot.status.clear();
+        snapshot.set_workspace(Some(&WorkspaceScene::from_snapshot(
+            &state,
+            size,
+            CellMetrics::for_scale(1.0),
+            0.0,
+            0.0,
+            |_, text| (text.into(), text.len() as f32 * 10.0),
+        )));
+        let empty = snapshot.tree();
+        assert_eq!(node(&empty, CONTENT).role(), Role::GenericContainer);
+        assert!(node(&empty, CONTENT).children().is_empty());
+        assert!(node(&empty, tab).supports_action(Action::Click));
+        snapshot.workspace_focus = WorkspaceFocus::Panes;
         assert_eq!(
             snapshot.workspace_target(CONTENT),
             Some(AccessibilityTarget::Terminal)
         );
 
+        state.tabs.push(workspace_tab("t2", &["p2"], "p2"));
+        state.active_tab = "t2".into();
         let inactive_picker = WorkspaceScene::from_snapshot(
-            &WorkspaceSnapshot {
-                active_tab: "t2".into(),
-                tabs: vec![
-                    workspace_tab("t1", &["p1"], "p1"),
-                    workspace_tab("t2", &["p2"], "p2"),
-                ],
-                directory_picker: Some(DirectoryPicker {
-                    tab: "t1".into(),
-                    endpoint: b"/run/eon/picker.sock".to_vec(),
-                }),
-            },
+            &state,
             size,
             CellMetrics::for_scale(1.0),
             0.0,
             0.0,
-            |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
+            |_, text| (text.into(), text.len() as f32 * 10.0),
         );
         snapshot.set_workspace(Some(&inactive_picker));
         let active_tab = snapshot.tab_ids["t2"];

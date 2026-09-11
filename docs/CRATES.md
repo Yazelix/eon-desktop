@@ -14,6 +14,8 @@ metadata without another schema or runtime dependency.
 v3 for one semantic picker action and one authoritative modal endpoint.
 `ven-consume-picker-first-eonw-v4-zd1` advances it to EONW v4 so an active
 picker-bound tab may have no panes or selected pane.
+`ven-shared-popup-surface-ehk` consumes EONW v5's shared popup projection and
+exact targeted actions through the same package and single attachment owner.
 `ven-venus-kinetic-touchpad-scroll-5sl` advances it to ORBS v7 for bounded
 multi-row preview windows and compositor-paced fractional scrolling.
 `ven-venus-native-selection-gestures-d3x` advances it to ORBS v10 for
@@ -47,11 +49,11 @@ ORBF v2 / ORBS v11 using the same dependency-free canonical package.
 
 ### Eon workspace protocol consumer
 
-- **Selected shape:** Exact Git revision `c305453bba4fe50c29f65e829b9cd65af31ced8a` of the
+- **Selected shape:** Exact Git revision `0cc8f477298681ae3945903e8fdb5852d487c5ab` of the
   dependency-free, publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package
 - **Status:** Active for internal development
-- **Owner consequence:** Eon alone owns EONW v4 values, validation, topology, pending tabs,
-  tab launch directories, picker lifecycle and tab binding, optional selection, actions, and
+- **Owner consequence:** Eon alone owns EONW v5 values, validation, topology, pending tabs,
+  tab launch directories, popup catalog/geometry/lifecycle, optional selection, targeted actions, and
   endpoint mappings. Venus owns only the Unix request worker and native projection.
 
 ### Orbit protocol consumer

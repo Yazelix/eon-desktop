@@ -1,5 +1,5 @@
 use crate::scene::{DrawRow, Scene, ScenePreview};
-use eon_workspace_protocol::v4::{Response as WorkspaceResponse, Snapshot};
+use eon_workspace_protocol::v5::{Popup, Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{
     ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
@@ -91,11 +91,13 @@ pub struct WorkspaceModel {
 }
 
 #[must_use]
-pub fn directory_picker_visible(snapshot: &Snapshot) -> bool {
-    snapshot
-        .directory_picker
-        .as_ref()
-        .is_some_and(|picker| picker.tab == snapshot.active_tab)
+pub fn active_popup(snapshot: &Snapshot) -> Option<&Popup> {
+    let tab = snapshot
+        .tabs
+        .iter()
+        .find(|tab| tab.id == snapshot.active_tab)?;
+    let selected = tab.selected_popup.as_ref()?;
+    tab.popups.iter().find(|popup| popup.id == *selected)
 }
 
 impl WorkspaceModel {
@@ -110,8 +112,8 @@ impl WorkspaceModel {
     }
 
     #[must_use]
-    pub fn directory_picker_visible(&self) -> bool {
-        self.snapshot.as_ref().is_some_and(directory_picker_visible)
+    pub fn popup_visible(&self) -> bool {
+        self.snapshot.as_ref().and_then(active_popup).is_some()
     }
 
     /// Apply a response and report `(view changed, snapshot changed)`.
@@ -141,10 +143,8 @@ impl WorkspaceModel {
     #[must_use]
     pub fn active_attachment(&self) -> Option<(&[u8], bool)> {
         let snapshot = self.snapshot.as_ref()?;
-        if directory_picker_visible(snapshot)
-            && let Some(picker) = &snapshot.directory_picker
-        {
-            return Some((&picker.endpoint, true));
+        if let Some(popup) = active_popup(snapshot) {
+            return Some((&popup.endpoint, true));
         }
         let tab = snapshot
             .tabs
@@ -477,7 +477,7 @@ fn bounded(mut detail: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v4::{DirectoryPicker, Failure, Pane, Tab};
+    use eon_workspace_protocol::v5::{Failure, Pane, Tab};
 
     #[test]
     fn rejected_workspace_action_preserves_the_last_complete_snapshot() {
@@ -485,6 +485,9 @@ mod tests {
             active_tab: "t1".into(),
             tabs: vec![
                 Tab {
+                    pending: false,
+                    selected_popup: None,
+                    popups: Vec::new(),
                     id: "t1".into(),
                     directory: b"/tmp/eon".to_vec(),
                     selected_pane: Some("pane-1".into()),
@@ -496,6 +499,9 @@ mod tests {
                     }],
                 },
                 Tab {
+                    pending: false,
+                    selected_popup: None,
+                    popups: Vec::new(),
                     id: "t2".into(),
                     directory: b"/tmp/nova".to_vec(),
                     selected_pane: Some("pane-2".into()),
@@ -507,7 +513,11 @@ mod tests {
                     }],
                 },
             ],
-            directory_picker: None,
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: Vec::new(),
         };
         let mut model = WorkspaceModel::default();
 
@@ -555,49 +565,6 @@ mod tests {
         assert_eq!(
             model.active_attachment(),
             Some((&b"/run/eon/orbit.sock"[..], false))
-        );
-
-        let durable = snapshot.clone();
-        let mut picker = snapshot.clone();
-        picker.directory_picker = Some(DirectoryPicker {
-            tab: "t1".into(),
-            endpoint: b"/run/eon/picker.sock".to_vec(),
-        });
-        model.apply(WorkspaceResponse::Snapshot(picker.clone()));
-        assert_eq!(
-            model.active_attachment(),
-            Some((&b"/run/eon/picker.sock"[..], true))
-        );
-
-        picker.active_tab = "t2".into();
-        model.apply(WorkspaceResponse::Snapshot(picker));
-        assert_eq!(
-            model.active_attachment(),
-            Some((&b"/run/eon/nova.sock"[..], true))
-        );
-
-        model.apply(WorkspaceResponse::Snapshot(Snapshot {
-            active_tab: "t1".into(),
-            tabs: vec![Tab {
-                id: "t1".into(),
-                directory: b"/tmp/eon".to_vec(),
-                selected_pane: None,
-                panes: Vec::new(),
-            }],
-            directory_picker: Some(DirectoryPicker {
-                tab: "t1".into(),
-                endpoint: b"/run/eon/pending-picker.sock".to_vec(),
-            }),
-        }));
-        assert_eq!(
-            model.active_attachment(),
-            Some((&b"/run/eon/pending-picker.sock"[..], true))
-        );
-
-        model.apply(WorkspaceResponse::Snapshot(durable));
-        assert_eq!(
-            model.active_attachment(),
-            Some((&b"/run/eon/orbit.sock"[..], true))
         );
     }
 }

@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
+use eon_workspace_protocol::v5::{Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
@@ -12,6 +12,84 @@ use yazelix_venus::{
     CellMetrics, ClipboardEffect, ConnectionState, LocalNoticeSource, ModelError, ScenePreview,
     SessionModel, WorkspaceHit, WorkspaceScene,
 };
+
+#[test]
+fn shared_popup_projection_keeps_hidden_work_and_one_input_surface() {
+    use eon_workspace_protocol::v5 as wire;
+    use yazelix_venus::WorkspaceModel;
+    let mut snapshot = wire::Snapshot {
+        active_tab: "t1".into(),
+        geometry: wire::PopupGeometry {
+            side_margin: 8.0,
+            vertical_margin: 4.0,
+        },
+        entries: vec![wire::PopupEntry {
+            id: "agent".into(),
+            label: "Agent".into(),
+            shortcut: wire::Shortcut {
+                modifiers: wire::ALT | wire::SHIFT,
+                key: "KeyL".into(),
+            },
+        }],
+        tabs: vec![wire::Tab {
+            id: "t1".into(),
+            directory: b"/work".to_vec(),
+            pending: false,
+            selected_pane: None,
+            selected_popup: Some("u1".into()),
+            panes: vec![],
+            popups: vec![wire::Popup {
+                id: "u1".into(),
+                entry: "agent".into(),
+                session: "s1".into(),
+                endpoint: b"/run/agent.sock".to_vec(),
+            }],
+        }],
+    };
+    let mut model = WorkspaceModel::default();
+    let apply = |model: &mut WorkspaceModel, snapshot: &wire::Snapshot| {
+        let bytes = wire::encode_response(&wire::Response::Snapshot(snapshot.clone())).unwrap();
+        model.apply(wire::decode_response(&bytes).unwrap());
+    };
+    apply(&mut model, &snapshot);
+    assert_eq!(
+        model.active_attachment(),
+        Some((&b"/run/agent.sock"[..], true))
+    );
+    let project = |snapshot: &wire::Snapshot, size| {
+        WorkspaceScene::from_snapshot(
+            snapshot,
+            size,
+            CellMetrics::for_scale(1.0),
+            0.0,
+            0.0,
+            |_, label| (label.into(), label.len() as f32 * 10.0),
+        )
+    };
+    let scene = project(&snapshot, PhysicalSize::new(960, 600));
+    assert!(scene.panes.is_empty());
+    assert_eq!(scene.terminal.left, 8.0);
+    assert_eq!(scene.terminal.top, scene.tab_viewport.bottom() + 4.0);
+    assert_eq!(scene.terminal.bottom(), 596.0);
+    assert_eq!(scene.hit_test(0.0, 50.0), None);
+    assert_eq!(scene.hit_test(40.0, 60.0), Some(WorkspaceHit::Terminal));
+    assert_eq!(
+        scene.hit_test(scene.tabs[0].rect.left + 1.0, scene.tabs[0].rect.top + 1.0),
+        Some(WorkspaceHit::Tab("t1"))
+    );
+    snapshot.tabs[0].selected_popup = None;
+    apply(&mut model, &snapshot);
+    assert_eq!(model.active_attachment(), None);
+    let hidden = project(&snapshot, PhysicalSize::new(960, 600));
+    assert!(hidden.visible_terminal().is_none());
+    assert_eq!(hidden.hit_test(40.0, 60.0), None);
+    assert_eq!(model.snapshot().unwrap().tabs[0].popups.len(), 1);
+    snapshot.tabs[0].selected_popup = Some("u1".into());
+    let narrow = project(&snapshot, PhysicalSize::new(34, 74));
+    assert_eq!(narrow.terminal.width, 34.0);
+    assert!(narrow.terminal.top >= narrow.tab_viewport.bottom());
+    assert!(narrow.terminal.bottom() <= 74.0);
+}
 
 #[test]
 fn scrollback_label_follows_only_current_authoritative_frames()
@@ -105,6 +183,9 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
         active_tab: "t1".into(),
         tabs: vec![
             Tab {
+                pending: false,
+                selected_popup: None,
+                popups: Vec::new(),
                 id: "t1".into(),
                 directory: b"/tmp/eon".to_vec(),
                 selected_pane: Some("pane-2".into()),
@@ -124,6 +205,9 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
                 ],
             },
             Tab {
+                pending: false,
+                selected_popup: None,
+                popups: Vec::new(),
                 id: "t2".into(),
                 directory: b"/tmp/nova".to_vec(),
                 selected_pane: Some("pane-3".into()),
@@ -135,7 +219,11 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
                 }],
             },
         ],
-        directory_picker: None,
+        geometry: eon_workspace_protocol::v5::PopupGeometry {
+            side_margin: 8.0,
+            vertical_margin: 4.0,
+        },
+        entries: Vec::new(),
     };
     let size = PhysicalSize::new(800, 600);
     let metrics = CellMetrics::for_scale(1.0);
@@ -300,96 +388,6 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
     );
     assert_eq!((tiny.tab_scroll(), tiny.pane_scroll()), (0.0, 0.0));
     assert!(tiny.terminal.bottom() <= 1.0);
-
-    let picker = WorkspaceScene::from_snapshot(
-        &Snapshot {
-            directory_picker: Some(DirectoryPicker {
-                tab: "t1".into(),
-                endpoint: b"/run/eon/picker.sock".to_vec(),
-            }),
-            ..snapshot.clone()
-        },
-        size,
-        metrics,
-        0.0,
-        0.0,
-        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
-    );
-    assert!(picker.panes.is_empty());
-    assert_eq!(picker.terminal.left, metrics.width);
-    assert_eq!(
-        picker.terminal.top,
-        picker.tab_viewport.bottom() + metrics.height
-    );
-    assert_eq!(picker.terminal.right(), size.width as f32 - metrics.width);
-    assert_eq!(
-        picker.terminal.bottom(),
-        size.height as f32 - metrics.height
-    );
-    assert_eq!(picker.hit_test(0.0, picker.terminal.top), None);
-
-    let inactive_picker = WorkspaceScene::from_snapshot(
-        &Snapshot {
-            active_tab: "t2".into(),
-            directory_picker: Some(DirectoryPicker {
-                tab: "t1".into(),
-                endpoint: b"/run/eon/picker.sock".to_vec(),
-            }),
-            ..snapshot.clone()
-        },
-        size,
-        metrics,
-        0.0,
-        0.0,
-        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
-    );
-    assert!(!inactive_picker.directory_picker());
-    assert_eq!(inactive_picker.panes.len(), 1);
-    assert_eq!(inactive_picker.panes[0].id, "pane-3");
-    assert_eq!(inactive_picker.terminal.left, 0.0);
-
-    let pending_picker = WorkspaceScene::from_snapshot(
-        &Snapshot {
-            active_tab: "t2".into(),
-            tabs: vec![
-                snapshot.tabs[0].clone(),
-                Tab {
-                    id: "t2".into(),
-                    directory: b"/tmp/eon".to_vec(),
-                    selected_pane: None,
-                    panes: Vec::new(),
-                },
-            ],
-            directory_picker: Some(DirectoryPicker {
-                tab: "t2".into(),
-                endpoint: b"/run/eon/picker.sock".to_vec(),
-            }),
-        },
-        size,
-        metrics,
-        0.0,
-        0.0,
-        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
-    );
-    assert!(pending_picker.tabs[1].selected);
-    assert_eq!(pending_picker.panes, picker.panes);
-    assert_eq!(pending_picker.terminal, picker.terminal);
-
-    let tiny_picker = WorkspaceScene::from_snapshot(
-        &Snapshot {
-            directory_picker: Some(DirectoryPicker {
-                tab: "t1".into(),
-                endpoint: b"/run/eon/picker.sock".to_vec(),
-            }),
-            ..snapshot
-        },
-        PhysicalSize::new(1, 1),
-        metrics,
-        0.0,
-        0.0,
-        |_, text| (text.to_owned(), text.chars().count() as f32 * 10.0),
-    );
-    assert_eq!(tiny_picker.terminal, tiny_picker.pane_viewport);
 }
 
 #[test]

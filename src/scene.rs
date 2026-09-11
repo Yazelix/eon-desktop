@@ -1,5 +1,5 @@
-use crate::{model::directory_picker_visible, render::CellMetrics};
-use eon_workspace_protocol::v4::Snapshot;
+use crate::{model::active_popup, render::CellMetrics};
+use eon_workspace_protocol::v5::Snapshot;
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
@@ -233,7 +233,7 @@ pub struct WorkspaceScene {
     pane_scroll_limit: f32,
     active_tab_scroll: f32,
     selected_pane_scroll: f32,
-    directory_picker: bool,
+    popup_label: Option<String>,
 }
 
 fn header_heights(metrics: CellMetrics) -> (f32, f32) {
@@ -252,8 +252,11 @@ impl WorkspaceScene {
     #[must_use]
     pub fn initial_overhead(snapshot: &Snapshot, metrics: CellMetrics) -> (f32, f32) {
         let (tab_height, pane_height) = header_heights(metrics);
-        if directory_picker_visible(snapshot) {
-            (metrics.width * 2.0, tab_height + metrics.height * 2.0)
+        if active_popup(snapshot).is_some() {
+            (
+                snapshot.geometry.side_margin * metrics.scale * 2.0,
+                tab_height + snapshot.geometry.vertical_margin * metrics.scale * 2.0,
+            )
         } else {
             let tab = snapshot
                 .tabs
@@ -262,7 +265,13 @@ impl WorkspaceScene {
                 .expect("EONW validates the active tab");
             (
                 0.0,
-                tab_height + pane_height * tab.panes.len() as f32 + stack_bottom_margin(metrics),
+                tab_height
+                    + pane_height * tab.panes.len() as f32
+                    + if tab.panes.is_empty() {
+                        0.0
+                    } else {
+                        stack_bottom_margin(metrics)
+                    },
             )
         }
     }
@@ -359,27 +368,30 @@ impl WorkspaceScene {
         for tab in &mut tabs {
             tab.rect.left -= tab_scroll;
         }
-        if directory_picker_visible(snapshot) {
-            let horizontal_inset =
-                if pane_viewport.width >= metrics.padding * 2.0 + metrics.width * 3.0 {
-                    metrics.width
-                } else {
-                    0.0
-                };
-            let vertical_inset =
-                if pane_viewport.height >= metrics.padding * 2.0 + metrics.height * 3.0 {
-                    metrics.height
-                } else {
-                    0.0
-                };
+        let active = &snapshot.tabs[active_tab];
+        let popup = active_popup(snapshot);
+        if popup.is_some() || active.panes.is_empty() {
+            let horizontal_inset = (snapshot.geometry.side_margin * metrics.scale)
+                .min((pane_viewport.width - metrics.padding * 2.0 - metrics.width).max(0.0) / 2.0);
+            let vertical_inset = (snapshot.geometry.vertical_margin * metrics.scale).min(
+                (pane_viewport.height - metrics.padding * 2.0 - metrics.height).max(0.0) / 2.0,
+            );
             return Self {
                 tabs,
                 panes: Vec::new(),
                 terminal: SceneRect {
                     left: horizontal_inset,
                     top: pane_viewport.top + vertical_inset,
-                    width: (pane_viewport.width - horizontal_inset * 2.0).max(0.0),
-                    height: (pane_viewport.height - vertical_inset * 2.0).max(0.0),
+                    width: if popup.is_some() {
+                        (pane_viewport.width - horizontal_inset * 2.0).max(0.0)
+                    } else {
+                        0.0
+                    },
+                    height: if popup.is_some() {
+                        (pane_viewport.height - vertical_inset * 2.0).max(0.0)
+                    } else {
+                        0.0
+                    },
                 },
                 tab_viewport,
                 pane_viewport,
@@ -389,7 +401,15 @@ impl WorkspaceScene {
                 pane_scroll_limit: 0.0,
                 active_tab_scroll,
                 selected_pane_scroll: 0.0,
-                directory_picker: true,
+                popup_label: popup.map(|popup| {
+                    snapshot
+                        .entries
+                        .iter()
+                        .find(|entry| entry.id == popup.entry)
+                        .expect("EONW validates popup entries")
+                        .label
+                        .clone()
+                }),
             };
         }
 
@@ -471,7 +491,7 @@ impl WorkspaceScene {
             active_tab_scroll,
             selected_pane_scroll: (selected_pane as f32 * pane_height)
                 .clamp(0.0, pane_scroll_limit),
-            directory_picker: false,
+            popup_label: None,
         }
     }
 
@@ -506,8 +526,8 @@ impl WorkspaceScene {
     }
 
     #[must_use]
-    pub fn directory_picker(&self) -> bool {
-        self.directory_picker
+    pub fn popup_label(&self) -> Option<&str> {
+        self.popup_label.as_deref()
     }
 
     #[must_use]

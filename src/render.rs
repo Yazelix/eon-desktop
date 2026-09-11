@@ -44,6 +44,7 @@ const MAX_CURSOR_DELTA: f32 = 0.1;
 const CURSOR_SETTLED: f32 = 0.01;
 const DEVICE_LOST: &str = "the Venus GPU device was lost";
 const DEFAULT_METRICS: CellMetrics = CellMetrics {
+    scale: 1.0,
     width: 10.0,
     height: 18.0,
     font_size: 16.0,
@@ -94,6 +95,7 @@ fn fragment_srgb(input: VertexOutput) -> @location(0) vec4<f32> {
 /// Physical cell layout used by rendering, input mapping, and resize requests.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CellMetrics {
+    pub scale: f32,
     pub width: f32,
     pub height: f32,
     pub font_size: f32,
@@ -285,6 +287,7 @@ impl FontSetup {
         Ok(Self {
             font_system,
             logical: CellMetrics {
+                scale: 1.0,
                 width,
                 height: settings.size * settings.line_height,
                 font_size: settings.size,
@@ -328,6 +331,7 @@ impl CellMetrics {
     fn scaled(self, scale_factor: f64) -> Self {
         let scale = scale_factor as f32;
         Self {
+            scale,
             width: (self.width * scale).round().max(1.0),
             height: (self.height * scale).round().max(1.0),
             font_size: (self.font_size * scale).max(1.0),
@@ -1177,50 +1181,42 @@ impl Renderer {
             let background = scene.map_or(DEFAULT_BACKGROUND, |scene| scene.background);
             rectangles.push(
                 0.0,
-                workspace.pane_viewport.bottom(),
+                workspace.tab_viewport.bottom(),
                 self.config.width as f32,
-                self.config.height as f32 - workspace.pane_viewport.bottom(),
+                self.config.height as f32 - workspace.tab_viewport.bottom(),
                 background,
                 self.background_opacity,
             );
             self.build_workspace(workspace, workspace_focus, &mut rectangles);
-            if let Some(terminal) = workspace.visible_terminal() {
-                rectangles.push(
-                    terminal.left,
-                    terminal.top,
-                    terminal.width,
-                    terminal.height,
-                    background,
-                    self.background_opacity,
+            if let Some(terminal) = workspace.visible_terminal()
+                && let Some(scene) = scene
+            {
+                let clip = scene_grid(scene, workspace.terminal, self.metrics)
+                    .intersection(terminal)
+                    .unwrap_or(terminal);
+                rectangles.clip = Some(clip);
+                let origin = shifted(workspace.terminal, scroll_offset);
+                self.build_scene_text(scene, blink_visible, origin, clip);
+                self.build_preview_text(scene, scroll_preview, blink_visible, origin, clip);
+                cursor_vertex_boundary = build_scene_rectangles(
+                    &mut rectangles,
+                    scene,
+                    blink_visible,
+                    self.metrics,
+                    origin,
+                    self.cursor_tail.is_none(),
                 );
-                if let Some(scene) = scene {
-                    let clip = scene_grid(scene, workspace.terminal, self.metrics)
-                        .intersection(terminal)
-                        .unwrap_or(terminal);
-                    rectangles.clip = Some(clip);
-                    let origin = shifted(workspace.terminal, scroll_offset);
-                    self.build_scene_text(scene, blink_visible, origin, clip);
-                    self.build_preview_text(scene, scroll_preview, blink_visible, origin, clip);
-                    cursor_vertex_boundary = build_scene_rectangles(
-                        &mut rectangles,
-                        scene,
-                        blink_visible,
-                        self.metrics,
-                        origin,
-                        self.cursor_tail.is_none(),
-                    );
-                    build_preview_rectangles(
-                        &mut rectangles,
-                        scene,
-                        scroll_preview,
-                        blink_visible,
-                        self.metrics,
-                        origin,
-                    );
-                    self.build_preedit(scene, preedit, &mut rectangles, origin, clip);
-                    self.build_hyperlink(scene, &mut rectangles, origin);
-                    rectangles.clip = None;
-                }
+                build_preview_rectangles(
+                    &mut rectangles,
+                    scene,
+                    scroll_preview,
+                    blink_visible,
+                    self.metrics,
+                    origin,
+                );
+                self.build_preedit(scene, preedit, &mut rectangles, origin, clip);
+                self.build_hyperlink(scene, &mut rectangles, origin);
+                rectangles.clip = None;
             }
             rectangles.clip = Some(workspace.pane_viewport);
             if self.pane_frames && !workspace.panes.is_empty() {
@@ -1266,28 +1262,46 @@ impl Renderer {
                 );
             }
             rectangles.clip = None;
-            if workspace.directory_picker()
-                && workspace_focus == WorkspaceFocus::Terminal
+            if let Some(label) = workspace.popup_label()
                 && let Some(terminal) = workspace.visible_terminal()
             {
-                rectangles.push_hollow(
-                    terminal.left,
-                    terminal.top,
-                    terminal.width,
-                    terminal.height,
-                    1.0,
+                rectangles.push_rounded_outline(
+                    terminal,
+                    self.metrics.padding,
                     SceneColor {
-                        r: 58,
-                        g: 75,
-                        b: 91,
+                        r: 82,
+                        g: 104,
+                        b: 124,
                     },
                 );
+                // The label occupies existing top padding, never a terminal cell.
+                let label_height = 12.0 * self.metrics.scale;
+                if self.metrics.padding >= label_height
+                    && terminal.height >= self.metrics.padding * 2.0 + self.metrics.height
+                    && terminal.width >= self.metrics.padding * 2.0 + self.metrics.width * 4.0
+                {
+                    self.push_text_clipped(
+                        label,
+                        terminal.left + self.metrics.padding,
+                        terminal.top,
+                        terminal.width - self.metrics.padding * 2.0,
+                        terminal.width - self.metrics.padding * 2.0,
+                        label_height,
+                        SceneColor {
+                            r: 162,
+                            g: 174,
+                            b: 190,
+                        },
+                        DrawStyleKind::PopupLabel,
+                        terminal,
+                    );
+                }
             }
             if !status.is_empty() {
                 self.build_notice(status, &mut rectangles, Some(workspace));
             }
             self.build_tab_tooltip(workspace, &mut rectangles);
-            if workspace.directory_picker()
+            if workspace.popup_label().is_some()
                 && status.is_empty()
                 && self.text_overlay.is_none()
                 && let Some(terminal) = workspace.visible_terminal()
@@ -1589,16 +1603,6 @@ impl Renderer {
             );
         }
         rectangles.clip = None;
-        if workspace.directory_picker() {
-            rectangles.push(
-                workspace.pane_viewport.left,
-                workspace.pane_viewport.top,
-                workspace.pane_viewport.width,
-                workspace.pane_viewport.height,
-                idle,
-                1.0,
-            );
-        }
         for pane in &workspace.panes {
             let Some(rect) = pane.rect.intersection(workspace.pane_viewport) else {
                 continue;
@@ -2009,6 +2013,14 @@ impl Renderer {
                 );
                 return 0.0;
             }
+            DrawStyleKind::PopupLabel => (
+                11.0 * self.metrics.scale,
+                12.0 * self.metrics.scale,
+                Attrs::new().family(Family::SansSerif),
+                None,
+                Wrap::None,
+                255,
+            ),
             DrawStyleKind::Heading => (
                 self.metrics.font_size * 1.15,
                 self.metrics.height * 1.4,
@@ -2206,6 +2218,7 @@ enum DrawStyleKind {
     Preedit,
     Link,
     Status(Wrap),
+    PopupLabel,
 }
 
 fn shaped_preedit_placement(buffer: &Buffer) -> (f32, f32) {
@@ -3240,7 +3253,7 @@ mod tests {
     #[test]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn long_workspace_labels_stay_on_the_visible_line() {
-        use eon_workspace_protocol::v4::{Pane, Snapshot, Tab};
+        use eon_workspace_protocol::v5::{Pane, Snapshot, Tab};
         use winit::{
             application::ApplicationHandler, event::WindowEvent, event_loop::EventLoop,
             platform::wayland::EventLoopBuilderExtWayland, window::WindowId,
@@ -3265,11 +3278,18 @@ mod tests {
                 .unwrap();
                 let snapshot = Snapshot {
                     active_tab: "t2".into(),
-                    directory_picker: None,
+                    geometry: eon_workspace_protocol::v5::PopupGeometry {
+                        side_margin: 8.0,
+                        vertical_margin: 4.0,
+                    },
+                    entries: Vec::new(),
                     tabs: ["eon", "machines_vs_aliens"]
                         .into_iter()
                         .enumerate()
                         .map(|(index, directory)| Tab {
+                            pending: false,
+                            selected_popup: None,
+                            popups: Vec::new(),
                             id: format!("t{}", index + 1),
                             directory: format!("/tmp/{directory}").into_bytes(),
                             selected_pane: Some(format!("p{}", index + 1)),
@@ -3575,6 +3595,7 @@ mod tests {
     #[test]
     fn bounded_preview_rows_cover_multi_row_fractional_offsets() {
         let metrics = CellMetrics {
+            scale: 1.0,
             width: 10.0,
             height: 20.0,
             font_size: 16.0,

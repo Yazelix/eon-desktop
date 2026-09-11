@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v4::{
+use eon_workspace_protocol::v5::{
     self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
     Response as WorkspaceResponse,
 };
@@ -54,13 +54,13 @@ pub struct Transport {
 }
 
 /// One complete result from the Eon-owned workspace request boundary.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum WorkspaceEvent {
     Response(WorkspaceResponse),
     Unavailable(String),
 }
 
-/// Bounded semantic-action handle for EONW v4.
+/// Bounded semantic-action handle for EONW v5.
 pub struct WorkspaceTransport {
     actions: mpsc::SyncSender<WorkspaceAction>,
     events: Arc<WorkspaceEventQueue>,
@@ -301,7 +301,7 @@ fn run_workspace(
         .unwrap_or_default()
         .as_nanos();
     let mut counter = 0;
-    let mut action = WorkspaceAction::Inspect;
+    let mut action = WorkspaceAction::Workspace(workspace::WorkspaceAction::Inspect);
     loop {
         let event = workspace_exchange(&socket, nonce, counter, action)
             .map(WorkspaceEvent::Response)
@@ -310,7 +310,9 @@ fn run_workspace(
         counter = counter.wrapping_add(1);
         action = match receiver.recv_timeout(refresh_interval) {
             Ok(action) => action,
-            Err(mpsc::RecvTimeoutError::Timeout) => WorkspaceAction::Inspect,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                WorkspaceAction::Workspace(workspace::WorkspaceAction::Inspect)
+            }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         };
     }
@@ -703,7 +705,9 @@ fn protocol_loss(error: session::Error) -> TransportEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v4::{DirectoryPicker, Pane, Snapshot, Tab};
+    use eon_workspace_protocol::v5::{
+        InvokeIntent, Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab,
+    };
     use orbit_protocol::{
         Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         session::{FocusEvent, Metadata},
@@ -1130,48 +1134,57 @@ mod tests {
 
     #[test]
     fn workspace_worker_carries_actions_and_picker_transition() {
-        use WorkspaceAction::{CloseTab, Focus, FocusId, Inspect, Move, PickTabDirectory};
+        use WorkspaceAction::Workspace;
         use workspace::Direction::{Down, Left, Right, Up};
+        use workspace::WorkspaceAction::{CloseTab, Focus, FocusId, Inspect, Move};
 
         let socket = TestSocket::new();
         let listener = UnixListener::bind(&socket.path).unwrap();
         let snapshot = WorkspaceResponse::Snapshot(workspace_snapshot());
         let mut picker = workspace_snapshot();
         picker.tabs.push(second_workspace_tab());
-        picker.directory_picker = Some(DirectoryPicker {
-            tab: "t1".into(),
-            endpoint: b"/run/eon/picker.sock".to_vec(),
-        });
+        picker.tabs[0].selected_popup = Some("u1".into());
         let mut inactive_picker = picker.clone();
         inactive_picker.active_tab = "t2".into();
         let exchanges = [
-            (Inspect, snapshot.clone()),
-            (FocusId("pane-1".into()), snapshot.clone()),
-            (Focus(Up), snapshot.clone()),
-            (Focus(Down), snapshot),
+            (Workspace(Inspect), snapshot.clone()),
+            (Workspace(FocusId("pane-1".into())), snapshot.clone()),
+            (Workspace(Focus(Up)), snapshot.clone()),
+            (Workspace(Focus(Down)), snapshot),
             (
-                Move(Left),
+                Workspace(Move(Left)),
                 WorkspaceResponse::Snapshot(workspace_snapshot()),
             ),
             (
-                Move(Right),
-                WorkspaceResponse::Snapshot(workspace_snapshot()),
-            ),
-            (Move(Up), WorkspaceResponse::Snapshot(workspace_snapshot())),
-            (
-                Move(Down),
+                Workspace(Move(Right)),
                 WorkspaceResponse::Snapshot(workspace_snapshot()),
             ),
             (
-                CloseTab { tab: "t2".into() },
+                Workspace(Move(Up)),
                 WorkspaceResponse::Snapshot(workspace_snapshot()),
             ),
             (
-                PickTabDirectory,
+                Workspace(Move(Down)),
+                WorkspaceResponse::Snapshot(workspace_snapshot()),
+            ),
+            (
+                Workspace(CloseTab { tab: "t2".into() }),
+                WorkspaceResponse::Snapshot(workspace_snapshot()),
+            ),
+            (
+                WorkspaceAction::InvokePopup {
+                    tab: "t1".into(),
+                    entry: "agent".into(),
+                    expected_instance: Some("u1".into()),
+                    intent: InvokeIntent::Toggle,
+                },
                 WorkspaceResponse::Snapshot(picker.clone()),
             ),
-            (Focus(Right), WorkspaceResponse::Snapshot(inactive_picker)),
-            (Focus(Left), WorkspaceResponse::Snapshot(picker)),
+            (
+                Workspace(Focus(Right)),
+                WorkspaceResponse::Snapshot(inactive_picker),
+            ),
+            (Workspace(Focus(Left)), WorkspaceResponse::Snapshot(picker)),
         ];
         let server_exchanges = exchanges.clone();
         let server = thread::spawn(move || {
@@ -1223,7 +1236,10 @@ mod tests {
         let server = thread::spawn(move || {
             for snapshot in snapshots {
                 let (mut stream, action) = accept_workspace_action(&listener);
-                assert_eq!(action, WorkspaceAction::Inspect);
+                assert_eq!(
+                    action,
+                    WorkspaceAction::Workspace(workspace::WorkspaceAction::Inspect)
+                );
                 stream
                     .write_all(
                         &workspace::encode_response(&WorkspaceResponse::Snapshot(snapshot))
@@ -1283,7 +1299,13 @@ mod tests {
             stream.write_all(&response).unwrap();
         });
 
-        let error = workspace_exchange(&socket.path, 1, 0, WorkspaceAction::Inspect).unwrap_err();
+        let error = workspace_exchange(
+            &socket.path,
+            1,
+            0,
+            WorkspaceAction::Workspace(workspace::WorkspaceAction::Inspect),
+        )
+        .unwrap_err();
 
         assert!(error.contains("unsupported EONW version"));
         server.join().unwrap();
@@ -1318,6 +1340,14 @@ mod tests {
         Snapshot {
             active_tab: "t1".into(),
             tabs: vec![Tab {
+                pending: false,
+                selected_popup: None,
+                popups: vec![Popup {
+                    id: "u1".into(),
+                    entry: "agent".into(),
+                    session: "popup-session".into(),
+                    endpoint: b"/run/agent.sock".to_vec(),
+                }],
                 id: "t1".into(),
                 directory: b"/tmp/eon".to_vec(),
                 selected_pane: Some("pane-1".into()),
@@ -1328,12 +1358,26 @@ mod tests {
                     live: true,
                 }],
             }],
-            directory_picker: None,
+            geometry: eon_workspace_protocol::v5::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: vec![PopupEntry {
+                id: "agent".into(),
+                label: "Agent".into(),
+                shortcut: Shortcut {
+                    modifiers: workspace::ALT | workspace::SHIFT,
+                    key: "KeyL".into(),
+                },
+            }],
         }
     }
 
     fn second_workspace_tab() -> Tab {
         Tab {
+            pending: false,
+            selected_popup: None,
+            popups: Vec::new(),
             id: "t2".into(),
             directory: b"/tmp/nova".to_vec(),
             selected_pane: Some("pane-2".into()),

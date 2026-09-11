@@ -86,7 +86,7 @@ Patched winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` owns native sizing.
 Its Wayland event loop consumes `ScaleFactorChanged`'s `InnerSizeWriter`
 synchronously; use that one admission to preserve the requested grid when the
 initial output scale arrives after the first buffer. Later user size/scale
-changes remain authoritative. Workspace Scene owns header and picker overhead.
+changes remain authoritative. Workspace Scene owns header and popup overhead.
 
 Rio `e1946a7b98a5a5a4074f384437f0256abf1df75b`,
 `sugarloaf/src/font/mod.rs` and `rio-backend/src/config/window.rs`, supplies
@@ -251,11 +251,10 @@ Within Eon's local-only product boundary, the projection treats a `file://`
 authority as transport decoration and displays only the absolute path. Remote
 working-directory semantics and percent decoding remain outside the contract.
 
-Exact EONW v4 protocol source `c305453bba4fe50c29f65e829b9cd65af31ced8a`
-is authoritative for picker lifecycle and tab binding, active-tab identity,
-pending-tab state, tab launch directory, pane liveness, endpoint identity, and
-optional selection. Venus derives picker visibility only when its bound tab is
-active, starts no hidden or offline observer, retires obsolete endpoints
+Exact EONW v5 protocol source `0cc8f477298681ae3945903e8fdb5852d487c5ab`
+is authoritative for popup selection, active-tab identity, pending-tab state,
+tab launch directory, pane liveness, endpoint identity, and optional selection.
+Venus starts no hidden or offline observer and retires obsolete endpoints
 directly from each accepted snapshot, and defers the selected endpoint's
 observer until its presentation attachment has completed.
 That deferral preserves Orbit's single pending-negotiation slot without adding
@@ -300,7 +299,7 @@ and backend-specific IME cursor-area comparison. Venus reused no source
 and rejected Alacritty's terminal, grid, selection, configuration, auto-copy,
 primary-selection, search, and raw-display clipboard ownership.
 
-## Required for native Eon workspace materialization
+## Native workspace foundation (historical v4 evidence)
 
 `ven-c87`, `ven-present-tab-directory-picker-a6v`, and
 `ven-consume-picker-first-eonw-v4-zd1` consume `EON-C10`, `EON-C17`, `EON-C18`,
@@ -342,6 +341,37 @@ Alt+H/L actions remain Eon-owned traversal. Nova
 accepted shortcut, inset, and terminal-backed lifecycle. Venus reuses no source
 and rejects a native picker, inferred modal state, simultaneous terminals, and
 a generic popup or modal API.
+
+## Required for shared popup presentation
+
+`ven-shared-popup-surface-ehk` consumes the exact Eon-owned EONW v5 seed at
+[`0cc8f477298681ae3945903e8fdb5852d487c5ab`](https://github.com/Yazelix/eon/tree/0cc8f477298681ae3945903e8fdb5852d487c5ab).
+The question is how Project and tools share one stack-covering surface without
+moving product or terminal policy into Venus. The dependency-free owner codec
+supplies the catalog, logical margins, per-tab instances/selection and guarded
+actions. Existing Venus attachment, Scene, renderer, input and accessibility
+owners consume it directly; no second schema or launch mechanism is added.
+
+Comparison-only sources inspected for this slice:
+
+- [Nova](https://github.com/Yazelix/nova/tree/6575ae476a8d4b2fa8b4aa8d0f3839bdba6467e1)
+  `defaults/config.toml` and `crates/yzx-config/src/custom_popups.rs`: named popup
+  entries and shared geometry; command and cwd policy stay with Eon.
+- [Zellij Popup](https://github.com/Yazelix/zellij-popup/tree/f9424823b01e5223dadff9e6c5b87c0131a902f8)
+  `src/lib.rs`, `src/main.rs::show_popup` and
+  `src/popup_contract.rs::should_restart_popup_for_cwd`: clamp margins for a
+  usable surface and consume authoritative visibility. Venus adopts no plugin,
+  process lookup, cwd restart or sidebar lifecycle.
+- [Kitty](https://github.com/kovidgoyal/kitty/tree/54416498c89e1d07e5079c49d15470dd0d947ce7)
+  `kitty/launch.py` and `kitty/tabs.py`: overlays identify an exact target and
+  reuse terminal presentation. Per-pane overlays and local PTY launch are
+  rejected because Eon selects one tab-body endpoint.
+
+Nova and Zellij Popup are Apache-2.0; Kitty is GPL-3.0. All were inspected without
+copying or adapting source. The chosen check combines canonical v5 roundtrips,
+focus/geometry/accessibility regressions and an isolated native Wayland consumer
+using real Orbit Sessions with a bounded canonical workspace producer. It does
+not establish Eon command/lifetime behavior or composed runtime activation.
 
 ## Required for pixel and kinetic retained-history scrolling
 
