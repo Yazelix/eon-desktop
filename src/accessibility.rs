@@ -174,12 +174,21 @@ impl Snapshot {
             }
 
             let mut panel = Node::new(Role::TabPanel);
-            panel.set_label(workspace.popup_label().unwrap_or("Active tab panes"));
+            panel.set_label(
+                workspace
+                    .popup_label()
+                    .unwrap_or(if workspace.panes.is_empty() {
+                        "Empty tab"
+                    } else {
+                        "Active tab panes"
+                    }),
+            );
             panel.set_orientation(Orientation::Vertical);
             panel.set_bounds(rect(workspace.pane_viewport));
             panel.set_clips_children();
             let mut children = Vec::with_capacity(workspace.panes.len() + 1);
-            if workspace.panes.is_empty() {
+            if workspace.panes.is_empty() && (visible_terminal.is_some() || !self.status.is_empty())
+            {
                 children.push(CONTENT);
             }
             for pane in &workspace.panes {
@@ -233,29 +242,33 @@ impl Snapshot {
             tree: Some(Tree::new(WINDOW)),
             tree_id: TreeId::ROOT,
             focus: self.workspace.as_ref().map_or(CONTENT, |workspace| {
+                let selected_tab = workspace
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.selected)
+                    .and_then(|tab| self.tab_ids.get(&tab.id).copied())
+                    .unwrap_or(CONTENT);
+                let content = visible_terminal.map_or(selected_tab, |_| CONTENT);
                 match self.workspace_focus {
-                    WorkspaceFocus::Terminal => CONTENT,
-                    WorkspaceFocus::Tabs => workspace
-                        .tabs
-                        .iter()
-                        .find(|tab| tab.selected)
-                        .and_then(|tab| self.tab_ids.get(&tab.id).copied())
-                        .unwrap_or(CONTENT),
+                    WorkspaceFocus::Terminal => content,
                     WorkspaceFocus::Panes => workspace
                         .panes
                         .iter()
                         .find(|pane| pane.selected)
                         .and_then(|pane| self.pane_ids.get(&pane.id).copied())
-                        .unwrap_or(CONTENT),
+                        .unwrap_or(content),
+                    WorkspaceFocus::Tabs => selected_tab,
                 }
             }),
         }
     }
 
     fn workspace_target(&self, target: NodeId) -> Option<AccessibilityTarget> {
-        self.workspace.as_ref()?;
+        let workspace = self.workspace.as_ref()?;
         if target == CONTENT {
-            return Some(AccessibilityTarget::Terminal);
+            return workspace
+                .visible_terminal()
+                .map(|_| AccessibilityTarget::Terminal);
         }
         if let Some((id, _)) = self.tab_ids.iter().find(|(_, node)| **node == target) {
             return Some(AccessibilityTarget::Tab(id.clone()));
@@ -856,7 +869,7 @@ mod tests {
     }
 
     #[test]
-    fn directory_picker_is_the_only_actionable_tab_body_content() {
+    fn popup_and_empty_body_expose_only_visible_accessibility_targets() {
         let size = PhysicalSize::new(800, 600);
         let mut state = WorkspaceSnapshot {
             active_tab: "t1".into(),
@@ -883,7 +896,7 @@ mod tests {
                     id: "u1".into(),
                     entry: "project".into(),
                     session: "s1".into(),
-                    endpoint: b"/run/picker.sock".to_vec(),
+                    endpoint: b"/run/popup.sock".to_vec(),
                 }],
             }],
         };
@@ -898,8 +911,8 @@ mod tests {
         let mut snapshot = Snapshot {
             content: AccessibleText {
                 rows: vec![AccessibleRow {
-                    value: "picker".into(),
-                    character_lengths: vec![1; 6],
+                    value: "popup".into(),
+                    character_lengths: vec![1; 5],
                 }],
                 selection: None,
             },
@@ -935,19 +948,30 @@ mod tests {
             0.0,
             |_, text| (text.into(), text.len() as f32 * 10.0),
         )));
+        snapshot.workspace_focus = WorkspaceFocus::Terminal;
         let empty = snapshot.tree();
         assert_eq!(node(&empty, CONTENT).role(), Role::GenericContainer);
         assert!(node(&empty, CONTENT).children().is_empty());
+        assert!(node(&empty, PANE_PANEL).children().is_empty());
+        assert_eq!(node(&empty, PANE_PANEL).label(), Some("Empty tab"));
+        assert_eq!(empty.focus, tab);
         assert!(node(&empty, tab).supports_action(Action::Click));
         snapshot.workspace_focus = WorkspaceFocus::Panes;
+        assert_eq!(snapshot.workspace_target(CONTENT), None);
+        snapshot.status = "popup action rejected".into();
+        let failed = snapshot.tree();
+        assert_eq!(node(&failed, PANE_PANEL).children(), &[CONTENT]);
+        assert_eq!(node(&failed, CONTENT).role(), Role::Alert);
         assert_eq!(
-            snapshot.workspace_target(CONTENT),
-            Some(AccessibilityTarget::Terminal)
+            node(&failed, CONTENT).value(),
+            Some("popup action rejected")
         );
+        assert_eq!(failed.focus, tab);
+        snapshot.status.clear();
 
         state.tabs.push(workspace_tab("t2", &["p2"], "p2"));
         state.active_tab = "t2".into();
-        let inactive_picker = WorkspaceScene::from_snapshot(
+        let inactive_popup = WorkspaceScene::from_snapshot(
             &state,
             size,
             CellMetrics::for_scale(1.0),
@@ -955,7 +979,7 @@ mod tests {
             0.0,
             |_, text| (text.into(), text.len() as f32 * 10.0),
         );
-        snapshot.set_workspace(Some(&inactive_picker));
+        snapshot.set_workspace(Some(&inactive_popup));
         let active_tab = snapshot.tab_ids["t2"];
         let pane = snapshot.pane_ids["p2"];
         let update = snapshot.tree();

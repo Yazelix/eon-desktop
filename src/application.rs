@@ -802,6 +802,8 @@ impl Application {
         if self.workspace_socket.is_some() {
             if let Some((endpoint, live)) = self.workspace_model.active_attachment() {
                 self.set_orbit_attachment(Some(endpoint.to_vec()), live);
+            } else if self.workspace_model.snapshot().is_some() {
+                self.set_workspace_focus(WorkspaceFocus::Tabs);
             }
         } else {
             self.start_orbit(
@@ -969,6 +971,14 @@ impl Application {
     }
 
     fn set_workspace_focus(&mut self, focus: WorkspaceFocus) {
+        let focus = if focus == WorkspaceFocus::Terminal
+            && self.workspace_model.snapshot().is_some()
+            && self.workspace_model.active_attachment().is_none()
+        {
+            WorkspaceFocus::Tabs
+        } else {
+            focus
+        };
         if self.workspace_focus == focus {
             return;
         }
@@ -1074,6 +1084,11 @@ impl Application {
             self.reveal_workspace_selection();
             self.presentation.invalidate();
             let attachment = self.workspace_model.active_attachment();
+            let popup_visible = self
+                .workspace_model
+                .snapshot()
+                .and_then(active_popup)
+                .is_some();
             if attachment
                 != self
                     .active_endpoint
@@ -1084,11 +1099,16 @@ impl Application {
                     (Some(endpoint.to_vec()), live)
                 });
                 self.set_orbit_attachment(endpoint, live);
-                if self.workspace_model.popup_visible() {
+                if popup_visible {
                     self.set_workspace_focus(WorkspaceFocus::Terminal);
                 }
             }
             self.send_resize();
+        }
+        if self.workspace_model.snapshot().is_some()
+            && self.workspace_model.active_attachment().is_none()
+        {
+            self.set_workspace_focus(WorkspaceFocus::Tabs);
         }
         if received_snapshot {
             self.reconcile_metadata_observers();
@@ -1186,6 +1206,7 @@ impl Application {
             PhysicalKey::Unidentified(_) => return focus != WorkspaceFocus::Terminal,
         };
         let modifiers = self.input.modifiers();
+        let has_terminal = self.workspace_model.active_attachment().is_some();
         let cycles_focus =
             code == KeyCode::F6 && modifiers == orbit_protocol::session::Modifiers::empty();
         let returns_to_terminal = code == KeyCode::Escape
@@ -1195,7 +1216,7 @@ impl Application {
             code,
             modifiers,
             snapshot,
-            terminal_focused(self.window_focused, focus),
+            has_terminal && terminal_focused(self.window_focused, focus),
         )
         .or_else(|| {
             workspace_shortcut(code, modifiers, &snapshot.active_tab)
@@ -3287,7 +3308,7 @@ mod tests {
             id: "u1".into(),
             entry: "project".into(),
             session: "popup-session".into(),
-            endpoint: b"/tmp/picker.sock".to_vec(),
+            endpoint: b"/tmp/popup.sock".to_vec(),
         }];
         snapshot.tabs[0].selected_popup = Some("u1".into());
     }
@@ -3500,8 +3521,8 @@ mod tests {
                     .collect(),
             }],
         };
-        for picker in [false, true] {
-            if picker {
+        for popup in [false, true] {
+            if popup {
                 show_test_popup(&mut snapshot);
             }
             for scale in [1.0, 1.25, 1.5, 2.0] {
@@ -3988,6 +4009,9 @@ mod tests {
                 assert!(app.transport.is_none());
                 assert!(app.model.scene().is_none());
                 assert!(app.terminal_size().is_none());
+                assert_eq!(app.workspace_focus, WorkspaceFocus::Tabs);
+                app.set_workspace_focus(WorkspaceFocus::Terminal);
+                assert_eq!(app.workspace_focus, WorkspaceFocus::Tabs);
                 assert!(
                     app.status().is_empty(),
                     "an empty body has no resize failure"
@@ -4451,19 +4475,19 @@ mod tests {
             [b"one".to_vec()].into()
         );
 
-        let mut picker = snapshot;
-        show_test_popup(&mut picker);
+        let mut popup = snapshot;
+        show_test_popup(&mut popup);
         assert_eq!(
-            visible_metadata_endpoints(&picker, Some(b"picker"), true),
+            visible_metadata_endpoints(&popup, Some(b"popup"), true),
             HashSet::new()
         );
 
-        let inactive_picker = Snapshot {
+        let inactive_popup = Snapshot {
             active_tab: "t2".into(),
-            ..picker
+            ..popup
         };
         assert_eq!(
-            visible_metadata_endpoints(&inactive_picker, Some(b"hidden"), true),
+            visible_metadata_endpoints(&inactive_popup, Some(b"hidden"), true),
             [b"hidden".to_vec()].into()
         );
     }

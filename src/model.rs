@@ -111,11 +111,6 @@ impl WorkspaceModel {
         self.notice.as_deref()
     }
 
-    #[must_use]
-    pub fn popup_visible(&self) -> bool {
-        self.snapshot.as_ref().and_then(active_popup).is_some()
-    }
-
     /// Apply a response and report `(view changed, snapshot changed)`.
     pub fn apply(&mut self, response: WorkspaceResponse) -> (bool, bool) {
         match response {

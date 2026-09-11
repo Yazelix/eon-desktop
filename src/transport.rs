@@ -1133,7 +1133,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_worker_carries_actions_and_picker_transition() {
+    fn workspace_worker_carries_actions_and_popup_transition() {
         use WorkspaceAction::Workspace;
         use workspace::Direction::{Down, Left, Right, Up};
         use workspace::WorkspaceAction::{CloseTab, Focus, FocusId, Inspect, Move};
@@ -1141,11 +1141,11 @@ mod tests {
         let socket = TestSocket::new();
         let listener = UnixListener::bind(&socket.path).unwrap();
         let snapshot = WorkspaceResponse::Snapshot(workspace_snapshot());
-        let mut picker = workspace_snapshot();
-        picker.tabs.push(second_workspace_tab());
-        picker.tabs[0].selected_popup = Some("u1".into());
-        let mut inactive_picker = picker.clone();
-        inactive_picker.active_tab = "t2".into();
+        let mut popup = workspace_snapshot();
+        popup.tabs.push(second_workspace_tab());
+        popup.tabs[0].selected_popup = Some("u1".into());
+        let mut inactive_popup = popup.clone();
+        inactive_popup.active_tab = "t2".into();
         let exchanges = [
             (Workspace(Inspect), snapshot.clone()),
             (Workspace(FocusId("pane-1".into())), snapshot.clone()),
@@ -1178,13 +1178,13 @@ mod tests {
                     expected_instance: Some("u1".into()),
                     intent: InvokeIntent::Toggle,
                 },
-                WorkspaceResponse::Snapshot(picker.clone()),
+                WorkspaceResponse::Snapshot(popup.clone()),
             ),
             (
                 Workspace(Focus(Right)),
-                WorkspaceResponse::Snapshot(inactive_picker),
+                WorkspaceResponse::Snapshot(inactive_popup),
             ),
-            (Workspace(Focus(Left)), WorkspaceResponse::Snapshot(picker)),
+            (Workspace(Focus(Left)), WorkspaceResponse::Snapshot(popup)),
         ];
         let server_exchanges = exchanges.clone();
         let server = thread::spawn(move || {
