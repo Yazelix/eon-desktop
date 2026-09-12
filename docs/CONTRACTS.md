@@ -145,7 +145,7 @@ Their distinct earlier proof identities and remaining limits stay qualified.
 
 ## VEN-C5 — Explicit native hyperlinks
 
-- **Status:** Candidate
+- **Status:** Partially proved
 - **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link or
   explicitly activates one.
 - **Result:** The hovered link is highlighted and its escaped target is
@@ -173,15 +173,20 @@ Their distinct earlier proof identities and remaining limits stay qualified.
   browser embedding, new crate, or protocol change. Host GIO and a registered
   handler are required for opening; copy remains available without them.
   Native Linux Wayland only; other platforms remain unsupported.
-- **Proof:** Candidate working tree over accepted baseline
-  `cf3a9169f2cd95d42c689134a52d51d9147ff37c`
-  - **Simplification candidate:** The working tree based on
-    `660abf30363817a7a466121cf63be4bd662d4dd5` deletes keyboard inspection,
-    traversal and target paging. Focused checks prove the two-action hint,
-    selection precedence, exact accessible controls and retirement of stale link
-    nodes; the complete ordinary Rust suite and isolated native input-pairing
-    regression pass. User-visible Open/Copy, AT-SPI actions, and installed
-    composition remain unproved for this candidate.
+- **Proof:** Accepted source
+  `3730201d6dd27e15fdcd1a8b0662aa476a587eb6`.
+  - **User-accepted simplification:** Nix package
+    `/nix/store/g8yhz7ha4drfkcraqg9bjyb34j6bgvv4-yazelix-venus-0.1.0`
+    ran as the sole presentation client for a live Eon workspace on native
+    COSMIC Wayland. The user confirmed the two-action hover hint, exact
+    Ctrl+Shift+C copy, and Ctrl+left-click GIO open against
+    `https://example.com/eon-link-test?source=venus-candidate#open-copy` while
+    the Eon supervisor and nine Orbit processes remained live.
+  - **Mechanical and isolated native evidence:** Focused checks prove selection
+    precedence, exact AccessKit Open/Copy controls and stale-node retirement;
+    the complete locked Rust suite and isolated native input-pairing regression
+    pass. Native AT-SPI activation and downstream installed Eon composition
+    remain unproved.
   - **Retired inspection correction:** The real Application regression fails before
     this revision and passes after it: unidentified native presses are captured,
     their repeats/releases stay captured after Escape, and fresh presses return
