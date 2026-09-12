@@ -854,8 +854,8 @@ mod tests {
             &[pane_1, pane_2, CONTENT]
         );
         assert_eq!(node(&update, tab_1).role(), Role::Tab);
-        assert_eq!(node(&update, tab_1).label(), Some("t1  /tmp/eon"));
-        assert_eq!(node(&update, tab_2).label(), Some("t2  /tmp/nova"));
+        assert_eq!(node(&update, tab_1).label(), Some("Tab 1 of 2  /tmp/eon"));
+        assert_eq!(node(&update, tab_2).label(), Some("Tab 2 of 2  /tmp/nova"));
         assert_eq!(node(&update, pane_1).label(), Some("p1 offline"));
         assert_eq!(workspace.panes[1].label(), "p2  /tmp/eon");
         assert_eq!(
@@ -1010,8 +1010,8 @@ mod tests {
             WorkspaceFocus::Panes,
         );
         let first = activation.request_initial_tree().unwrap();
-        let tab_a = tree_node_id(&first, "t1  /tmp/t1");
-        let tab_b = tree_node_id(&first, "t2  /tmp/t2");
+        let tab_a = tree_node_id(&first, "Tab 1 of 2  /tmp/t1");
+        let tab_b = tree_node_id(&first, "Tab 2 of 2  /tmp/t2");
         let pane_a = tree_node_id(&first, "pane-a unavailable");
         let pane_b = tree_node_id(&first, "pane-b unavailable");
         assert_ne!(tab_a, pane_a);
@@ -1023,7 +1023,7 @@ mod tests {
         );
         let second = activation.request_initial_tree().unwrap();
 
-        assert_eq!(tree_node_id(&second, "t2  /tmp/t2"), tab_b);
+        assert_eq!(tree_node_id(&second, "Tab 1 of 1  /tmp/t2"), tab_b);
         assert_eq!(tree_node_id(&second, "pane-b unavailable"), pane_b);
         assert_eq!(second.focus, pane_b);
         assert_eq!(
@@ -1051,9 +1051,9 @@ mod tests {
         );
         let third = activation.request_initial_tree().unwrap();
 
-        assert_eq!(tree_node_id(&third, "t2  /tmp/t2"), tab_b);
+        assert_eq!(tree_node_id(&third, "Tab 2 of 2  /tmp/t2"), tab_b);
         assert_eq!(tree_node_id(&third, "pane-b unavailable"), pane_b);
-        assert_ne!(tree_node_id(&third, "t3  /tmp/t3"), tab_a);
+        assert_ne!(tree_node_id(&third, "Tab 1 of 2  /tmp/t3"), tab_a);
         assert_ne!(tree_node_id(&third, "pane-c unavailable"), pane_a);
         assert_eq!(third.focus, pane_b);
     }

@@ -2423,7 +2423,7 @@ fn fit_header_text(
         return (text.to_owned(), measured);
     }
 
-    // Keep the numeric identity; cuts use the shaper's original cluster boundaries.
+    // Keep the positional prefix; cuts use the shaper's original cluster boundaries.
     let prefix = text.find("  ").map_or(0, |index| index + 2);
     let mut boundaries: Vec<_> = buffer
         .layout_runs()
@@ -3347,7 +3347,7 @@ mod tests {
                 );
                 assert_eq!(
                     renderer.text[first].buffer.lines[0].text(),
-                    "t2  /tmp/machines_vs_aliens"
+                    "Tab 2 of 2  /tmp/machines_vs_aliens"
                 );
                 let mut snapshot = snapshot;
                 snapshot.tabs[1].panes.push(Pane {

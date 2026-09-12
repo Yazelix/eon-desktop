@@ -1212,16 +1212,23 @@ impl Application {
         let returns_to_terminal = code == KeyCode::Escape
             && modifiers == orbit_protocol::session::Modifiers::empty()
             && focus != WorkspaceFocus::Terminal;
-        let action = popup_shortcut(
-            code,
-            modifiers,
-            snapshot,
-            has_terminal && terminal_focused(self.window_focused, focus),
-        )
-        .or_else(|| {
-            workspace_shortcut(code, modifiers, &snapshot.active_tab)
-                .map(WorkspaceAction::Workspace)
-        });
+        let tab_index = tab_shortcut_index(code, modifiers);
+        let action = match tab_index {
+            Some(index) => snapshot
+                .tabs
+                .get(index)
+                .map(|tab| WorkspaceAction::Workspace(CommonAction::FocusId(tab.id.clone()))),
+            None => popup_shortcut(
+                code,
+                modifiers,
+                snapshot,
+                has_terminal && terminal_focused(self.window_focused, focus),
+            )
+            .or_else(|| {
+                workspace_shortcut(code, modifiers, &snapshot.active_tab)
+                    .map(WorkspaceAction::Workspace)
+            }),
+        };
         let has_panes = active_popup(snapshot).is_none()
             && snapshot
                 .tabs
@@ -1232,7 +1239,7 @@ impl Application {
             event.physical_key,
             event.state,
             event.repeat,
-            cycles_focus || returns_to_terminal || action.is_some(),
+            cycles_focus || returns_to_terminal || tab_index.is_some() || action.is_some(),
         ) {
             if event.state == ElementState::Pressed {
                 if cycles_focus && !event.repeat {
@@ -2958,6 +2965,30 @@ fn workspace_shortcut(
                 tab: active_tab.into(),
             })
         }
+        _ => None,
+    }
+}
+
+fn tab_shortcut_index(
+    code: KeyCode,
+    modifiers: orbit_protocol::session::Modifiers,
+) -> Option<usize> {
+    use orbit_protocol::session::Modifiers;
+
+    if modifiers != Modifiers::ALT {
+        return None;
+    }
+    match code {
+        KeyCode::Digit1 => Some(0),
+        KeyCode::Digit2 => Some(1),
+        KeyCode::Digit3 => Some(2),
+        KeyCode::Digit4 => Some(3),
+        KeyCode::Digit5 => Some(4),
+        KeyCode::Digit6 => Some(5),
+        KeyCode::Digit7 => Some(6),
+        KeyCode::Digit8 => Some(7),
+        KeyCode::Digit9 => Some(8),
+        KeyCode::Digit0 => Some(9),
         _ => None,
     }
 }
@@ -5045,6 +5076,30 @@ mod tests {
         }
         assert_eq!(
             workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT), "t2"),
+            None
+        );
+    }
+
+    #[test]
+    fn alt_digits_resolve_current_tab_positions_without_leaking_missing_targets() {
+        use orbit_protocol::session::Modifiers;
+
+        let tabs = ["t7", "t2", "t3", "t4", "t5", "t6", "t1", "t8", "t9", "t10"];
+
+        for (key, expected_index, id) in [
+            (KeyCode::Digit1, 0, "t7"),
+            (KeyCode::Digit9, 8, "t9"),
+            (KeyCode::Digit0, 9, "t10"),
+        ] {
+            let index = tab_shortcut_index(key, Modifiers::ALT);
+            assert_eq!(index, Some(expected_index));
+            assert_eq!(index.and_then(|index| tabs.get(index)), Some(&id));
+        }
+        let missing = tab_shortcut_index(KeyCode::Digit9, Modifiers::ALT);
+        assert!(missing.is_some());
+        assert_eq!(missing.and_then(|index| tabs[..2].get(index)), None);
+        assert_eq!(
+            tab_shortcut_index(KeyCode::Digit1, Modifiers::empty()),
             None
         );
     }

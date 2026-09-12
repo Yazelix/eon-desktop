@@ -173,7 +173,12 @@ fn bounded_metadata_field(value: &str) -> String {
     format!("{prefix}{tail}")
 }
 
-fn tab_labels(id: &str, directory: &[u8], home: Option<&Path>) -> (String, String) {
+fn tab_labels(
+    index: usize,
+    tab_count: usize,
+    directory: &[u8],
+    home: Option<&Path>,
+) -> (String, String) {
     let path = Path::new(OsStr::from_bytes(directory));
     let leaf = if home.is_some_and(|home| path == home) {
         "~".into()
@@ -185,7 +190,7 @@ fn tab_labels(id: &str, directory: &[u8], home: Option<&Path>) -> (String, Strin
             .to_string_lossy()
             .into_owned()
     };
-    let number = id.strip_prefix('t').unwrap_or(id);
+    let position = index + 1;
     let clean = |text: &str| {
         text.chars()
             .map(|c| if c.is_control() { '\u{fffd}' } else { c })
@@ -193,8 +198,8 @@ fn tab_labels(id: &str, directory: &[u8], home: Option<&Path>) -> (String, Strin
     };
     let full_path = clean(&path.as_os_str().to_string_lossy());
     (
-        format!("{number}  {}", clean(&leaf)),
-        format!("{id}  {full_path}"),
+        format!("{position}  {}", clean(&leaf)),
+        format!("Tab {position} of {tab_count}  {full_path}"),
     )
 }
 
@@ -354,8 +359,12 @@ impl WorkspaceScene {
             .iter()
             .enumerate()
             .map(|(index, tab)| {
-                let (label, accessible_label) =
-                    tab_labels(&tab.id, &tab.directory, home.as_deref().map(Path::new));
+                let (label, accessible_label) = tab_labels(
+                    index,
+                    snapshot.tabs.len(),
+                    &tab.directory,
+                    home.as_deref().map(Path::new),
+                );
                 let (label, text_width) = tab_text(&tab.id, &label);
                 let tab_width = (text_width.ceil() + metrics.padding * 2.0)
                     .clamp((metrics.font_size * 4.0).min(max_tab_width), max_tab_width);
@@ -1176,27 +1185,27 @@ mod tests {
     }
 
     #[test]
-    fn tab_directory_labels_keep_identity_and_bounded_path_context() {
+    fn tab_directory_labels_use_current_position_and_bounded_path_context() {
         assert_eq!(
-            tab_labels("t1", b"/home/alice", Some(Path::new("/home/alice"))),
-            ("1  ~".into(), "t1  /home/alice".into())
+            tab_labels(0, 5, b"/home/alice", Some(Path::new("/home/alice"))),
+            ("1  ~".into(), "Tab 1 of 5  /home/alice".into())
         );
         assert_eq!(
-            tab_labels("t2", b"/", Some(Path::new("/home/alice"))),
-            ("2  /".into(), "t2  /".into())
+            tab_labels(1, 5, b"/", Some(Path::new("/home/alice"))),
+            ("2  /".into(), "Tab 2 of 5  /".into())
         );
         assert_eq!(
-            tab_labels("t3", b"/srv/nova", Some(Path::new("/home/alice"))),
-            ("3  nova".into(), "t3  /srv/nova".into())
+            tab_labels(2, 5, b"/srv/nova", Some(Path::new("/home/alice"))),
+            ("3  nova".into(), "Tab 3 of 5  /srv/nova".into())
         );
         assert_eq!(
-            tab_labels("t4", b"/tmp/eon-\xff", None),
-            ("4  eon-�".into(), "t4  /tmp/eon-�".into())
+            tab_labels(3, 5, b"/tmp/eon-\xff", None),
+            ("4  eon-�".into(), "Tab 4 of 5  /tmp/eon-�".into())
         );
         let long = format!("/tmp/{}", "eon".repeat(100));
-        let labels = tab_labels("t5", long.as_bytes(), None);
+        let labels = tab_labels(4, 5, long.as_bytes(), None);
         assert_eq!(labels.0, format!("5  {}", "eon".repeat(100)));
-        assert_eq!(labels.1, format!("t5  {long}"));
+        assert_eq!(labels.1, format!("Tab 5 of 5  {long}"));
     }
 
     #[test]
