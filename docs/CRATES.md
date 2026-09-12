@@ -117,7 +117,9 @@ ORBF v2 / ORBS v11 using the same dependency-free canonical package.
   adapter
 - **Status:** Active
 - **Owner consequence:** Venus derives native accessibility updates from each accepted
-  immutable scene without creating another presentation model.
+  immutable scene without creating another presentation model. The locked Linux
+  adapter exposes standard Click actions but not model-level custom actions, so
+  distinct Open and Copy nodes use that supported path.
 
 ### Native text clipboard
 

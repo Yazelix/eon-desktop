@@ -1,5 +1,4 @@
 use crate::{Result, launch::LaunchArguments};
-use accesskit::Action as AccessibilityAction;
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
 use eon_workspace_protocol::v5::{
     Action as WorkspaceAction, Direction as WorkspaceDirection, InvokeIntent, Snapshot,
@@ -36,10 +35,10 @@ use winit::{
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, ClipboardEffect, Color, ConnectionState,
-    FontSettings, FontSetup, Hyperlink, InputState, LocalNoticeSource, MetadataEvent,
-    MetadataTransport, ModelError, PaneMetadata, PresentOutcome, Renderer, Scene, ScenePreview,
-    SceneRect, SessionModel, Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus,
-    WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, active_popup,
+    FontSettings, FontSetup, Hyperlink, InputState, LocalNoticeSource, MAX_LINK_BYTES,
+    MetadataEvent, MetadataTransport, ModelError, PaneMetadata, PresentOutcome, Renderer, Scene,
+    ScenePreview, SceneRect, SessionModel, Transport, TransportEvent, WorkspaceEvent,
+    WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, active_popup,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -408,8 +407,6 @@ impl PresentationState {
     }
 }
 
-const MAX_LINK_BYTES: usize = 4096;
-
 fn validate_copy_uri(uri: &str) -> std::result::Result<(), &'static str> {
     if uri.is_empty() || uri.len() > MAX_LINK_BYTES {
         Err("Link target must contain 1–4096 bytes.")
@@ -482,16 +479,23 @@ fn validate_open_uri(uri: &str) -> std::result::Result<(), &'static str> {
     Ok(())
 }
 
-fn escaped_link(uri: &str) -> String {
-    uri.chars()
-        .take(MAX_LINK_BYTES)
-        .flat_map(char::escape_default)
-        .collect()
+fn link_hint(uri: &str) -> String {
+    format!(
+        "{}\nCtrl+click Open · Ctrl+Shift+C Copy",
+        uri.escape_default()
+    )
 }
 
-fn link_page(uri: &str, page: usize, width: usize) -> &str {
-    let start = page.saturating_mul(width).min(uri.len());
-    &uri[start..start.saturating_add(width).min(uri.len())]
+fn link_copy_shortcut(
+    key: PhysicalKey,
+    modifiers: session::Modifiers,
+    selected: bool,
+    current: bool,
+) -> bool {
+    key == PhysicalKey::Code(KeyCode::KeyC)
+        && modifiers == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
+        && !selected
+        && current
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -504,11 +508,8 @@ struct LinkFocus {
 #[derive(Default)]
 struct LinkInteraction {
     focus: Option<LinkFocus>,
-    presented: Option<LinkFocus>,
     unshifted: bool,
     pointer_inside: bool,
-    keyboard: bool,
-    page: usize,
     pressed: Option<LinkFocus>,
     notice: Option<String>,
 }
@@ -1474,12 +1475,7 @@ impl Application {
     fn link_scene(&self) -> Option<(&Scene, PresentationIdentity)> {
         let workspace = self.workspace_scene();
         let identity = self.presentation_candidate(workspace.as_ref());
-        (self.window_focused
-            && !self.window_occluded
-            && self.workspace_focus == WorkspaceFocus::Terminal
-            && self.workspace_model.notice().is_none()
-            && !self.terminal_scroll.active()
-            && self.links.unshifted
+        (self.link_surface_available(self.links.unshifted)
             && self.presentation.is_current(identity))
         .then(|| {
             (
@@ -1487,6 +1483,15 @@ impl Application {
                 identity,
             )
         })
+    }
+
+    fn link_surface_available(&self, unshifted: bool) -> bool {
+        self.window_focused
+            && !self.window_occluded
+            && self.workspace_focus == WorkspaceFocus::Terminal
+            && self.workspace_model.notice().is_none()
+            && !self.terminal_scroll.active()
+            && unshifted
     }
 
     fn focused_link(&self) -> Option<Hyperlink<'_>> {
@@ -1521,19 +1526,17 @@ impl Application {
         let (origin, visible) = self.link_viewport()?;
         let x = self.cursor.x as f32;
         let y = self.cursor.y as f32;
-        if !(visible.left..visible.right()).contains(&x)
-            || !(visible.top..visible.bottom()).contains(&y)
-        {
+        if !visible.contains(x, y) {
             return None;
         }
         let metrics = state.renderer.metrics();
-        if !self.status().is_empty() {
-            let notice = state.renderer.notice_rect(workspace.as_ref());
-            if (notice.left..notice.right()).contains(&x)
-                && (notice.top..notice.bottom()).contains(&y)
-            {
-                return None;
-            }
+        if !self.status().is_empty()
+            && state
+                .renderer
+                .notice_rect(workspace.as_ref())
+                .contains(x, y)
+        {
+            return None;
         }
         let column = ((x - origin.left - metrics.padding) / metrics.width).floor();
         let row = ((y - origin.top - metrics.padding) / metrics.height).floor();
@@ -1553,13 +1556,12 @@ impl Application {
     }
 
     fn inspect_pointer_link(&mut self) {
-        if self.links.keyboard || self.links.pressed.is_some() {
+        if self.links.pressed.is_some() {
             return;
         }
         let focus = self.pointer_link();
         if self.links.focus != focus {
             self.links.focus = focus;
-            self.links.page = 0;
             self.links.notice = None;
             self.refresh_client_view();
         }
@@ -1571,136 +1573,64 @@ impl Application {
         }
         let link = self.focused_link()?;
         if link.uri.len() > MAX_LINK_BYTES {
-            return Some("Link target exceeds 4096 bytes; opening and copying are disabled. Escape closes inspection.".into());
+            return Some(format!(
+                "Link target exceeds {MAX_LINK_BYTES} bytes; opening and copying are disabled."
+            ));
         }
-        let target = escaped_link(link.uri);
-        let width = self.link_page_width();
-        let pages = target.len().div_ceil(width).max(1);
-        let page = self.links.page.min(pages - 1);
-        Some(format!(
-            "{}\nLink {}/{} · Ctrl+Shift+O inspect · Tab · ←/→ · Enter open · Ctrl+Shift+C copy · Esc",
-            link_page(&target, page, width),
-            page + 1,
-            pages
-        ))
+        Some(link_hint(link.uri))
     }
 
-    fn link_page_width(&self) -> usize {
-        self.window.as_ref().map_or(40, |state| {
-            ((state.renderer.size().width as f32 / state.renderer.metrics().width) as usize)
-                .saturating_sub(22)
-                .max(1)
-        })
-    }
-
-    fn handle_link_key(&mut self, key: PhysicalKey, state: ElementState, repeat: bool) -> bool {
+    fn handle_link_copy(&mut self, key: PhysicalKey, state: ElementState, repeat: bool) -> bool {
         let modifiers = self.input.modifiers();
-        let inspect = key == PhysicalKey::Code(KeyCode::KeyO)
-            && modifiers == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
-            && self.workspace_focus == WorkspaceFocus::Terminal
-            && !self.input.pointer_busy();
+        let selected = self.model.scene().is_some_and(Scene::has_selected_content);
+        let current = self.focused_link().is_some();
+        let recognized = link_copy_shortcut(key, modifiers, selected, current);
         if !self
             .input
-            .consumes_host_shortcut(key, state, repeat, inspect || self.links.keyboard)
+            .consumes_host_shortcut(key, state, repeat, recognized)
         {
             return false;
         }
-        if !shortcut_is_ready(state, repeat) {
-            return true;
-        }
-        let PhysicalKey::Code(code) = key else {
-            return true;
-        };
-        if code == KeyCode::Escape {
-            self.links.keyboard = false;
-            self.links.focus = None;
-            self.links.notice = None;
-        } else if inspect || code == KeyCode::Tab {
-            self.links.keyboard = true;
-            self.links.notice = None;
-            let links = self
-                .link_scene()
-                .zip(self.link_viewport())
-                .map(|((scene, identity), (origin, clip))| {
-                    let metrics = self
-                        .window
-                        .as_ref()
-                        .expect("link viewport has a window")
-                        .renderer
-                        .metrics();
-                    scene
-                        .hyperlinks()
-                        .filter(|link| link.rect(origin, metrics).intersection(clip).is_some())
-                        .map(|link| LinkFocus {
-                            identity,
-                            row: link.row,
-                            column: link.column,
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            let current = links
-                .iter()
-                .position(|link| Some(*link) == self.links.focus);
-            let next = match (
-                current,
-                modifiers.contains(session::Modifiers::SHIFT) && !inspect,
-            ) {
-                (Some(index), true) => index
-                    .checked_sub(1)
-                    .unwrap_or(links.len().saturating_sub(1)),
-                (Some(index), false) if !inspect => (index + 1) % links.len(),
-                (Some(index), _) => index,
-                (None, _) => 0,
-            };
-            self.links.focus = links.get(next).copied();
-            self.links.page = 0;
-            if self.links.focus.is_none() {
-                self.links.notice =
-                    Some("No links in the presented terminal. Escape returns to typing.".into());
-            }
-        } else if code == KeyCode::ArrowLeft || code == KeyCode::ArrowRight {
-            self.links.notice = None;
-            self.links.page = if code == KeyCode::ArrowLeft {
-                self.links.page.saturating_sub(1)
-            } else {
-                self.focused_link().map_or(0, |link| {
-                    (self.links.page + 1).min(
-                        escaped_link(link.uri)
-                            .len()
-                            .div_ceil(self.link_page_width())
-                            .saturating_sub(1),
-                    )
-                })
-            };
-        } else if code == KeyCode::Enter || code == KeyCode::NumpadEnter {
-            self.activate_link(false);
-        } else if code == KeyCode::KeyC
-            && modifiers == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
-        {
+        if shortcut_is_ready(state, repeat) {
             self.activate_link(true);
+            self.refresh_client_view();
         }
-        self.refresh_client_view();
         true
     }
 
     fn activate_link(&mut self, copy: bool) {
-        let uri = self
-            .focused_link()
-            .filter(|_| self.links.focus == self.links.presented)
-            .map(|link| link.uri.to_owned());
-        let result = match uri {
-            None => Err("Link changed or has not been presented. Inspect it again."),
-            Some(uri) if copy => validate_copy_uri(&uri).and_then(|()| {
+        let Some(uri) = self.focused_link().map(|link| link.uri.to_owned()) else {
+            return;
+        };
+        self.activate_uri(uri, copy);
+    }
+
+    fn activate_accessible_link(&mut self, row: u16, column: u16, copy: bool) {
+        let Some(uri) = self
+            .link_scene()
+            .and_then(|(scene, _)| scene.hyperlink_at(row, column))
+            .map(|link| link.uri.to_owned())
+        else {
+            return;
+        };
+        self.activate_uri(uri, copy);
+        self.refresh_client_view();
+    }
+
+    fn activate_uri(&mut self, uri: String, copy: bool) {
+        let result = if copy {
+            validate_copy_uri(&uri).and_then(|()| {
                 write_native_clipboard(wl_clipboard_rs::copy::ClipboardType::Regular, uri)
                     .map(|()| "Link copied.")
                     .map_err(|_| "Could not copy the link to the native clipboard.")
-            }),
-            Some(_) if self.link_opener.is_some() => Err("A link dispatch is already pending."),
-            Some(uri) => LinkOpener::start(&uri).map(|opener| {
+            })
+        } else if self.link_opener.is_some() {
+            Err("A link dispatch is already pending.")
+        } else {
+            LinkOpener::start(&uri).map(|opener| {
                 self.link_opener = Some(opener);
                 "Opening link…"
-            }),
+            })
         };
         self.links.notice = Some(result.unwrap_or_else(|error| error).into());
     }
@@ -1712,46 +1642,48 @@ impl Application {
         if state == ElementState::Released
             && let Some(pressed) = self.links.pressed.take()
         {
-            if self.pointer_link() == Some(pressed) {
+            let released = self.pointer_link();
+            if released == Some(pressed) && self.input.modifiers() == session::Modifiers::CTRL {
                 self.links.focus = Some(pressed);
                 self.activate_link(false);
+            } else {
+                self.links.focus = released;
+                self.links.notice = None;
             }
             self.refresh_client_view();
             return true;
         }
-        if state == ElementState::Pressed
-            && self.input.modifiers() == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
-            && let Some(focus) = self.pointer_link()
-        {
-            self.links.keyboard = false;
-            self.links.focus = Some(focus);
-            self.links.pressed = Some(focus);
-            self.refresh_client_view();
-            return true;
+        if state == ElementState::Pressed {
+            self.links.pressed = None;
+            if self.input.modifiers() == session::Modifiers::CTRL
+                && let Some(focus) = self.pointer_link()
+            {
+                self.links.focus = Some(focus);
+                self.links.pressed = Some(focus);
+                self.refresh_client_view();
+                return true;
+            }
         }
         false
     }
 
     fn refresh_client_view(&mut self) {
+        if !self.link_surface_available(self.links.unshifted) {
+            self.links.pressed = None;
+        }
         if self.links.focus.is_some() && self.focused_link().is_none() {
             self.links.focus = None;
-            if self.links.keyboard {
-                self.links.notice = Some(
-                    "Links changed. Tab inspects the current frame; Escape returns to typing."
-                        .into(),
-                );
-            }
         }
+        let link_generation = self.link_scene().map(|(_, identity)| identity.generation);
         let status = self.status();
         let workspace = self.workspace_scene();
         let scrollback_label = self.scrollback_label(workspace.as_ref());
         let workspace_focus = self.workspace_focus;
-        let ime_allowed = !self.links.keyboard
-            && ime_allowed(
-                self.window_focused,
-                workspace_focus,
-                self.model.is_attached(),
-            );
+        let ime_allowed = ime_allowed(
+            self.window_focused,
+            workspace_focus,
+            self.model.is_attached(),
+        );
         let Some(state) = &mut self.window else {
             return;
         };
@@ -1789,6 +1721,7 @@ impl Application {
             scrollback_label.as_deref(),
             state.renderer.size(),
             state.renderer.metrics(),
+            link_generation,
         );
         state.window.request_redraw();
     }
@@ -2076,32 +2009,31 @@ impl Application {
             )
         });
         let kinetic_active = self.terminal_scroll.velocity != 0.0;
+        let link_generation = (candidate.revision.is_some()
+            && self.link_surface_available(scroll_offset == 0.0))
+        .then_some(candidate.generation);
         let scrollback_label = self.scrollback_label(workspace.as_ref()).filter(|_| {
             workspace
                 .as_ref()
                 .is_some_and(|workspace| workspace.popup_label().is_none())
                 || (!self.input.pointer_busy()
                     && self.links.focus.is_none()
-                    && !self.links.keyboard
                     && !self.model.scene().is_some_and(Scene::has_selected_content))
         });
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
         let hovered_header = (self.window_focused
             && self.links.pointer_inside
-            && !self.input.pointer_busy()
-            && !self.links.keyboard)
-            .then(|| {
-                workspace.as_ref().and_then(|scene| {
-                    match scene.hit_test(self.cursor.x as f32, self.cursor.y as f32) {
-                        Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
-                        Some(WorkspaceHit::Pane(id)) => {
-                            Some((WorkspaceFocus::Panes, id.to_owned()))
-                        }
-                        _ => None,
-                    }
-                })
+            && !self.input.pointer_busy())
+        .then(|| {
+            workspace.as_ref().and_then(|scene| {
+                match scene.hit_test(self.cursor.x as f32, self.cursor.y as f32) {
+                    Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
+                    Some(WorkspaceHit::Pane(id)) => Some((WorkspaceFocus::Panes, id.to_owned())),
+                    _ => None,
+                }
             })
-            .flatten();
+        })
+        .flatten();
         let mut refresh = false;
         let mut presented = false;
         let Some(state) = &mut self.window else {
@@ -2128,7 +2060,11 @@ impl Application {
                 refresh = self.render_notice.take().is_some();
                 self.presentation.publish(candidate);
                 self.links.unshifted = scroll_offset == 0.0;
-                self.links.presented = self.links.focus;
+                state.accessibility.present_links(
+                    &mut state.adapter,
+                    self.model.scene(),
+                    link_generation,
+                );
                 if kinetic_active {
                     state.window.request_redraw();
                 }
@@ -2164,6 +2100,7 @@ impl Application {
                         scrollback_label.as_deref(),
                         state.renderer.size(),
                         state.renderer.metrics(),
+                        None,
                     );
                 }
             }
@@ -2294,7 +2231,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 if self
                     .input
                     .suppresses_retired_key(event.physical_key, event.state, event.repeat)
-                    || self.handle_link_key(event.physical_key, event.state, event.repeat)
+                    || self.handle_link_copy(event.physical_key, event.state, event.repeat)
                     || self.handle_workspace_key(&event)
                 {
                 } else if self.input.consumes_paste_shortcut(
@@ -2325,12 +2262,11 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::Ime(event) => {
                 self.cancel_terminal_scroll();
-                let allowed = !self.links.keyboard
-                    && ime_allowed(
-                        self.window_focused,
-                        workspace_focus,
-                        self.model.is_attached(),
-                    );
+                let allowed = ime_allowed(
+                    self.window_focused,
+                    workspace_focus,
+                    self.model.is_attached(),
+                );
                 if ime_reaches_terminal(allowed, &event)
                     && let Some(message) =
                         native_ime_message(&mut self.input, &mut self.model, event)
@@ -2345,9 +2281,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.terminal_scroll.cancel();
                 state.renderer.reset_cursor_animation();
                 if !focused {
-                    self.links.keyboard = false;
                     self.links.focus = None;
-                    self.links.pressed = None;
                     self.cancel_pointer_sequence();
                 }
                 let message = self
@@ -2400,10 +2334,8 @@ impl ApplicationHandler<UserEvent> for Application {
                 state.window.request_redraw();
                 self.cancel_terminal_scroll();
                 self.cancel_pointer_sequence();
-                if !self.links.keyboard {
-                    self.links.focus = None;
-                    self.refresh_client_view();
-                }
+                self.links.focus = None;
+                self.refresh_client_view();
             }
             WindowEvent::MouseInput {
                 state: button_state,
@@ -2421,7 +2353,6 @@ impl ApplicationHandler<UserEvent> for Application {
                     return;
                 }
                 if button_state == ElementState::Pressed {
-                    self.links.keyboard = false;
                     self.links.focus = None;
                     self.links.notice = None;
                     self.refresh_client_view();
@@ -2486,6 +2417,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 if self.input.is_selecting() {
                     return;
                 }
+                self.links.pressed = None;
                 let metrics = state.renderer.metrics();
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
@@ -2602,23 +2534,27 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 match event.window_event {
                     AccessKitWindowEvent::InitialTreeRequested => self.refresh_client_view(),
-                    AccessKitWindowEvent::ActionRequested(request)
-                        if matches!(
-                            request.action,
-                            AccessibilityAction::Click | AccessibilityAction::Focus
-                        ) =>
-                    {
-                        let target = state.accessibility.workspace_target(request.target_node);
-                        if let Some(focus) = target.and_then(|target| {
-                            accessibility_workspace_focus(target, |action| {
-                                self.queue_workspace(WorkspaceAction::Workspace(action))
-                            })
-                        }) {
-                            self.set_workspace_focus(focus);
+                    AccessKitWindowEvent::ActionRequested(request) => {
+                        let target = state
+                            .accessibility
+                            .action_target(request.target_node, request.action);
+                        match target {
+                            Some(AccessibilityTarget::Link { row, column, copy }) => {
+                                self.activate_accessible_link(row, column, copy);
+                            }
+                            Some(target) => {
+                                if let Some(focus) =
+                                    accessibility_workspace_focus(target, |action| {
+                                        self.queue_workspace(WorkspaceAction::Workspace(action))
+                                    })
+                                {
+                                    self.set_workspace_focus(focus);
+                                }
+                            }
+                            None => {}
                         }
                     }
-                    AccessKitWindowEvent::ActionRequested(_)
-                    | AccessKitWindowEvent::AccessibilityDeactivated => {}
+                    AccessKitWindowEvent::AccessibilityDeactivated => {}
                 }
             }
         }
@@ -2928,6 +2864,7 @@ fn accessibility_workspace_focus(
         AccessibilityTarget::Terminal => return Some(WorkspaceFocus::Terminal),
         AccessibilityTarget::Tab(id) => (WorkspaceFocus::Tabs, id),
         AccessibilityTarget::Pane(id) => (WorkspaceFocus::Panes, id),
+        AccessibilityTarget::Link { .. } => return None,
     };
     queue(CommonAction::FocusId(id)).then_some(focus)
 }
@@ -3626,7 +3563,7 @@ mod tests {
             })))
         }
 
-        fn linked_frame(revision: u64) -> TransportEvent {
+        fn linked_frame(revision: u64, uri: &str) -> TransportEvent {
             use orbit_protocol::{Cell, CellStyle, CellWidth, Row, StyleColor, Underline};
             let TransportEvent::Server(ServerMessage::Frame(mut frame)) =
                 frame(revision, Screen::Alternate)
@@ -3637,7 +3574,7 @@ mod tests {
             let cell = Cell {
                 width: CellWidth::Wide,
                 text: "界".into(),
-                hyperlink: format!("https://example.com/{revision}"),
+                hyperlink: uri.into(),
                 style: CellStyle {
                     foreground: StyleColor::None,
                     background: StyleColor::None,
@@ -3934,7 +3871,7 @@ mod tests {
                 app.render();
                 app.window_focused = true;
                 app.links.pointer_inside = true;
-                app.handle_transport(linked_frame(6));
+                app.handle_transport(linked_frame(6, "https://example.com/6"));
                 let workspace = app.workspace_scene().unwrap();
                 let metrics = app.window.as_ref().unwrap().renderer.metrics();
                 app.cursor = PhysicalPosition::new(
@@ -3946,7 +3883,7 @@ mod tests {
                 assert_eq!(app.focused_link().unwrap().uri, "https://example.com/6");
                 app.render();
                 app.links.pressed = app.links.focus;
-                app.handle_transport(linked_frame(7));
+                app.handle_transport(linked_frame(7, "https://example.com/7"));
                 assert!(app.focused_link().is_none());
                 app.render();
                 assert!(app.handle_link_button(ElementState::Released, MouseButton::Left));
@@ -3954,38 +3891,59 @@ mod tests {
                     app.link_opener.is_none(),
                     "a captured click cannot cross a frame replacement"
                 );
+                assert_eq!(app.focused_link().unwrap().uri, "https://example.com/7");
                 app.render();
                 assert_eq!(app.focused_link().unwrap().uri, "https://example.com/7");
-                let unknown = PhysicalKey::Unidentified(winit::keyboard::NativeKeyCode::Xkb(240));
-                app.input.set_modifiers(
-                    winit::keyboard::ModifiersState::CONTROL
-                        | winit::keyboard::ModifiersState::SHIFT,
-                );
-                assert!(app.handle_link_key(
-                    PhysicalKey::Code(KeyCode::KeyO),
-                    ElementState::Pressed,
-                    false
-                ));
-                assert!(app.links.keyboard);
+                app.handle_transport(linked_frame(8, "file:///modifier-mismatch"));
+                app.render();
+                let link = app.links.focus;
+                app.input
+                    .set_modifiers(winit::keyboard::ModifiersState::empty());
+                app.links.pressed = link;
+                assert!(app.handle_link_button(ElementState::Released, MouseButton::Left));
                 assert!(
-                    app.handle_link_key(unknown, ElementState::Pressed, false),
-                    "inspection must capture unidentified native keys"
+                    app.links.notice.is_none(),
+                    "a link release without Ctrl must not activate its target"
                 );
-                assert!(app.handle_link_key(
-                    PhysicalKey::Code(KeyCode::Escape),
-                    ElementState::Pressed,
-                    false
-                ));
-                assert!(!app.links.keyboard);
+                app.links.pressed = link;
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::MouseWheel {
+                        device_id,
+                        delta: MouseScrollDelta::LineDelta(0.0, 1.0),
+                        phase: TouchPhase::Moved,
+                    },
+                );
                 assert!(
-                    app.handle_link_key(unknown, ElementState::Pressed, true),
-                    "captured repeats remain captured after dismissal"
+                    app.links.pressed.is_none(),
+                    "scroll input must retire a captured link press immediately"
                 );
-                assert!(app.handle_link_key(unknown, ElementState::Released, false));
+                app.links.pressed = link;
+                app.cursor = PhysicalPosition::new(0.0, 0.0);
+                assert!(!app.handle_link_button(ElementState::Pressed, MouseButton::Left));
                 assert!(
-                    !app.handle_link_key(unknown, ElementState::Pressed, false),
-                    "fresh keys return to terminal routing"
+                    app.links.pressed.is_none(),
+                    "a fresh ordinary press must retire a missed link release"
                 );
+                app.links.pressed = link;
+                app.set_workspace_focus(WorkspaceFocus::Panes);
+                assert!(
+                    app.links.pressed.is_none(),
+                    "leaving terminal focus must retire a captured link press"
+                );
+                app.set_workspace_focus(WorkspaceFocus::Terminal);
+                let snapshot = app.workspace_model.snapshot().unwrap().clone();
+                app.links.pressed = link;
+                let _ = app.workspace_model.mark_unavailable("offline");
+                app.refresh_client_view();
+                assert!(
+                    app.links.pressed.is_none(),
+                    "an unavailable link surface must retire its captured press"
+                );
+                app.workspace_model
+                    .apply(workspace::Response::Snapshot(snapshot));
+                app.refresh_client_view();
 
                 app.window_event(
                     event_loop,
@@ -4899,13 +4857,38 @@ mod tests {
         assert!(validate_copy_uri("file:///tmp/a").is_ok());
         assert!(validate_copy_uri("https://example.com/\n").is_err());
         let target = "https://example.com/\u{202e}abc";
-        let escaped = escaped_link(target);
-        assert!(escaped.is_ascii());
-        assert!(escaped.contains("\\u{202e}"));
-        let pages = (0..escaped.len().div_ceil(7))
-            .map(|page| link_page(&escaped, page, 7))
-            .collect::<String>();
-        assert_eq!(pages, escaped);
+        assert_eq!(
+            link_hint(target),
+            "https://example.com/\\u{202e}abc\nCtrl+click Open · Ctrl+Shift+C Copy"
+        );
+        assert!(link_copy_shortcut(
+            PhysicalKey::Code(KeyCode::KeyC),
+            session::Modifiers::CTRL.union(session::Modifiers::SHIFT),
+            false,
+            true,
+        ));
+        assert!(!link_copy_shortcut(
+            PhysicalKey::Code(KeyCode::KeyC),
+            session::Modifiers::CTRL.union(session::Modifiers::SHIFT),
+            true,
+            true,
+        ));
+        for key in [
+            KeyCode::KeyO,
+            KeyCode::Tab,
+            KeyCode::ArrowLeft,
+            KeyCode::ArrowRight,
+            KeyCode::Enter,
+            KeyCode::NumpadEnter,
+            KeyCode::Escape,
+        ] {
+            assert!(!link_copy_shortcut(
+                PhysicalKey::Code(key),
+                session::Modifiers::CTRL.union(session::Modifiers::SHIFT),
+                false,
+                true,
+            ));
+        }
     }
 
     #[test]

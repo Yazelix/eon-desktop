@@ -2,6 +2,9 @@
 
 //! Native presentation and interaction for one authoritative Orbit session.
 
+/// Maximum OSC 8 target size accepted by Venus link actions.
+pub const MAX_LINK_BYTES: usize = 4096;
+
 mod accessibility;
 mod input;
 mod model;

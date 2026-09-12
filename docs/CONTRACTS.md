@@ -145,33 +145,44 @@ Their distinct earlier proof identities and remaining limits stay qualified.
 
 ## VEN-C5 — Explicit native hyperlinks
 
-- **Status:** Proved
-- **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link,
-  inspects links with Ctrl+Shift+O, or explicitly activates one.
-- **Result:** The presented link is highlighted and its actual target is
-  inspectable. Tab/Shift+Tab chooses a link; Left/Right pages the complete
-  escaped target; Enter opens, Ctrl+Shift+C copies, and Escape dismisses.
-  Ctrl+Shift+left click opens only when press and release identify the same
-  presented target. Ordinary terminal clicks and selection retain their owner.
-- **Failures:** Revision, attachment, geometry, or presentation changes retire
-  link actions. Opening accepts at most 4096 bytes of ASCII HTTP/HTTPS URI
-  syntax with a host and without credentials. Copy accepts bounded target text
-  without control characters. Unsupported or malformed targets, missing native
-  handlers, and launch failures/timeouts have bounded visual and accessible
-  notices. No URI is opened on hover or keyboard focus.
+- **Status:** Candidate
+- **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link or
+  explicitly activates one.
+- **Result:** The hovered link is highlighted and its escaped target is
+  shown with only `Ctrl+click Open` and `Ctrl+Shift+C Copy`. Ctrl+left click opens
+  only when press and release identify the same current presented target.
+  Ctrl+Shift+C copies the current hovered target unless the terminal has selected
+  text, which retains copy precedence. AccessKit exposes each current visible
+  target as an Open link followed by a Copy button, both using the native Click
+  action. Ordinary terminal clicks, input and selection retain their owners.
+- **Failures:** Revision, attachment, geometry, presentation, focus, occlusion,
+  or scroll changes retire link actions. A captured release without Ctrl is
+  consumed without activation. Opening accepts at most 4096 bytes of ASCII
+  HTTP/HTTPS URI syntax with a host and without credentials. Copy accepts bounded
+  target text without control characters. Unsupported or malformed targets,
+  missing native handlers, and launch failures/timeouts have bounded visual and
+  accessible notices. No URI is opened on hover or keyboard focus.
 - **Owners:** Orbit owns URI attributes; Scene derives spans; Venus presentation
   identity gates actions; the existing renderer, input, AccessKit status and
   Wayland clipboard owners project them. Linux `gio open` on the host PATH
   dispatches the exact URI as one argument to the desktop's registered handler.
   One launch runs at a time with a ten-second dispatcher deadline.
-- **Consumes:** Accepted Orbit `91999d79546422b49bdbc124166a65859d0bd872`,
-  `ORB-C6` proof `a65e199e16e97330175e314cacf791fa00f53069`, ORBF v1/ORBS v10.
+- **Consumes:** Accepted Orbit and `ORB-C6` proof
+  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, ORBF v2 / ORBS v11.
 - **Boundary:** No heuristic detection, file/custom-scheme opening, URI rewrite,
   browser embedding, new crate, or protocol change. Host GIO and a registered
   handler are required for opening; copy remains available without them.
   Native Linux Wayland only; other platforms remain unsupported.
-- **Proof:** `cf3a9169f2cd95d42c689134a52d51d9147ff37c`
-  - **Inspection correction:** The real Application regression fails before
+- **Proof:** Candidate working tree over accepted baseline
+  `cf3a9169f2cd95d42c689134a52d51d9147ff37c`
+  - **Simplification candidate:** The working tree based on
+    `660abf30363817a7a466121cf63be4bd662d4dd5` deletes keyboard inspection,
+    traversal and target paging. Focused checks prove the two-action hint,
+    selection precedence, exact accessible controls and retirement of stale link
+    nodes; the complete ordinary Rust suite and isolated native input-pairing
+    regression pass. User-visible Open/Copy, AT-SPI actions, and installed
+    composition remain unproved for this candidate.
+  - **Retired inspection correction:** The real Application regression fails before
     this revision and passes after it: unidentified native presses are captured,
     their repeats/releases stay captured after Escape, and fresh presses return
     to terminal routing. Locked checks (115 ordinary tests) and both native
@@ -483,7 +494,7 @@ qualified by the identities and boundaries below.
     and cursor collision; the existing native continuous-output Application
     regression passes. Real native counts track output (10 to 15), reflow (63),
     history top (177), pruning (36,135), live bottom and clear (zero), reconnect,
-    and pane switches (10 / 20 / 10). Selection and link inspection hide the
+    and pane switches (10 / 20 / 10). Selection and link previews hide the
     standalone overlay. Source/lock hashes, scripts, captures, observations and
     process-preservation records are retained under
     `~/.local/state/eon/proofs/ven-scrollback-position-ddo-2026-09-09/` and

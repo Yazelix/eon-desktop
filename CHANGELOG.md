@@ -21,7 +21,7 @@
 - Show authoritative scrollback distance as `↑ N rows` in the selected pane
   header, or a small standalone/picker overlay. Hide it at live output and
   expose committed position as an accessible description. Overlays yield to
-  selection, link inspection, notices, tab previews and overlapping cursors.
+  selection, link previews, notices, tab previews and overlapping cursors.
   Consume exact Orbit ORBF v2 / ORBS v11; older session versions are rejected.
   Preserve the directory ending beside the count. Idle cleanup and rejected
   input keep the count hidden during terminal-owned scrolling.
@@ -63,14 +63,11 @@
   cell grid, include workspace/picker overhead, and reject invalid settings or
   impossible native sizing before terminal attachment.
 
-- Capture unidentified native keys during hyperlink inspection, including their
-  repeats and releases after dismissal, so inspection cannot leak typing to Orbit.
-
-- Inspect explicit OSC 8 targets through hover or Ctrl+Shift+O; traverse with
-  Tab/Shift+Tab, page with Left/Right, copy with Ctrl+Shift+C, and open HTTP/HTTPS
-  with Enter or Ctrl+Shift+click. Preserve ordinary terminal mouse behavior,
-  reject stale targets and unsafe opening, and expose actual targets and bounded
-  failures through native notices and accessibility. Opening uses host GIO.
+- Preview explicit OSC 8 targets on hover with only two actions: Ctrl+click opens
+  HTTP/HTTPS and Ctrl+Shift+C copies the hovered target unless terminal text is
+  selected. Preserve ordinary terminal mouse behavior, reject stale targets and
+  unsafe opening, and expose each current visible target as an Open link and
+  Copy button through accessibility. Opening uses host GIO.
 
 - Use Alt+Shift+T to open a new tab and Alt+Shift+W to close the active
   non-final tab, matching Nova. Ctrl+T and Ctrl+Shift+W reach terminal programs.

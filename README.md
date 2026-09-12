@@ -107,15 +107,13 @@ These are startup options; Eon owns persistent product configuration.
 ### Hyperlinks
 
 Hover an explicit OSC 8 link to highlight it and preview its actual target.
-Ctrl+Shift+left click opens it. Ordinary clicks retain terminal mouse reporting
-and selection behavior; ordinary URL-looking text is not detected as a link.
-
-Ctrl+Shift+O enters link inspection without opening anything. Tab/Shift+Tab
-chooses a visible link, Left/Right pages its complete escaped target, Enter
-opens it, Ctrl+Shift+C copies the exact target, and Escape returns to typing.
-Inspection consumes typing until dismissed. A changed frame retires the target;
-Tab inspects links in the current presentation. Hover and actions pause during
-scroll animation and renderer recovery.
+Ctrl+left click opens it. Ctrl+Shift+C copies the hovered target unless the
+terminal has selected text, in which case it copies that selection. Ordinary
+clicks retain terminal mouse reporting and selection behavior; ordinary
+URL-looking text is not detected as a link. The accessibility tree exposes each
+current visible target as an Open link followed by a Copy button. A changed
+frame retires both. Hover and actions pause during scroll animation and renderer
+recovery.
 
 Opening accepts ASCII HTTP/HTTPS targets up to 4096 bytes, with a host and
 without credentials. Other schemes, malformed targets and oversized links
@@ -292,7 +290,7 @@ While scrolled, `↑ N rows` shows the last committed viewport's wrapped display
 rows above live output (`↑ 1 row` for one). The selected pane header reserves
 space for it, preserving the directory ending when the label needs shortening.
 Standalone and popup terminals use a small top-right overlay
-without resizing the grid; it yields to selection, link inspection, notices,
+without resizing the grid; it yields to selection, link previews, notices,
 popup tab previews, and an overlapping terminal cursor. Live bottom, alternate screen, recovery, pending reflow,
 and known terminal-owned scrolling hide it. Fractional preview movement never
 changes the number. If the complete label cannot fit, it stays available in the
@@ -366,13 +364,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 378 |
+| README | 376 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,656 |
+| Contracts and references | 1,675 |
 | Memory benchmark report | 158 |
-| Crate decisions | 263 |
-| Changelog | 246 |
-| Rust source, including unit tests | 16,760 |
+| Crate decisions | 265 |
+| Changelog | 243 |
+| Rust source, including unit tests | 16,981 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **20,741** |
+| **Total** | **20,978** |

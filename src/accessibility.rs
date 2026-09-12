@@ -1,5 +1,5 @@
 use crate::{
-    CellMetrics, Scene, SceneRect, WorkspaceFocus, WorkspaceScene,
+    CellMetrics, MAX_LINK_BYTES, Scene, SceneRect, WorkspaceFocus, WorkspaceScene,
     scene::{AccessiblePosition, AccessibleRow, AccessibleSelection, AccessibleText},
 };
 use accesskit::{
@@ -20,6 +20,17 @@ const TAB_LIST: NodeId = NodeId(3);
 const PANE_PANEL: NodeId = NodeId(4);
 // Scene rows are u16, so this range cannot collide with fixed or text-run nodes.
 const WORKSPACE_NODE_START: u64 = 1 << 32;
+const LINK_NODE_START: u64 = 1 << 48;
+
+#[derive(Clone, Debug)]
+struct AccessibleLink {
+    open: NodeId,
+    copy: NodeId,
+    row: u16,
+    column: u16,
+    label: String,
+    bounds: SceneRect,
+}
 
 #[derive(Clone, Debug)]
 struct Snapshot {
@@ -35,6 +46,9 @@ struct Snapshot {
     tab_ids: HashMap<String, NodeId>,
     pane_ids: HashMap<String, NodeId>,
     next_workspace_id: u64,
+    links: Vec<AccessibleLink>,
+    link_identity: Option<(u64, u64)>,
+    next_link_id: u64,
 }
 
 impl Snapshot {
@@ -52,6 +66,9 @@ impl Snapshot {
             tab_ids: HashMap::new(),
             pane_ids: HashMap::new(),
             next_workspace_id: WORKSPACE_NODE_START,
+            links: Vec::new(),
+            link_identity: None,
+            next_link_id: LINK_NODE_START,
         }
     }
 
@@ -74,6 +91,56 @@ impl Snapshot {
             allocate_workspace_id(&mut self.pane_ids, &mut self.next_workspace_id, &pane.id);
         }
         self.workspace = Some(workspace.clone());
+    }
+
+    fn set_links(&mut self, scene: Option<&Scene>, generation: Option<u64>) {
+        let identity = link_identity(scene, generation);
+        if self.link_identity == identity {
+            return;
+        }
+        self.links.clear();
+        self.link_identity = identity;
+        let Some((scene, _)) = scene.zip(generation) else {
+            return;
+        };
+        let terminal = self.workspace.as_ref().map_or(
+            SceneRect {
+                width: self.size.width as f32,
+                height: self.size.height as f32,
+                ..SceneRect::default()
+            },
+            |workspace| workspace.terminal,
+        );
+        let visible = self
+            .workspace
+            .as_ref()
+            .map_or(Some(terminal), WorkspaceScene::visible_terminal);
+        self.links = visible.map_or_else(Vec::new, |visible| {
+            scene
+                .hyperlinks()
+                .filter_map(|link| {
+                    let bounds = link.rect(terminal, self.metrics).intersection(visible)?;
+                    let open = NodeId(self.next_link_id);
+                    let copy = NodeId(
+                        self.next_link_id
+                            .checked_add(1)
+                            .expect("AccessKit link node IDs exhausted"),
+                    );
+                    self.next_link_id = self
+                        .next_link_id
+                        .checked_add(2)
+                        .expect("AccessKit link node IDs exhausted");
+                    Some(AccessibleLink {
+                        open,
+                        copy,
+                        row: link.row,
+                        column: link.column,
+                        label: accessible_link_label(link.uri),
+                        bounds,
+                    })
+                })
+                .collect()
+        });
     }
 
     fn tree(&self) -> TreeUpdate {
@@ -118,6 +185,7 @@ impl Snapshot {
             content.set_children(
                 (0..self.content.rows.len())
                     .map(text_run_id)
+                    .chain(self.links.iter().flat_map(|link| [link.open, link.copy]))
                     .collect::<Vec<_>>(),
             );
             if let Some(selection) = self.content.selection {
@@ -231,6 +299,19 @@ impl Snapshot {
                 ));
             }
         }
+        for link in &self.links {
+            let mut open = Node::new(Role::Link);
+            open.set_label(link.label.as_str());
+            open.set_bounds(rect(link.bounds));
+            open.add_action(Action::Click);
+            nodes.push((link.open, open));
+
+            // The locked AT-SPI adapter exposes Click but not CustomAction.
+            let mut copy = Node::new(Role::Button);
+            copy.set_label(format!("Copy {}", link.label));
+            copy.add_action(Action::Click);
+            nodes.push((link.copy, copy));
+        }
         if status_alert {
             let mut status = Node::new(Role::Alert);
             status.set_label(self.status.as_str());
@@ -263,7 +344,24 @@ impl Snapshot {
         }
     }
 
-    fn workspace_target(&self, target: NodeId) -> Option<AccessibilityTarget> {
+    fn action_target(&self, target: NodeId, action: Action) -> Option<AccessibilityTarget> {
+        if let Some(link) = self
+            .links
+            .iter()
+            .find(|link| link.open == target || link.copy == target)
+        {
+            if action != Action::Click {
+                return None;
+            }
+            return Some(AccessibilityTarget::Link {
+                row: link.row,
+                column: link.column,
+                copy: link.copy == target,
+            });
+        }
+        if !matches!(action, Action::Click | Action::Focus) {
+            return None;
+        }
         let workspace = self.workspace.as_ref()?;
         if target == CONTENT {
             return workspace
@@ -322,6 +420,7 @@ impl Accessibility {
         scrollback_label: Option<&str>,
         size: PhysicalSize<u32>,
         metrics: CellMetrics,
+        link_generation: Option<u64>,
     ) {
         {
             let mut snapshot = lock(&self.snapshot);
@@ -344,22 +443,54 @@ impl Accessibility {
                 snapshot.content = AccessibleText::default();
                 snapshot.columns = None;
             }
+            snapshot.set_links(scene, link_generation);
         }
         adapter.update_if_active(|| lock(&self.snapshot).tree());
     }
 
+    pub fn present_links(
+        &self,
+        adapter: &mut Adapter,
+        scene: Option<&Scene>,
+        generation: Option<u64>,
+    ) {
+        if lock(&self.snapshot).link_identity == link_identity(scene, generation) {
+            return;
+        }
+        adapter.update_if_active(|| {
+            let mut snapshot = lock(&self.snapshot);
+            snapshot.set_links(scene, generation);
+            snapshot.tree()
+        });
+    }
+
     #[must_use]
-    pub fn workspace_target(&self, target: NodeId) -> Option<AccessibilityTarget> {
-        lock(&self.snapshot).workspace_target(target)
+    pub fn action_target(&self, target: NodeId, action: Action) -> Option<AccessibilityTarget> {
+        lock(&self.snapshot).action_target(target, action)
     }
 }
 
-/// Accessible workspace activation routed back through Eon semantics.
+fn link_identity(scene: Option<&Scene>, generation: Option<u64>) -> Option<(u64, u64)> {
+    scene
+        .zip(generation)
+        .map(|(scene, generation)| (generation, scene.revision))
+}
+
+fn accessible_link_label(uri: &str) -> String {
+    if uri.len() > MAX_LINK_BYTES {
+        format!("Link target exceeds {MAX_LINK_BYTES} bytes")
+    } else {
+        uri.escape_debug().to_string()
+    }
+}
+
+/// Accessible action routed back through Venus and Eon semantics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AccessibilityTarget {
     Terminal,
     Tab(String),
     Pane(String),
+    Link { row: u16, column: u16, copy: bool },
 }
 
 fn bounds(size: PhysicalSize<u32>) -> Rect {
@@ -429,10 +560,11 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PaneMetadata;
+    use crate::{Color, DrawCell, DrawRow, DrawStyle, PaneMetadata};
     use eon_workspace_protocol::v5::{
         Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Snapshot as WorkspaceSnapshot, Tab,
     };
+    use orbit_protocol::{CellWidth, Screen, Underline};
 
     fn workspace_tab(id: &str, panes: &[&str], selected_pane: &str) -> Tab {
         Tab {
@@ -499,6 +631,106 @@ mod tests {
             .find(|(node_id, _)| *node_id == id)
             .unwrap()
             .1
+    }
+
+    fn linked_scene(revision: u64, uri: &str) -> Scene {
+        Scene {
+            revision,
+            columns: 1,
+            rows: 1,
+            screen: Screen::Primary,
+            title: "shell".into(),
+            working_directory: String::new(),
+            background: Color::default(),
+            foreground: Color::default(),
+            cursor: None,
+            content: vec![DrawRow {
+                wrapped: false,
+                wrap_continuation: false,
+                kitty_virtual_placeholder: false,
+                cells: vec![DrawCell {
+                    width: CellWidth::Narrow,
+                    text: "x".into(),
+                    hyperlink: uri.into(),
+                    style: DrawStyle {
+                        foreground: Color::default(),
+                        background: Color::default(),
+                        underline_color: Color::default(),
+                        bold: false,
+                        italic: false,
+                        faint: false,
+                        blink: false,
+                        invisible: false,
+                        strikethrough: false,
+                        overline: false,
+                        selected: false,
+                        background_is_default: true,
+                        protected: false,
+                        underline: Underline::None,
+                    },
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn visible_links_offer_only_open_and_copy_and_retire_with_the_scene() {
+        let mut snapshot = Snapshot::new(PhysicalSize::new(800, 600));
+        let first_scene = linked_scene(1, "https://example.com/one");
+        snapshot.content = first_scene.accessible_content();
+        snapshot.columns = Some(first_scene.columns);
+        snapshot.status.clear();
+        snapshot.set_links(Some(&first_scene), Some(7));
+
+        let first = snapshot.tree();
+        let first_link = tree_node_id(&first, "https://example.com/one");
+        let first_copy = tree_node_id(&first, "Copy https://example.com/one");
+        assert_eq!(node(&first, first_link).role(), Role::Link);
+        assert!(node(&first, first_link).supports_action(Action::Click));
+        assert!(!node(&first, first_link).supports_action(Action::CustomAction));
+        assert!(!node(&first, first_link).supports_action(Action::Focus));
+        assert_eq!(node(&first, first_copy).role(), Role::Button);
+        assert!(node(&first, first_copy).supports_action(Action::Click));
+        assert!(!node(&first, first_copy).supports_action(Action::CustomAction));
+        assert!(!node(&first, first_copy).supports_action(Action::Focus));
+        assert_eq!(
+            snapshot.action_target(first_link, Action::Click),
+            Some(AccessibilityTarget::Link {
+                row: 0,
+                column: 0,
+                copy: false,
+            })
+        );
+        assert_eq!(
+            snapshot.action_target(first_copy, Action::Click),
+            Some(AccessibilityTarget::Link {
+                row: 0,
+                column: 0,
+                copy: true,
+            })
+        );
+        assert_eq!(snapshot.action_target(first_copy, Action::Focus), None);
+
+        snapshot.set_links(Some(&first_scene), None);
+        assert_eq!(snapshot.action_target(first_link, Action::Click), None);
+        assert_eq!(snapshot.action_target(first_copy, Action::Click), None);
+
+        let second_scene = linked_scene(1, "https://example.com/two");
+        snapshot.content = second_scene.accessible_content();
+        snapshot.columns = Some(second_scene.columns);
+        snapshot.set_links(Some(&second_scene), Some(8));
+        let second = snapshot.tree();
+        let second_link = tree_node_id(&second, "https://example.com/two");
+        assert_ne!(first_link, second_link);
+        assert_eq!(snapshot.action_target(first_link, Action::Click), None);
+
+        let oversized = "x".repeat(MAX_LINK_BYTES + 1);
+        let oversized_scene = linked_scene(2, &oversized);
+        snapshot.set_links(Some(&oversized_scene), Some(9));
+        let oversized = snapshot.tree();
+        let failure = format!("Link target exceeds {MAX_LINK_BYTES} bytes");
+        tree_node_id(&oversized, &failure);
+        tree_node_id(&oversized, &format!("Copy {failure}"));
     }
 
     #[test]
@@ -930,7 +1162,7 @@ mod tests {
         assert!(node(&update, tab).supports_action(Action::Click));
         assert!(node(&update, tab).supports_action(Action::Focus));
         assert_eq!(
-            snapshot.workspace_target(tab),
+            snapshot.action_target(tab, Action::Click),
             Some(AccessibilityTarget::Tab("t1".into()))
         );
         snapshot.workspace_focus = WorkspaceFocus::Tabs;
@@ -957,7 +1189,7 @@ mod tests {
         assert_eq!(empty.focus, tab);
         assert!(node(&empty, tab).supports_action(Action::Click));
         snapshot.workspace_focus = WorkspaceFocus::Panes;
-        assert_eq!(snapshot.workspace_target(CONTENT), None);
+        assert_eq!(snapshot.action_target(CONTENT, Action::Click), None);
         snapshot.status = "popup action rejected".into();
         let failed = snapshot.tree();
         assert_eq!(node(&failed, PANE_PANEL).children(), &[CONTENT]);
@@ -989,7 +1221,7 @@ mod tests {
         assert_eq!(update.focus, pane);
         assert!(node(&update, active_tab).supports_action(Action::Focus));
         assert_eq!(
-            snapshot.workspace_target(active_tab),
+            snapshot.action_target(active_tab, Action::Click),
             Some(AccessibilityTarget::Tab("t2".into()))
         );
     }
@@ -1027,16 +1259,19 @@ mod tests {
         assert_eq!(tree_node_id(&second, "pane-b unavailable"), pane_b);
         assert_eq!(second.focus, pane_b);
         assert_eq!(
-            accessibility.workspace_target(tab_b),
+            accessibility.action_target(tab_b, Action::Click),
             Some(AccessibilityTarget::Tab("t2".into()))
         );
         assert_eq!(
-            accessibility.workspace_target(pane_b),
+            accessibility.action_target(pane_b, Action::Click),
             Some(AccessibilityTarget::Pane("pane-b".into()))
         );
-        assert_eq!(accessibility.workspace_target(tab_a), None);
-        assert_eq!(accessibility.workspace_target(pane_a), None);
-        assert_eq!(accessibility.workspace_target(NodeId(u64::MAX)), None);
+        assert_eq!(accessibility.action_target(tab_a, Action::Click), None);
+        assert_eq!(accessibility.action_target(pane_a, Action::Click), None);
+        assert_eq!(
+            accessibility.action_target(NodeId(u64::MAX), Action::Click),
+            None
+        );
 
         set_workspace(
             &accessibility,

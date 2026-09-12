@@ -58,7 +58,15 @@ The exact selected winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` cursor and
 event APIs own the native pointer boundary. Foot
 `85655c74a4ded119392ea8b632626c3920042807` (`url-mode.c`, `doc/foot.ini.5.scd`)
 demonstrates explicit keyboard traversal, clipboard activation and a distinct
-launcher. Venus rejects its URL discovery, launch templates and file rewriting.
+launcher. Venus rejects its traversal mode, URL discovery, launch templates and
+file rewriting; the chosen interaction keeps only pointer opening and hovered
+target copying.
+
+AccessKit models custom actions, but the locked Linux adapter's exact
+[`accesskit_atspi_common` source](https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/atspi-common/src/node.rs)
+maps actionable nodes only to the standard Click action. Venus therefore
+publishes one Click-backed Open link and one Click-backed Copy button per
+visible target instead of an inert Linux custom action.
 
 [GLib 2.84.4's GIO dispatcher](https://github.com/GNOME/glib/blob/2.84.4/gio/gio-tool-open.c)
 preserves a URI argument and completes after dispatch to the registered handler.
