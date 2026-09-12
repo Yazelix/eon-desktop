@@ -145,7 +145,7 @@ Their distinct earlier proof identities and remaining limits stay qualified.
 
 ## VEN-C5 — Explicit native hyperlinks
 
-- **Status:** Partially proved
+- **Status:** Proved
 - **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link or
   explicitly activates one.
 - **Result:** The hovered link is highlighted and its escaped target is
@@ -185,8 +185,13 @@ Their distinct earlier proof identities and remaining limits stay qualified.
   - **Mechanical and isolated native evidence:** Focused checks prove selection
     precedence, exact AccessKit Open/Copy controls and stale-node retirement;
     the complete locked Rust suite and isolated native input-pairing regression
-    pass. Native AT-SPI activation and downstream installed Eon composition
-    remain unproved.
+    pass. A private static EonTerm on native COSMIC Wayland exposed the exact
+    Link and Copy button through AT-SPI with one Click action each. Copy produced
+    the exact Wayland clipboard target; Open invoked exact `gio open -- URI`
+    arguments through a disposable recorder. Real GIO opening was already
+    accepted in user dogfood. AT-SPI was enabled before launch; activation after
+    an already-published frame remains unqualified. Downstream installed Eon
+    composition remains separate and unproved.
   - **Retired inspection correction:** The real Application regression fails before
     this revision and passes after it: unidentified native presses are captured,
     their repeats/releases stay captured after Escape, and fresh presses return
