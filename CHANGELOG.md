@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Number workspace tabs by their current position and update those numbers after
+  reordering. Alt+1 through Alt+9 select positions 1 through 9; Alt+0 selects
+  position 10. Stable Eon tab identities remain internal to actions and
+  accessibility nodes.
+
 - Consume exact EONW v5 through one shared popup surface for tools and Project:
   rounded stack-covering geometry, compact labels, translucent margins, catalog
   shortcuts with exact targets, actionable tabs, and empty popup-only bodies.

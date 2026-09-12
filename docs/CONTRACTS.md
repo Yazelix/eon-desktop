@@ -530,13 +530,13 @@ qualified by the identities and boundaries below.
   lifetime, liveness, endpoint, or metadata.
 - **Result:**
   - Venus materializes ordered horizontal tabs and every fitting header for the
-    active tab around exactly one expanded pane. Each tab shows its numeric
-    `tN` prefix plus the leaf, `~`, or `/` derived from Eon's authoritative
-    launch directory.
+    active tab around exactly one expanded pane. Each tab shows its current
+    one-based position plus the leaf, `~`, or `/` derived from Eon's
+    authoritative launch directory; positions update when Eon reorders tabs.
   - Tabs have pill-shaped corners and separated hit targets. Width follows shaped
     label text plus padding, capped near 280 logical pixels at default
     typography. Long labels use a cluster-safe middle ellipsis; when even that
-    cannot fit, preserve the numeric identity whenever it fits. Overflow stays
+    cannot fit, preserve the positional number whenever it fits. Overflow stays
     horizontally scrollable across the whole strip, including its gaps, and
     selection reveals the active tab. Hover shows
     its control-sanitized launch path within available window space; the
@@ -580,6 +580,11 @@ qualified by the identities and boundaries below.
     the active tab's projection. Popup-only tabs may have no pane or selected
     pane. Hiding their last visible popup yields an empty body with actionable
     tabs and catalog shortcuts (VEN-C18).
+  - Physical Alt+1 through Alt+9 focus the corresponding current tab position;
+    Alt+0 focuses position 10. Venus resolves the position from the accepted
+    snapshot and sends the existing stable `tN` through `FocusId`. A missing
+    position is consumed without an action or terminal input. Alt+H/L remains
+    the traversal path for tabs after position 10.
   - Ctrl+Alt+H/L sends one non-repeating semantic move for the active tab;
     Ctrl+Alt+K/J does the same for its selected pane. Alt+Shift+W sends one
     non-repeating close naming the snapshot's active stable `tN`. Venus consumes
@@ -588,9 +593,10 @@ qualified by the identities and boundaries below.
     input, and none of these shortcuts enters a mode.
   - Compatible terminal output does not withdraw tab/pane focus actions or
     presented header hit targets while a repaint is pending.
-  - Hit testing and actions retain the exact `tN` identity. AccessKit names pair
-    that identity with a bounded full launch path, so duplicate leaves remain
-    distinguishable without storing another tab name.
+  - Hit testing, AccessKit node identity, and actions retain the exact `tN`.
+    AccessKit names pair the current position with a bounded full launch path,
+    so duplicate leaves remain distinguishable without storing another tab
+    name.
 - **Important failures:** Workspace loss, Orbit exit, endpoint replacement,
   liveness change, rejected close or movement, or incompatible metadata retires
   stale observations and never grants Venus topology or Session-lifecycle
@@ -608,6 +614,12 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Positional labels and direct Alt-digit focus are accepted at source
+    `f4845f1d0dd5c31301fd0c64b28fa8a907d1eae0`
+    (`ven-positional-tabs-alt-digit-b3j`). The focused red/green checks and the
+    complete locked Rust route pass with 127 ordinary tests. This source proof
+    covers deterministic scene, shortcut, tooltip and AccessKit projection; it
+    does not claim native input, screen-reader, installed Eon or macOS proof.
   - EONW v5 shared-popup and empty-body projection is accepted at
     `f7fb5a071edc446d04e629837b6e277f28d93709`; VEN-C18 indexes its exact
     Rust/Nix and isolated native checks. This consumer proof does not widen

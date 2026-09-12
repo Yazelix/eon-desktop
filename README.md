@@ -9,9 +9,9 @@ and sends semantic interaction back to the authoritative session runtime.
 The Venus client implements one native Wayland window on Linux for an Eon workspace or one
 standalone already-running local Orbit session. In workspace mode it renders
 Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
-pane accordion. Tab headers show the numeric part of Eon's stable `tN` identity,
-two spaces, and the leaf, `~`, or `/` derived from Eon's authoritative launch
-directory. Pill-shaped tabs fit their labels, with middle ellipsis for long names
+pane accordion. Tab headers show their current one-based position, two spaces,
+and the leaf, `~`, or `/` derived from Eon's authoritative launch directory.
+Pill-shaped tabs fit their labels, with middle ellipsis for long names
 and full launch-path previews on hover. Selected tabs use a brighter fill and
 label without an underline; keyboard tab focus adds a rounded outline.
 Pane headers use quiet backgrounds and a lighter selected fill and label. One
@@ -250,7 +250,9 @@ workspace changes from another client appear without a click or restart.
 Recovery continues only while that exact attachment remains current and live;
 endpoint replacement or authoritative offline state cancels obsolete retry
 state.
-Click a tab or pane header to select it. Alt+H/L walks tabs, Alt+K/J walks panes,
+Click a tab or pane header to select it. Alt+1 through Alt+9 select tab positions
+1 through 9, and Alt+0 selects position 10; missing positions do nothing.
+Alt+H/L walks every tab, Alt+K/J walks panes,
 Ctrl+Alt+H/L moves the active tab, Ctrl+Alt+K/J moves the selected pane,
 Alt+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
 Alt+Shift+T requests a pending tab. Eon's catalog supplies popup shortcuts,
@@ -263,9 +265,10 @@ plus panes when visible; Left/Right on tabs and Up/Down on panes traverse them.
 Escape returns chrome focus to the terminal. While the terminal has focus,
 Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit input.
 Popup margins shrink to preserve a usable cell grid; tiny surfaces omit the
-label before clipping terminal content. Tab headers show `N  leaf`, `N  ~`, or `N  /` from Eon's launch
-directory while hit testing and actions retain `tN`; accessibility pairs `tN`
-with its full launch path. Tab widths follow shaped text plus padding up to
+label before clipping terminal content. Tab headers show the current positional
+`N  leaf`, `N  ~`, or `N  /` from Eon's launch directory while hit testing and
+actions retain stable `tN`; accessibility and hover details pair the current
+position with its full launch path. Tab widths follow shaped text plus padding up to
 280 logical pixels at default typography; larger fonts scale that limit.
 Long labels preserve both ends without cutting shaped clusters. If the name and
 ellipsis cannot fit, the tab keeps its number whenever that fits. Hover previews
@@ -363,13 +366,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 375 |
+| README | 378 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,644 |
+| Contracts and references | 1,656 |
 | Memory benchmark report | 158 |
 | Crate decisions | 263 |
-| Changelog | 241 |
-| Rust source, including unit tests | 16,696 |
+| Changelog | 246 |
+| Rust source, including unit tests | 16,760 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **20,657** |
+| **Total** | **20,741** |
