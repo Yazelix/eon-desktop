@@ -1066,8 +1066,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C20 — Native shortcut viewer
 
-- **Status:** Not yet proved; the implementation candidate is mechanically and
-  natively verified, but no proof-bearing Git commit is accepted yet.
+- **Status:** Proved
 - **Consumer:** One person using a Venus surface attached to an Eon workspace.
 - **Trigger:** Physical Alt+Slash toggles the viewer; Escape closes it.
 - **Result:** Venus presents one ephemeral, read-only native dialog containing
@@ -1092,9 +1091,9 @@ qualified by the identities and boundaries below.
   shortcuts, action execution from rows, search, filtering, rebinding,
   tutorial, telemetry, persistence, momentary timer, second renderer, generic
   modal framework, dependency, or platform-support expansion.
-- **Proof:** Candidate evidence only until exact-source acceptance:
-  - **Environment:** Edge baseline
-    `43ea277d50f7f06e9ca6a5c38e8d9a09bbe6ea84` plus exact candidate source
+- **Proof:** Accepted source
+  `2f05a408e499117c1ddb57f99255dcdb4a236bdf`:
+  - **Environment:** Exact package source
     `/nix/store/v4kyjq0z34kfgrhz8js9gh7fkhd9lk3n-venus-popup-source`;
     x86_64 Linux, Sway 1.12 headless native Wayland at 1440x900 scale 1,
     wgpu Vulkan on Mesa 26.1.2 lavapipe; EONW v5 fixture at
@@ -1112,10 +1111,9 @@ qualified by the identities and boundaries below.
     product process identity observed at proof start survives. Reproduction
     inputs, logs, accessibility tree, and captures are in
     `~/.local/state/eon/proofs/ven-toggleable-shortcut-viewer-s41-2026-09-12/`.
-- **Open proof:** Commit and accept the exact Venus source before promoting this
-  contract to Proved. Eon must then reserve Alt+Slash and prove the installed
-  full-product interaction in `eon-deliver-native-shortcut-viewer-rif`. Apple
-  Silicon macOS remains under its separately approved proof chain.
+- **Open proof:** Eon must reserve Alt+Slash and prove the installed full-product
+  interaction in `eon-deliver-native-shortcut-viewer-rif`. Apple Silicon macOS
+  remains under its separately approved proof chain.
 
 ## Rules
 
