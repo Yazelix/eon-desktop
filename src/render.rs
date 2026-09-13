@@ -1,6 +1,6 @@
 use crate::{
     Color as SceneColor, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene, ScenePreview, SceneRect,
-    WorkspaceFocus, WorkspaceScene, scene::pane_chrome_rect,
+    ShortcutViewerScene, WorkspaceFocus, WorkspaceScene, scene::pane_chrome_rect,
 };
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
@@ -383,6 +383,7 @@ struct ContentKey {
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
     scrollback_label: Option<String>,
+    shortcut_viewer_scroll: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -967,6 +968,7 @@ impl Renderer {
         scroll_preview: Option<&ScenePreview>,
         scroll_offset: f32,
         workspace: Option<&WorkspaceScene>,
+        shortcut_viewer: Option<&ShortcutViewerScene>,
         workspace_focus: WorkspaceFocus,
         status: &str,
         blink_visible: bool,
@@ -979,13 +981,14 @@ impl Renderer {
             scroll_preview,
             scroll_offset,
             workspace,
+            shortcut_viewer,
             workspace_focus,
             status,
             blink_visible,
             preedit,
             generation,
         );
-        if scroll_offset == 0.0 {
+        if scroll_offset == 0.0 && shortcut_viewer.is_none() {
             self.rebuild_dynamic_cursor(scene, workspace, blink_visible);
         } else {
             self.reset_cursor_animation();
@@ -1129,6 +1132,7 @@ impl Renderer {
         scroll_preview: Option<&ScenePreview>,
         scroll_offset: f32,
         workspace: Option<&WorkspaceScene>,
+        shortcut_viewer: Option<&ShortcutViewerScene>,
         workspace_focus: WorkspaceFocus,
         status: &str,
         blink_visible: bool,
@@ -1145,6 +1149,7 @@ impl Renderer {
             hyperlink: self.hyperlink,
             hovered_header: self.hovered_header.clone(),
             scrollback_label: self.scrollback_label.clone(),
+            shortcut_viewer_scroll: shortcut_viewer.map(|viewer| viewer.scroll),
         };
         if self.content_key.as_ref() == Some(&key) {
             return false;
@@ -1377,6 +1382,9 @@ impl Renderer {
                 DrawStyleKind::Status(Wrap::WordOrGlyph),
             );
         }
+        if let Some(shortcut_viewer) = shortcut_viewer {
+            self.build_shortcut_viewer(shortcut_viewer, &mut rectangles);
+        }
         self.cursor_vertex_boundary = cursor_vertex_boundary;
         self.upload_vertices(&rectangles.bytes);
         self.content_key = Some(key);
@@ -1516,6 +1524,181 @@ impl Renderer {
                 g: 49,
                 b: 64,
             },
+        );
+    }
+
+    fn build_shortcut_viewer(
+        &mut self,
+        viewer: &ShortcutViewerScene,
+        rectangles: &mut RectangleBatch,
+    ) {
+        let first = self.text.len();
+        let padding = self.metrics.padding.min(viewer.bounds.width / 8.0);
+        rectangles.clip = None;
+        rectangles.push_rounded(
+            viewer.bounds,
+            padding / 2.0,
+            SceneColor {
+                r: 16,
+                g: 22,
+                b: 32,
+            },
+        );
+        rectangles.push_rounded_outline(
+            viewer.bounds,
+            padding / 2.0,
+            SceneColor {
+                r: 58,
+                g: 75,
+                b: 91,
+            },
+        );
+        self.text_overlay = Some((
+            first,
+            TextBounds {
+                left: viewer.bounds.left.floor() as i32,
+                top: viewer.bounds.top.floor() as i32,
+                right: viewer.bounds.right().ceil() as i32,
+                bottom: viewer.bounds.bottom().ceil() as i32,
+            },
+        ));
+
+        let title_top = viewer.bounds.top + padding;
+        self.push_text_clipped(
+            "Shortcuts",
+            viewer.content.left,
+            title_top,
+            viewer.content.width,
+            viewer.content.width,
+            self.metrics.height * 1.5,
+            SceneColor {
+                r: 239,
+                g: 244,
+                b: 248,
+            },
+            DrawStyleKind::Heading,
+            viewer.bounds,
+        );
+        self.push_text_clipped(
+            "Eon surface · physical keys",
+            viewer.content.left,
+            title_top + self.metrics.height * 1.45,
+            viewer.content.width,
+            viewer.content.width,
+            self.metrics.height,
+            SceneColor {
+                r: 162,
+                g: 174,
+                b: 190,
+            },
+            DrawStyleKind::PopupLabel,
+            viewer.bounds,
+        );
+
+        rectangles.clip = Some(viewer.content);
+        let key_width = (self.metrics.font_size * 15.0).min(viewer.content.width * 0.4);
+        let gap = padding.min(self.metrics.width);
+        for group in &viewer.groups {
+            self.push_text_clipped(
+                &group.title,
+                group.heading.left,
+                group.heading.top,
+                group.heading.width,
+                group.heading.width,
+                group.heading.height,
+                SceneColor {
+                    r: 126,
+                    g: 231,
+                    b: 185,
+                },
+                DrawStyleKind::PopupLabel,
+                viewer.content,
+            );
+            for row in &group.rows {
+                self.push_text_clipped(
+                    &row.shortcut,
+                    row.rect.left,
+                    row.rect.top,
+                    key_width,
+                    key_width,
+                    row.rect.height,
+                    SceneColor {
+                        r: 162,
+                        g: 204,
+                        b: 230,
+                    },
+                    DrawStyleKind::Status(Wrap::WordOrGlyph),
+                    viewer.content,
+                );
+                let action_left = row.rect.left + key_width + gap;
+                self.push_text_clipped(
+                    &row.action,
+                    action_left,
+                    row.rect.top,
+                    (row.rect.right() - action_left).max(1.0),
+                    (row.rect.right() - action_left).max(1.0),
+                    row.rect.height,
+                    SceneColor {
+                        r: 219,
+                        g: 226,
+                        b: 234,
+                    },
+                    DrawStyleKind::Status(Wrap::WordOrGlyph),
+                    viewer.content,
+                );
+            }
+        }
+        if viewer.max_scroll > 0.0 {
+            let track = SceneRect {
+                left: viewer.content.right() - self.metrics.scale * 3.0,
+                top: viewer.content.top,
+                width: self.metrics.scale * 2.0,
+                height: viewer.content.height,
+            };
+            rectangles.push_rounded(
+                track,
+                track.width / 2.0,
+                SceneColor {
+                    r: 43,
+                    g: 53,
+                    b: 67,
+                },
+            );
+            let thumb_height = (track.height * viewer.content.height
+                / (viewer.content.height + viewer.max_scroll))
+                .max(track.width * 2.0)
+                .min(track.height);
+            let thumb_top =
+                track.top + (track.height - thumb_height) * viewer.scroll / viewer.max_scroll;
+            rectangles.push_rounded(
+                SceneRect {
+                    top: thumb_top,
+                    height: thumb_height,
+                    ..track
+                },
+                track.width / 2.0,
+                SceneColor {
+                    r: 126,
+                    g: 231,
+                    b: 185,
+                },
+            );
+        }
+        rectangles.clip = None;
+        self.push_text_clipped(
+            "Wheel or ↑↓ to scroll · Esc or Alt+/ to close",
+            viewer.content.left,
+            viewer.content.bottom() + self.metrics.height * 0.35,
+            viewer.content.width,
+            viewer.content.width,
+            self.metrics.height,
+            SceneColor {
+                r: 162,
+                g: 174,
+                b: 190,
+            },
+            DrawStyleKind::PopupLabel,
+            viewer.bounds,
         );
     }
 
@@ -3372,6 +3555,7 @@ mod tests {
                     None,
                     0.0,
                     Some(&workspace),
+                    None,
                     WorkspaceFocus::Terminal,
                     "",
                     false,
@@ -3386,6 +3570,7 @@ mod tests {
                     None,
                     None,
                     0.0,
+                    None,
                     None,
                     WorkspaceFocus::Terminal,
                     &"Sessions unavailable. ".repeat(32),
@@ -3413,6 +3598,7 @@ mod tests {
                     None,
                     0.0,
                     Some(&workspace),
+                    None,
                     WorkspaceFocus::Terminal,
                     "",
                     false,
@@ -3455,6 +3641,7 @@ mod tests {
                     None,
                     0.0,
                     Some(&workspace),
+                    None,
                     WorkspaceFocus::Terminal,
                     "",
                     false,
@@ -3565,8 +3752,8 @@ mod tests {
     }
 
     #[test]
-    fn content_cache_separates_generations() {
-        let key = |generation| ContentKey {
+    fn content_cache_separates_generations_and_viewer_state() {
+        let key = |generation, shortcut_viewer_scroll| ContentKey {
             generation,
             scroll_offset: 0.0,
             workspace_focus: WorkspaceFocus::Terminal,
@@ -3576,9 +3763,12 @@ mod tests {
             hyperlink: None,
             hovered_header: None,
             scrollback_label: None,
+            shortcut_viewer_scroll,
         };
 
-        assert_ne!(key(1), key(2));
+        assert_ne!(key(1, None), key(2, None));
+        assert_ne!(key(1, None), key(1, Some(0.0)));
+        assert_ne!(key(1, Some(0.0)), key(1, Some(1.0)));
     }
 
     #[test]

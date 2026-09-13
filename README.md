@@ -262,6 +262,12 @@ Switching tabs retains each tab's popup selection. F6 cycles terminal and tabs,
 plus panes when visible; Left/Right on tabs and Up/Down on panes traverse them.
 Escape returns chrome focus to the terminal. While the terminal has focus,
 Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit input.
+Alt+/ opens a native Shortcuts dialog for the Eon surface. It uses the same
+fixed binding descriptors as dispatch and appends the enabled Project/tool rows
+from the current Eon catalog; child-application bindings remain in those apps.
+Wheel, Up/Down, Page Up/Down, Home and End scroll the list. Escape or Alt+/
+closes it and restores the prior terminal or chrome focus without sending a
+workspace action or terminal key.
 Popup margins shrink to preserve a usable cell grid; tiny surfaces omit the
 label before clipping terminal content. Tab headers show the current positional
 `N  leaf`, `N  ~`, or `N  /` from Eon's launch directory while hit testing and
@@ -364,13 +370,13 @@ and benchmark CSV data.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 376 |
+| README | 382 |
 | Repository ignore rules | 6 |
-| Contracts and references | 1,685 |
+| Contracts and references | 1,738 |
 | Memory benchmark report | 158 |
 | Crate decisions | 265 |
-| Changelog | 243 |
-| Rust source, including unit tests | 16,981 |
+| Changelog | 249 |
+| Rust source, including unit tests | 17,972 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **20,988** |
+| **Total** | **22,044** |

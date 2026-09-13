@@ -26,9 +26,7 @@ pub struct InputState {
     pressed_buttons: Vec<WinitMouseButton>,
     scroll: (f64, f64),
     selection_position: Option<SelectionPosition>,
-    copy_pressed: bool,
-    paste_shortcuts: Vec<WinitPhysicalKey>,
-    host_shortcuts: Vec<WinitPhysicalKey>,
+    captured_shortcuts: Vec<WinitPhysicalKey>,
 }
 
 impl InputState {
@@ -87,11 +85,7 @@ impl InputState {
     /// The returned loss retires an attached endpoint without changing the focus replay state.
     pub fn retire_orbit_generation(&mut self) -> Option<ClientMessage> {
         let mut retired = std::mem::take(&mut self.pressed_keys);
-        retired.append(&mut self.paste_shortcuts);
-        if std::mem::take(&mut self.copy_pressed) {
-            retired.push(WinitPhysicalKey::Code(KeyCode::KeyC));
-        }
-        retired.append(&mut self.host_shortcuts);
+        retired.append(&mut self.captured_shortcuts);
         self.retired_keys.extend(retired);
         self.pressed_buttons.clear();
         self.reset_scroll();
@@ -396,81 +390,29 @@ impl InputState {
     }
 
     #[must_use]
-    pub fn consumes_copy_shortcut(
-        &mut self,
-        key: WinitPhysicalKey,
-        state: ElementState,
-        repeat: bool,
-    ) -> bool {
-        if key != WinitPhysicalKey::Code(KeyCode::KeyC) {
-            return false;
-        }
-        match state {
-            ElementState::Pressed
-                if self.copy_pressed
-                    || (!repeat
-                        && self.modifiers.contains(Modifiers::CTRL)
-                        && self.modifiers.contains(Modifiers::SHIFT)) =>
-            {
-                self.copy_pressed = true;
-                true
-            }
-            ElementState::Released if self.copy_pressed => {
-                self.copy_pressed = false;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    #[must_use]
-    pub fn consumes_paste_shortcut(
-        &mut self,
-        key: &Key,
-        physical_key: WinitPhysicalKey,
-        state: ElementState,
-        repeat: bool,
-    ) -> bool {
-        let recognized = !repeat
-            && match key {
-                Key::Named(winit::keyboard::NamedKey::Paste) => true,
-                Key::Character(text) if text.eq_ignore_ascii_case("v") => {
-                    self.modifiers == Modifiers::CTRL.union(Modifiers::SHIFT)
-                }
-                _ => false,
-            };
-        capture_shortcut(&mut self.paste_shortcuts, physical_key, state, recognized)
-    }
-
-    pub fn consumes_host_shortcut(
+    pub fn consumes_shortcut(
         &mut self,
         key: WinitPhysicalKey,
         state: ElementState,
         repeat: bool,
         recognized: bool,
     ) -> bool {
-        let recognized = !repeat && recognized;
-        capture_shortcut(&mut self.host_shortcuts, key, state, recognized)
-    }
-}
-
-fn capture_shortcut<T: Copy + Eq>(
-    shortcuts: &mut Vec<T>,
-    key: T,
-    state: ElementState,
-    recognized: bool,
-) -> bool {
-    if let Some(index) = shortcuts.iter().position(|candidate| *candidate == key) {
-        if state == ElementState::Released {
-            shortcuts.swap_remove(index);
+        if let Some(index) = self
+            .captured_shortcuts
+            .iter()
+            .position(|candidate| *candidate == key)
+        {
+            if state == ElementState::Released {
+                self.captured_shortcuts.swap_remove(index);
+            }
+            return true;
         }
-        return true;
+        if state == ElementState::Pressed && !repeat && recognized {
+            self.captured_shortcuts.push(key);
+            return true;
+        }
+        false
     }
-    if state == ElementState::Pressed && recognized {
-        shortcuts.push(key);
-        return true;
-    }
-    false
 }
 
 fn selection_position(
@@ -846,13 +788,8 @@ mod tests {
             time_ns: 0,
             modifiers: Modifiers::empty(),
         }));
-        assert!(input.consumes_paste_shortcut(
-            &Key::Named(winit::keyboard::NamedKey::Paste),
-            paste,
-            Pressed,
-            false
-        ));
-        assert!(input.consumes_host_shortcut(
+        assert!(input.consumes_shortcut(paste, Pressed, false, true));
+        assert!(input.consumes_shortcut(
             WinitPhysicalKey::Code(KeyCode::KeyH),
             Pressed,
             false,
@@ -1153,21 +1090,24 @@ mod tests {
         ));
 
         input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
-        assert!(input.consumes_copy_shortcut(
+        assert!(input.consumes_shortcut(
             WinitPhysicalKey::Code(KeyCode::KeyC),
             ElementState::Pressed,
-            false
+            false,
+            true,
         ));
         input.set_modifiers(ModifiersState::empty());
-        assert!(input.consumes_copy_shortcut(
+        assert!(input.consumes_shortcut(
             WinitPhysicalKey::Code(KeyCode::KeyC),
             ElementState::Released,
-            false
+            false,
+            false,
         ));
-        assert!(!input.consumes_copy_shortcut(
+        assert!(!input.consumes_shortcut(
             WinitPhysicalKey::Code(KeyCode::KeyX),
             ElementState::Pressed,
-            false
+            false,
+            false,
         ));
     }
 
@@ -1180,42 +1120,29 @@ mod tests {
     }
 
     #[test]
-    fn paste_shortcuts_are_one_shot_without_consuming_control_v() {
+    fn recognized_shortcuts_are_one_shot() {
         use winit::event::ElementState::{Pressed, Released};
-        use winit::keyboard::NamedKey;
 
         let mut input = InputState::default();
-        let v = Key::Character("v".into());
         let v_physical = WinitPhysicalKey::Code(KeyCode::KeyV);
-        input.set_modifiers(ModifiersState::CONTROL);
-        assert!(!input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
+        assert!(!input.consumes_shortcut(v_physical, Pressed, false, false));
+        assert!(input.consumes_shortcut(v_physical, Pressed, false, true));
+        assert!(input.consumes_shortcut(v_physical, Pressed, true, false));
+        assert!(input.consumes_shortcut(v_physical, Released, false, false));
+        assert!(!input.consumes_shortcut(v_physical, Released, false, false));
 
-        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
-        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
-        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, true));
-        input.set_modifiers(ModifiersState::empty());
-        assert!(input.consumes_paste_shortcut(&v, v_physical, Released, false));
-        assert!(!input.consumes_paste_shortcut(&v, v_physical, Released, false));
-
-        let paste = Key::Named(NamedKey::Paste);
         let paste_physical = WinitPhysicalKey::Code(KeyCode::Paste);
-        assert!(input.consumes_paste_shortcut(&paste, paste_physical, Pressed, false));
+        assert!(input.consumes_shortcut(paste_physical, Pressed, false, true));
         input.native_focus(false, false);
-        assert!(!input.consumes_paste_shortcut(&paste, paste_physical, Released, false));
+        assert!(!input.consumes_shortcut(paste_physical, Released, false, false));
 
-        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
-        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
-        assert!(input.consumes_paste_shortcut(&paste, paste_physical, Pressed, false));
-        assert!(input.consumes_paste_shortcut(&v, v_physical, Released, false));
-        assert!(input.consumes_paste_shortcut(&paste, paste_physical, Released, false));
+        assert!(input.consumes_shortcut(v_physical, Pressed, false, true));
+        assert!(input.consumes_shortcut(paste_physical, Pressed, false, true));
+        assert!(input.consumes_shortcut(v_physical, Released, false, false));
+        assert!(input.consumes_shortcut(paste_physical, Released, false, false));
 
-        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT | ModifiersState::ALT);
-        assert!(!input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
-
-        input.set_modifiers(ModifiersState::CONTROL | ModifiersState::SHIFT);
-        assert!(input.consumes_paste_shortcut(&v, v_physical, Pressed, false));
-        let changed_layout = Key::Character("x".into());
-        assert!(input.consumes_paste_shortcut(&changed_layout, v_physical, Released, false));
+        assert!(input.consumes_shortcut(v_physical, Pressed, false, true));
+        assert!(input.consumes_shortcut(v_physical, Released, false, false));
     }
 
     #[test]
@@ -1225,7 +1152,7 @@ mod tests {
 
         let mut input = InputState::default();
         let mut shortcut = |key, state, repeat, recognized| {
-            input.consumes_host_shortcut(WinitPhysicalKey::Code(key), state, repeat, recognized)
+            input.consumes_shortcut(WinitPhysicalKey::Code(key), state, repeat, recognized)
         };
         assert!(!shortcut(KeyH, Pressed, true, true));
         assert!(shortcut(KeyH, Pressed, false, true));

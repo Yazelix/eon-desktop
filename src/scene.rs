@@ -224,6 +224,119 @@ pub enum WorkspaceFocus {
     Panes,
 }
 
+/// One read-only shortcut shown by the native viewer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShortcutRow {
+    pub shortcut: String,
+    pub action: String,
+    pub rect: SceneRect,
+}
+
+impl ShortcutRow {
+    #[must_use]
+    pub fn new(shortcut: impl Into<String>, action: impl Into<String>) -> Self {
+        Self {
+            shortcut: shortcut.into(),
+            action: action.into(),
+            rect: SceneRect::default(),
+        }
+    }
+}
+
+/// Related shortcuts presented under one native heading.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShortcutGroup {
+    pub title: String,
+    pub rows: Vec<ShortcutRow>,
+    pub heading: SceneRect,
+}
+
+impl ShortcutGroup {
+    #[must_use]
+    pub fn new(title: impl Into<String>, rows: Vec<ShortcutRow>) -> Self {
+        Self {
+            title: title.into(),
+            rows,
+            heading: SceneRect::default(),
+        }
+    }
+}
+
+/// Bounded geometry for the one native shortcut dialog.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShortcutViewerScene {
+    pub bounds: SceneRect,
+    pub content: SceneRect,
+    pub groups: Vec<ShortcutGroup>,
+    pub scroll: f32,
+    pub max_scroll: f32,
+}
+
+impl ShortcutViewerScene {
+    #[must_use]
+    pub fn new(
+        mut groups: Vec<ShortcutGroup>,
+        size: PhysicalSize<u32>,
+        metrics: CellMetrics,
+        scroll: f32,
+    ) -> Self {
+        let width = size.width as f32;
+        let height = size.height as f32;
+        let margin = metrics.padding.min(width / 12.0).min(height / 12.0);
+        let dialog_width = (metrics.font_size * 54.0).min(width - margin * 2.0);
+        let bounds = SceneRect {
+            left: ((width - dialog_width) / 2.0).max(0.0),
+            top: margin.max(0.0),
+            width: dialog_width,
+            height: height - margin * 2.0,
+        };
+        let padding = metrics.padding.min(bounds.width / 8.0);
+        let header_height = (metrics.height * 2.5).min(bounds.height / 3.0);
+        let footer_height = (metrics.height * 1.75).min(bounds.height / 3.0);
+        let content = SceneRect {
+            left: bounds.left + padding,
+            top: bounds.top + header_height,
+            width: bounds.width - padding * 2.0,
+            height: bounds.height - header_height - footer_height,
+        };
+        let heading_height = metrics.height * 1.4;
+        let row_height = metrics.height * 2.25;
+        let group_gap = metrics.height * 0.6;
+        let content_height = groups.iter().fold(0.0, |height, group| {
+            height + heading_height + row_height * group.rows.len() as f32 + group_gap
+        });
+        let max_scroll = (content_height - content.height).max(0.0);
+        let scroll = scroll.clamp(0.0, max_scroll);
+        let mut top = content.top - scroll;
+        for group in &mut groups {
+            group.heading = SceneRect {
+                left: content.left,
+                top,
+                width: content.width,
+                height: heading_height,
+            };
+            top += heading_height;
+            for row in &mut group.rows {
+                row.rect = SceneRect {
+                    left: content.left,
+                    top,
+                    width: content.width,
+                    height: row_height,
+                };
+                top += row_height;
+            }
+            top += group_gap;
+        }
+        Self {
+            bounds,
+            content,
+            groups,
+            scroll,
+            max_scroll,
+        }
+    }
+}
+
 /// Deterministic native projection of one complete accepted Eon snapshot.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceScene {
@@ -1552,5 +1665,35 @@ mod tests {
         assert_eq!(content.plain_text(), "\u{fffd}");
         assert_eq!(content.rows[0].character_lengths, [3]);
         assert_eq!(content.selection, selected_first_cell);
+    }
+
+    #[test]
+    fn shortcut_viewer_clamps_scroll_and_keeps_fixed_dismissal_space() {
+        let groups = vec![ShortcutGroup::new(
+            "Projects and tools",
+            (0..32)
+                .map(|index| ShortcutRow::new("Alt+Z", format!("Entry {index}")))
+                .collect(),
+        )];
+        let size = PhysicalSize::new(320, 180);
+        let metrics = CellMetrics::for_scale(1.0);
+        let start = ShortcutViewerScene::new(groups.clone(), size, metrics, -100.0);
+        let end = ShortcutViewerScene::new(groups, size, metrics, f32::MAX);
+
+        assert_eq!(start.scroll, 0.0);
+        assert!(end.max_scroll > 0.0);
+        assert_eq!(end.scroll, end.max_scroll);
+        assert!(start.bounds.width <= size.width as f32);
+        assert!(start.bounds.height <= size.height as f32);
+        assert!(start.content.top > start.bounds.top);
+        assert!(start.content.bottom() < start.bounds.bottom());
+        assert_eq!(end.groups[0].rows.len(), 32);
+
+        let tiny = ShortcutViewerScene::new(Vec::new(), PhysicalSize::new(1, 1), metrics, 0.0);
+        assert!(tiny.bounds.right() <= 1.0 && tiny.bounds.bottom() <= 1.0);
+        assert!(
+            tiny.content.right() <= tiny.bounds.right()
+                && tiny.content.bottom() <= tiny.bounds.bottom()
+        );
     }
 }

@@ -1064,6 +1064,59 @@ qualified by the identities and boundaries below.
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` and Eon distinct-endpoint
   acceptance `4298fbb8868752e3d6c8eb4fd79fae067ab3e2a1` do not prove v5.
 
+## VEN-C20 — Native shortcut viewer
+
+- **Status:** Not yet proved; the implementation candidate is mechanically and
+  natively verified, but no proof-bearing Git commit is accepted yet.
+- **Consumer:** One person using a Venus surface attached to an Eon workspace.
+- **Trigger:** Physical Alt+Slash toggles the viewer; Escape closes it.
+- **Result:** Venus presents one ephemeral, read-only native dialog containing
+  grouped native workspace, host, and current Eon popup shortcuts. Fixed
+  bindings share their descriptor owner with dispatch; popup rows use the exact
+  enabled label and normalized physical shortcut from the current EONW v5
+  snapshot. Wheel and navigation keys scroll bounded content. Opening,
+  refreshing, scrolling, and closing send no terminal bytes or workspace
+  action; matching releases remain captured and prior terminal/chrome focus is
+  restored on dismissal.
+- **Important failures:** Repeated toggle events do not oscillate the viewer.
+  Workspace loss, empty or maximum-size catalogs, long labels, resize, scale,
+  focus loss, and tiny surfaces retain local dismissal and clipped, scrollable
+  presentation. While open, keyboard, pointer, IME, clipboard, link, and
+  workspace actions do not reach their normal targets.
+- **Owner:** Venus owns viewer state, fixed native binding descriptors, scene,
+  rendering, input precedence, and AccessKit projection. Eon owns the enabled
+  popup catalog and must reserve Alt+Slash before full-product delivery.
+- **Consumes:** EONW v5 and `eon-workspace-protocol` 0.1.0 at exact Eon source
+  `0cc8f477298681ae3945903e8fdb5852d487c5ab`.
+- **Boundary:** No Orbit Session, Eon configuration parsing, child-application
+  shortcuts, action execution from rows, search, filtering, rebinding,
+  tutorial, telemetry, persistence, momentary timer, second renderer, generic
+  modal framework, dependency, or platform-support expansion.
+- **Proof:** Candidate evidence only until exact-source acceptance:
+  - **Environment:** Edge baseline
+    `43ea277d50f7f06e9ca6a5c38e8d9a09bbe6ea84` plus exact candidate source
+    `/nix/store/v4kyjq0z34kfgrhz8js9gh7fkhd9lk3n-venus-popup-source`;
+    x86_64 Linux, Sway 1.12 headless native Wayland at 1440x900 scale 1,
+    wgpu Vulkan on Mesa 26.1.2 lavapipe; EONW v5 fixture at
+    `0cc8f477298681ae3945903e8fdb5852d487c5ab`; Orbit artifact from
+    `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
+  - **Evidence:** Locked fmt/check/test/Clippy and the Nix build pass all 131
+    ordinary tests. The native artifact
+    `/nix/store/q8pxjwq26z2qnazm1pbjbfg39yggbpkb-venus-popup-proof-0.1.0`
+    opens, scrolls, survives a live v5 refresh and 320x240 resize, and closes
+    through Escape and Alt+Slash without terminal bytes or workspace actions;
+    subsequent `a` and `b` reach the same Orbit Session. Native AT-SPI
+    traversal finds one modal, focusable dialog, every group, the fixed rows,
+    and both live Agent/Project rows with their accessible names; the focused
+    source projection is protected by its AccessKit regression. Every Eon
+    product process identity observed at proof start survives. Reproduction
+    inputs, logs, accessibility tree, and captures are in
+    `~/.local/state/eon/proofs/ven-toggleable-shortcut-viewer-s41-2026-09-12/`.
+- **Open proof:** Commit and accept the exact Venus source before promoting this
+  contract to Proved. Eon must then reserve Alt+Slash and prove the installed
+  full-product interaction in `eon-deliver-native-shortcut-viewer-rif`. Apple
+  Silicon macOS remains under its separately approved proof chain.
+
 ## Rules
 
 - Each contract uses one `## VEN-CN — Name` heading and the required fields

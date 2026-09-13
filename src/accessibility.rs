@@ -1,5 +1,6 @@
 use crate::{
-    CellMetrics, MAX_LINK_BYTES, Scene, SceneRect, WorkspaceFocus, WorkspaceScene,
+    CellMetrics, MAX_LINK_BYTES, Scene, SceneRect, ShortcutViewerScene, WorkspaceFocus,
+    WorkspaceScene,
     scene::{AccessiblePosition, AccessibleRow, AccessibleSelection, AccessibleText},
 };
 use accesskit::{
@@ -18,9 +19,12 @@ const CONTENT: NodeId = NodeId(1);
 const STATUS: NodeId = NodeId(2);
 const TAB_LIST: NodeId = NodeId(3);
 const PANE_PANEL: NodeId = NodeId(4);
+const SHORTCUT_DIALOG: NodeId = NodeId(5);
 // Scene rows are u16, so this range cannot collide with fixed or text-run nodes.
 const WORKSPACE_NODE_START: u64 = 1 << 32;
 const LINK_NODE_START: u64 = 1 << 48;
+const SHORTCUT_NODE_START: u64 = 1 << 56;
+const SHORTCUT_GROUP_STRIDE: u64 = 1 << 8;
 
 #[derive(Clone, Debug)]
 struct AccessibleLink {
@@ -42,6 +46,7 @@ struct Snapshot {
     metrics: CellMetrics,
     columns: Option<u16>,
     workspace: Option<WorkspaceScene>,
+    shortcut_viewer: Option<ShortcutViewerScene>,
     workspace_focus: WorkspaceFocus,
     tab_ids: HashMap<String, NodeId>,
     pane_ids: HashMap<String, NodeId>,
@@ -62,6 +67,7 @@ impl Snapshot {
             metrics: CellMetrics::for_scale(1.0),
             columns: None,
             workspace: None,
+            shortcut_viewer: None,
             workspace_focus: WorkspaceFocus::Terminal,
             tab_ids: HashMap::new(),
             pane_ids: HashMap::new(),
@@ -148,6 +154,50 @@ impl Snapshot {
         let mut root = Node::new(Role::Window);
         root.set_label(self.title.as_str());
         root.set_bounds(bounds(self.size));
+        if let Some(viewer) = &self.shortcut_viewer {
+            root.set_children(vec![SHORTCUT_DIALOG]);
+            let mut dialog = Node::new(Role::Dialog);
+            dialog.set_label("Eon shortcuts");
+            dialog.set_description(
+                "Native Eon surface shortcuts. Use arrows or Page Up and Page Down to scroll; press Escape or Alt+Slash to close.",
+            );
+            dialog.set_bounds(rect(viewer.bounds));
+            dialog.set_modal();
+            dialog.set_clips_children();
+            let mut nodes = vec![(WINDOW, root)];
+            let mut group_ids = Vec::with_capacity(viewer.groups.len());
+            for (group_index, group) in viewer.groups.iter().enumerate() {
+                let group_id =
+                    NodeId(SHORTCUT_NODE_START + group_index as u64 * SHORTCUT_GROUP_STRIDE);
+                group_ids.push(group_id);
+                let mut group_node = Node::new(Role::Group);
+                group_node.set_label(group.title.as_str());
+                if let Some(bounds) = group.heading.intersection(viewer.content) {
+                    group_node.set_bounds(rect(bounds));
+                }
+                let row_ids = (0..group.rows.len())
+                    .map(|index| NodeId(group_id.0 + index as u64 + 1))
+                    .collect::<Vec<_>>();
+                group_node.set_children(row_ids.clone());
+                nodes.push((group_id, group_node));
+                for (row, id) in group.rows.iter().zip(row_ids) {
+                    let mut node = Node::new(Role::Label);
+                    node.set_value(format!("{} — {}", row.shortcut, row.action));
+                    if let Some(bounds) = row.rect.intersection(viewer.content) {
+                        node.set_bounds(rect(bounds));
+                    }
+                    nodes.push((id, node));
+                }
+            }
+            dialog.set_children(group_ids);
+            nodes.push((SHORTCUT_DIALOG, dialog));
+            return TreeUpdate {
+                nodes,
+                tree: Some(Tree::new(WINDOW)),
+                tree_id: TreeId::ROOT,
+                focus: SHORTCUT_DIALOG,
+            };
+        }
         let status_alert = terminal && !self.status.is_empty();
         root.set_children(if self.workspace.is_some() {
             let mut children = vec![TAB_LIST, PANE_PANEL];
@@ -345,6 +395,9 @@ impl Snapshot {
     }
 
     fn action_target(&self, target: NodeId, action: Action) -> Option<AccessibilityTarget> {
+        if self.shortcut_viewer.is_some() {
+            return None;
+        }
         if let Some(link) = self
             .links
             .iter()
@@ -415,6 +468,7 @@ impl Accessibility {
         adapter: &mut Adapter,
         scene: Option<&Scene>,
         workspace: Option<&WorkspaceScene>,
+        shortcut_viewer: Option<&ShortcutViewerScene>,
         workspace_focus: WorkspaceFocus,
         status: &str,
         scrollback_label: Option<&str>,
@@ -429,6 +483,7 @@ impl Accessibility {
             snapshot.status = status.to_owned();
             snapshot.scrollback_label = scrollback_label.map(str::to_owned);
             snapshot.set_workspace(workspace);
+            snapshot.shortcut_viewer = shortcut_viewer.cloned();
             snapshot.workspace_focus = workspace_focus;
             if let Some(scene) = scene {
                 snapshot.title = if scene.title.is_empty() {
@@ -560,7 +615,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Color, DrawCell, DrawRow, DrawStyle, PaneMetadata};
+    use crate::{Color, DrawCell, DrawRow, DrawStyle, PaneMetadata, ShortcutGroup, ShortcutRow};
     use eon_workspace_protocol::v5::{
         Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Snapshot as WorkspaceSnapshot, Tab,
     };
@@ -671,6 +726,36 @@ mod tests {
                 }],
             }],
         }
+    }
+
+    #[test]
+    fn shortcut_viewer_replaces_terminal_tree_with_a_focused_dialog() {
+        let size = PhysicalSize::new(320, 180);
+        let viewer = ShortcutViewerScene::new(
+            vec![ShortcutGroup::new(
+                "Host",
+                vec![ShortcutRow::new("Alt+/", "Show or close shortcuts")],
+            )],
+            size,
+            CellMetrics::for_scale(1.0),
+            0.0,
+        );
+        let mut snapshot = Snapshot::new(size);
+        snapshot.shortcut_viewer = Some(viewer);
+        let update = snapshot.tree();
+
+        assert_eq!(node(&update, WINDOW).children(), &[SHORTCUT_DIALOG]);
+        assert_eq!(node(&update, SHORTCUT_DIALOG).role(), Role::Dialog);
+        assert!(node(&update, SHORTCUT_DIALOG).is_modal());
+        assert_eq!(update.focus, SHORTCUT_DIALOG);
+        tree_node_id(&update, "Host");
+        assert!(
+            update
+                .nodes
+                .iter()
+                .any(|(_, node)| { node.value() == Some("Alt+/ — Show or close shortcuts") })
+        );
+        assert_eq!(snapshot.action_target(CONTENT, Action::Focus), None);
     }
 
     #[test]

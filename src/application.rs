@@ -30,15 +30,16 @@ use winit::{
     dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
     event::{ElementState, Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::{Key, KeyCode, PhysicalKey},
     window::{CursorIcon, UserAttentionType, Window, WindowAttributes, WindowId},
 };
 use yazelix_venus::{
     Accessibility, AccessibilityTarget, CellMetrics, ClipboardEffect, Color, ConnectionState,
     FontSettings, FontSetup, Hyperlink, InputState, LocalNoticeSource, MAX_LINK_BYTES,
     MetadataEvent, MetadataTransport, ModelError, PaneMetadata, PresentOutcome, Renderer, Scene,
-    ScenePreview, SceneRect, SessionModel, Transport, TransportEvent, WorkspaceEvent,
-    WorkspaceFocus, WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, active_popup,
+    ScenePreview, SceneRect, SessionModel, ShortcutGroup, ShortcutRow, ShortcutViewerScene,
+    Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel,
+    WorkspaceScene, WorkspaceTransport, active_popup,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -492,10 +493,383 @@ fn link_copy_shortcut(
     selected: bool,
     current: bool,
 ) -> bool {
-    key == PhysicalKey::Code(KeyCode::KeyC)
-        && modifiers == session::Modifiers::CTRL.union(session::Modifiers::SHIFT)
+    native_key_shortcut(key, modifiers)
+        .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::Copy)
         && !selected
         && current
+}
+
+fn paste_shortcut(key: &Key, physical_key: PhysicalKey, modifiers: session::Modifiers) -> bool {
+    matches!(key, Key::Named(winit::keyboard::NamedKey::Paste))
+        || native_key_shortcut(physical_key, modifiers)
+            .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::Paste)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeShortcutAction {
+    ToggleViewer,
+    FocusTabPosition,
+    Focus(WorkspaceDirection),
+    Move(WorkspaceDirection),
+    CreatePane,
+    CreateTab,
+    CloseTab,
+    CycleFocus,
+    ReturnToTerminal,
+    TraverseChrome(WorkspaceDirection),
+    Copy,
+    Paste,
+    OpenLink,
+}
+
+#[derive(Clone, Copy)]
+enum NativeShortcutTrigger {
+    Key(KeyCode, session::Modifiers),
+    AltDigits,
+    Paste,
+    CtrlClick,
+}
+
+impl NativeShortcutTrigger {
+    fn display_label(self) -> String {
+        match self {
+            Self::Key(code, modifiers) => {
+                physical_shortcut_label(wire_modifiers(modifiers), &format!("{code:?}"))
+            }
+            Self::AltDigits => "Alt+1…9 / Alt+0".into(),
+            Self::Paste => "Ctrl+Shift+V or Paste".into(),
+            Self::CtrlClick => "Ctrl+click".into(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NativeShortcut {
+    group: &'static str,
+    label: &'static str,
+    trigger: NativeShortcutTrigger,
+    action: NativeShortcutAction,
+}
+
+const ALT_SHIFT: session::Modifiers = session::Modifiers::ALT.union(session::Modifiers::SHIFT);
+const CTRL_ALT: session::Modifiers = session::Modifiers::CTRL.union(session::Modifiers::ALT);
+const CTRL_SHIFT: session::Modifiers = session::Modifiers::CTRL.union(session::Modifiers::SHIFT);
+static FIXED_SHORTCUTS: &[NativeShortcut] = &[
+    NativeShortcut {
+        group: "Navigate",
+        label: "Focus tab by position",
+        trigger: NativeShortcutTrigger::AltDigits,
+        action: NativeShortcutAction::FocusTabPosition,
+    },
+    NativeShortcut::key(
+        "Navigate",
+        "Focus previous tab",
+        KeyCode::KeyH,
+        session::Modifiers::ALT,
+        NativeShortcutAction::Focus(WorkspaceDirection::Left),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Focus next tab",
+        KeyCode::KeyL,
+        session::Modifiers::ALT,
+        NativeShortcutAction::Focus(WorkspaceDirection::Right),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Focus pane above",
+        KeyCode::KeyK,
+        session::Modifiers::ALT,
+        NativeShortcutAction::Focus(WorkspaceDirection::Up),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Focus pane below",
+        KeyCode::KeyJ,
+        session::Modifiers::ALT,
+        NativeShortcutAction::Focus(WorkspaceDirection::Down),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Cycle terminal, tabs, and panes",
+        KeyCode::F6,
+        session::Modifiers::empty(),
+        NativeShortcutAction::CycleFocus,
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Return focus to the terminal",
+        KeyCode::Escape,
+        session::Modifiers::empty(),
+        NativeShortcutAction::ReturnToTerminal,
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Previous tab while tabs are focused",
+        KeyCode::ArrowLeft,
+        session::Modifiers::empty(),
+        NativeShortcutAction::TraverseChrome(WorkspaceDirection::Left),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Next tab while tabs are focused",
+        KeyCode::ArrowRight,
+        session::Modifiers::empty(),
+        NativeShortcutAction::TraverseChrome(WorkspaceDirection::Right),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Previous pane while panes are focused",
+        KeyCode::ArrowUp,
+        session::Modifiers::empty(),
+        NativeShortcutAction::TraverseChrome(WorkspaceDirection::Up),
+    ),
+    NativeShortcut::key(
+        "Navigate",
+        "Next pane while panes are focused",
+        KeyCode::ArrowDown,
+        session::Modifiers::empty(),
+        NativeShortcutAction::TraverseChrome(WorkspaceDirection::Down),
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Create pane",
+        KeyCode::KeyM,
+        session::Modifiers::ALT,
+        NativeShortcutAction::CreatePane,
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Create tab",
+        KeyCode::KeyT,
+        ALT_SHIFT,
+        NativeShortcutAction::CreateTab,
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Close active tab",
+        KeyCode::KeyW,
+        ALT_SHIFT,
+        NativeShortcutAction::CloseTab,
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Move tab left",
+        KeyCode::KeyH,
+        CTRL_ALT,
+        NativeShortcutAction::Move(WorkspaceDirection::Left),
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Move tab right",
+        KeyCode::KeyL,
+        CTRL_ALT,
+        NativeShortcutAction::Move(WorkspaceDirection::Right),
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Move pane up",
+        KeyCode::KeyK,
+        CTRL_ALT,
+        NativeShortcutAction::Move(WorkspaceDirection::Up),
+    ),
+    NativeShortcut::key(
+        "Tabs and panes",
+        "Move pane down",
+        KeyCode::KeyJ,
+        CTRL_ALT,
+        NativeShortcutAction::Move(WorkspaceDirection::Down),
+    ),
+    NativeShortcut::key(
+        "Host",
+        "Show or close shortcuts",
+        KeyCode::Slash,
+        session::Modifiers::ALT,
+        NativeShortcutAction::ToggleViewer,
+    ),
+    NativeShortcut::key(
+        "Host",
+        "Copy selected text or focused link",
+        KeyCode::KeyC,
+        CTRL_SHIFT,
+        NativeShortcutAction::Copy,
+    ),
+    NativeShortcut {
+        group: "Host",
+        label: "Paste",
+        trigger: NativeShortcutTrigger::Paste,
+        action: NativeShortcutAction::Paste,
+    },
+    NativeShortcut {
+        group: "Host",
+        label: "Open link",
+        trigger: NativeShortcutTrigger::CtrlClick,
+        action: NativeShortcutAction::OpenLink,
+    },
+];
+
+impl NativeShortcut {
+    const fn key(
+        group: &'static str,
+        label: &'static str,
+        code: KeyCode,
+        modifiers: session::Modifiers,
+        action: NativeShortcutAction,
+    ) -> Self {
+        Self {
+            group,
+            label,
+            trigger: NativeShortcutTrigger::Key(code, modifiers),
+            action,
+        }
+    }
+
+    fn matches_key(self, key: PhysicalKey, modifiers: session::Modifiers) -> bool {
+        match self.trigger {
+            NativeShortcutTrigger::Key(code, expected) => {
+                key == PhysicalKey::Code(code) && modifiers == expected
+            }
+            NativeShortcutTrigger::AltDigits => {
+                modifiers == session::Modifiers::ALT
+                    && matches!(
+                        key,
+                        PhysicalKey::Code(
+                            KeyCode::Digit0
+                                | KeyCode::Digit1
+                                | KeyCode::Digit2
+                                | KeyCode::Digit3
+                                | KeyCode::Digit4
+                                | KeyCode::Digit5
+                                | KeyCode::Digit6
+                                | KeyCode::Digit7
+                                | KeyCode::Digit8
+                                | KeyCode::Digit9
+                        )
+                    )
+            }
+            NativeShortcutTrigger::Paste => {
+                key == PhysicalKey::Code(KeyCode::Paste)
+                    || key == PhysicalKey::Code(KeyCode::KeyV) && modifiers == CTRL_SHIFT
+            }
+            NativeShortcutTrigger::CtrlClick => false,
+        }
+    }
+
+    fn matches_pointer(self, button: MouseButton, modifiers: session::Modifiers) -> bool {
+        matches!(self.trigger, NativeShortcutTrigger::CtrlClick)
+            && button == MouseButton::Left
+            && modifiers == session::Modifiers::CTRL
+    }
+}
+
+fn native_key_shortcut(
+    key: PhysicalKey,
+    modifiers: session::Modifiers,
+) -> Option<&'static NativeShortcut> {
+    FIXED_SHORTCUTS
+        .iter()
+        .find(|shortcut| shortcut.matches_key(key, modifiers))
+}
+
+fn native_pointer_shortcut(
+    button: MouseButton,
+    modifiers: session::Modifiers,
+) -> Option<&'static NativeShortcut> {
+    FIXED_SHORTCUTS
+        .iter()
+        .find(|shortcut| shortcut.matches_pointer(button, modifiers))
+}
+
+fn shortcut_groups(entries: &[eon_workspace_protocol::v5::PopupEntry]) -> Vec<ShortcutGroup> {
+    let mut groups = ["Navigate", "Tabs and panes", "Host"]
+        .into_iter()
+        .map(|title| {
+            ShortcutGroup::new(
+                title,
+                FIXED_SHORTCUTS
+                    .iter()
+                    .filter(|shortcut| shortcut.group == title)
+                    .map(|shortcut| {
+                        ShortcutRow::new(shortcut.trigger.display_label(), shortcut.label)
+                    })
+                    .collect(),
+            )
+        })
+        .collect::<Vec<_>>();
+    if !entries.is_empty() {
+        groups.insert(
+            2,
+            ShortcutGroup::new(
+                "Projects and tools",
+                entries
+                    .iter()
+                    .map(|entry| {
+                        ShortcutRow::new(
+                            physical_shortcut_label(entry.shortcut.modifiers, &entry.shortcut.key),
+                            entry.label.clone(),
+                        )
+                    })
+                    .collect(),
+            ),
+        );
+    }
+    groups
+}
+
+fn physical_shortcut_label(modifiers: u8, key: &str) -> String {
+    use eon_workspace_protocol::v5 as wire;
+
+    let mut parts = Vec::with_capacity(5);
+    for (bit, label) in [
+        (wire::CTRL, "Ctrl"),
+        (wire::ALT, "Alt"),
+        (wire::SHIFT, "Shift"),
+        (wire::SUPER, "Super"),
+    ] {
+        if modifiers & bit != 0 {
+            parts.push(label);
+        }
+    }
+    parts.push(match key {
+        key if key.starts_with("Key") => &key[3..],
+        key if key.starts_with("Digit") => &key[5..],
+        "ArrowLeft" => "Left",
+        "ArrowRight" => "Right",
+        "ArrowUp" => "Up",
+        "ArrowDown" => "Down",
+        "Backquote" => "`",
+        "Backslash" => "\\",
+        "BracketLeft" => "[",
+        "BracketRight" => "]",
+        "Comma" => ",",
+        "Equal" => "=",
+        "Minus" => "-",
+        "Period" => ".",
+        "Quote" => "'",
+        "Semicolon" => ";",
+        "Slash" => "/",
+        key => key,
+    });
+    parts.join("+")
+}
+
+fn wire_modifiers(modifiers: session::Modifiers) -> u8 {
+    use eon_workspace_protocol::v5 as wire;
+
+    [
+        (session::Modifiers::SHIFT, wire::SHIFT),
+        (session::Modifiers::CTRL, wire::CTRL),
+        (session::Modifiers::ALT, wire::ALT),
+        (session::Modifiers::SUPER, wire::SUPER),
+    ]
+    .into_iter()
+    .fold(0, |bits, (native, shared)| {
+        bits | if modifiers.contains(native) {
+            shared
+        } else {
+            0
+        }
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -612,6 +986,22 @@ struct MetadataObserver {
     metadata: PaneMetadata,
 }
 
+#[derive(Debug, Default)]
+struct ShortcutViewerState {
+    open: bool,
+    scroll: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ShortcutViewerCommand {
+    Toggle,
+    Close,
+    ScrollLines(f32),
+    ScrollPages(f32),
+    Start,
+    End,
+}
+
 struct Application {
     application_id: String,
     orbit_socket: Option<PathBuf>,
@@ -654,6 +1044,7 @@ struct Application {
     window_focused: bool,
     window_occluded: bool,
     workspace_focus: WorkspaceFocus,
+    shortcut_viewer: ShortcutViewerState,
     tab_texts: HashMap<String, (String, f32)>,
     tab_scroll: f32,
     pane_scroll: f32,
@@ -724,6 +1115,7 @@ impl Application {
             window_focused: false,
             window_occluded: false,
             workspace_focus: WorkspaceFocus::Terminal,
+            shortcut_viewer: ShortcutViewerState::default(),
             tab_texts: HashMap::new(),
             tab_scroll: 0.0,
             pane_scroll: 0.0,
@@ -908,6 +1300,111 @@ impl Application {
         })
     }
 
+    fn shortcut_viewer_scene(&self) -> Option<ShortcutViewerScene> {
+        let state = self.window.as_ref()?;
+        self.shortcut_viewer.open.then(|| {
+            let entries = self
+                .workspace_model
+                .snapshot()
+                .map_or(&[][..], |snapshot| snapshot.entries.as_slice());
+            ShortcutViewerScene::new(
+                shortcut_groups(entries),
+                state.renderer.size(),
+                state.renderer.metrics(),
+                self.shortcut_viewer.scroll,
+            )
+        })
+    }
+
+    fn set_shortcut_viewer(&mut self, open: bool) {
+        if self.shortcut_viewer.open == open || open && self.workspace_model.snapshot().is_none() {
+            return;
+        }
+        let was_terminal_focused = terminal_focused(self.window_focused, self.workspace_focus)
+            && !self.shortcut_viewer.open;
+        self.cancel_terminal_scroll();
+        self.cancel_pointer_sequence();
+        self.shortcut_viewer.open = open;
+        self.shortcut_viewer.scroll = 0.0;
+        let is_terminal_focused =
+            terminal_focused(self.window_focused, self.workspace_focus) && !open;
+        let message = self.input.terminal_focus(is_terminal_focused);
+        if was_terminal_focused != is_terminal_focused {
+            self.send(message);
+        }
+        self.refresh_client_view();
+    }
+
+    fn handle_shortcut_viewer_key(&mut self, event: &winit::event::KeyEvent) -> bool {
+        if !self.shortcut_viewer.open && self.workspace_model.snapshot().is_none() {
+            return false;
+        }
+        let command = match event.physical_key {
+            PhysicalKey::Code(code) => shortcut_viewer_command(
+                self.shortcut_viewer.open,
+                code,
+                self.input.modifiers(),
+                event.repeat,
+            ),
+            PhysicalKey::Unidentified(_) => None,
+        };
+        if !self.input.consumes_shortcut(
+            event.physical_key,
+            event.state,
+            event.repeat,
+            self.shortcut_viewer.open || command.is_some(),
+        ) {
+            return false;
+        }
+        if event.state == ElementState::Pressed {
+            match command {
+                Some(ShortcutViewerCommand::Toggle) => {
+                    self.set_shortcut_viewer(!self.shortcut_viewer.open)
+                }
+                Some(ShortcutViewerCommand::Close) => self.set_shortcut_viewer(false),
+                Some(ShortcutViewerCommand::ScrollLines(lines)) => {
+                    let height = self
+                        .window
+                        .as_ref()
+                        .map_or(0.0, |state| state.renderer.metrics().height);
+                    self.scroll_shortcut_viewer(lines * height)
+                }
+                Some(ShortcutViewerCommand::ScrollPages(pages)) => {
+                    let height = self
+                        .shortcut_viewer_scene()
+                        .map_or(0.0, |viewer| viewer.content.height);
+                    self.scroll_shortcut_viewer(pages * height)
+                }
+                Some(ShortcutViewerCommand::Start) => {
+                    self.shortcut_viewer.scroll = 0.0;
+                    self.refresh_client_view();
+                }
+                Some(ShortcutViewerCommand::End) => {
+                    if let Some(viewer) = self.shortcut_viewer_scene() {
+                        self.shortcut_viewer.scroll = viewer.max_scroll;
+                        self.refresh_client_view();
+                    }
+                }
+                None => {}
+            }
+        }
+        true
+    }
+
+    fn scroll_shortcut_viewer(&mut self, pixels: f32) {
+        if !pixels.is_finite() {
+            return;
+        }
+        let Some(viewer) = self.shortcut_viewer_scene() else {
+            return;
+        };
+        let scroll = (viewer.scroll + pixels).clamp(0.0, viewer.max_scroll);
+        if self.shortcut_viewer.scroll != scroll {
+            self.shortcut_viewer.scroll = scroll;
+            self.refresh_client_view();
+        }
+    }
+
     fn terminal_size(&self) -> Option<PhysicalSize<u32>> {
         if self.workspace_model.snapshot().is_some()
             && self.workspace_model.active_attachment().is_none()
@@ -983,10 +1480,12 @@ impl Application {
         if self.workspace_focus == focus {
             return;
         }
-        let was_focused = terminal_focused(self.window_focused, self.workspace_focus);
+        let was_focused = terminal_focused(self.window_focused, self.workspace_focus)
+            && !self.shortcut_viewer.open;
         self.cancel_terminal_scroll();
         self.workspace_focus = focus;
-        let is_focused = terminal_focused(self.window_focused, self.workspace_focus);
+        let is_focused = terminal_focused(self.window_focused, self.workspace_focus)
+            && !self.shortcut_viewer.open;
         if was_focused != is_focused {
             if !is_focused {
                 self.cancel_pointer_sequence();
@@ -1207,11 +1706,12 @@ impl Application {
             PhysicalKey::Unidentified(_) => return focus != WorkspaceFocus::Terminal,
         };
         let modifiers = self.input.modifiers();
+        let fixed = native_key_shortcut(event.physical_key, modifiers);
         let has_terminal = self.workspace_model.active_attachment().is_some();
         let cycles_focus =
-            code == KeyCode::F6 && modifiers == orbit_protocol::session::Modifiers::empty();
-        let returns_to_terminal = code == KeyCode::Escape
-            && modifiers == orbit_protocol::session::Modifiers::empty()
+            fixed.is_some_and(|shortcut| shortcut.action == NativeShortcutAction::CycleFocus);
+        let returns_to_terminal = fixed
+            .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::ReturnToTerminal)
             && focus != WorkspaceFocus::Terminal;
         let tab_index = tab_shortcut_index(code, modifiers);
         let action = match tab_index {
@@ -1236,7 +1736,7 @@ impl Application {
                 .iter()
                 .find(|tab| tab.id == snapshot.active_tab)
                 .is_some_and(|tab| !tab.panes.is_empty());
-        if self.input.consumes_host_shortcut(
+        if self.input.consumes_shortcut(
             event.physical_key,
             event.state,
             event.repeat,
@@ -1267,11 +1767,19 @@ impl Application {
             return false;
         }
         if event.state == ElementState::Pressed {
-            let direction = match (focus, code) {
-                (WorkspaceFocus::Tabs, KeyCode::ArrowLeft) => Some(WorkspaceDirection::Left),
-                (WorkspaceFocus::Tabs, KeyCode::ArrowRight) => Some(WorkspaceDirection::Right),
-                (WorkspaceFocus::Panes, KeyCode::ArrowUp) => Some(WorkspaceDirection::Up),
-                (WorkspaceFocus::Panes, KeyCode::ArrowDown) => Some(WorkspaceDirection::Down),
+            let direction = match (focus, fixed.map(|shortcut| shortcut.action)) {
+                (
+                    WorkspaceFocus::Tabs,
+                    Some(NativeShortcutAction::TraverseChrome(
+                        direction @ (WorkspaceDirection::Left | WorkspaceDirection::Right),
+                    )),
+                ) => Some(direction),
+                (
+                    WorkspaceFocus::Panes,
+                    Some(NativeShortcutAction::TraverseChrome(
+                        direction @ (WorkspaceDirection::Up | WorkspaceDirection::Down),
+                    )),
+                ) => Some(direction),
                 _ => None,
             };
             if let Some(direction) = direction {
@@ -1488,6 +1996,7 @@ impl Application {
     fn link_surface_available(&self, unshifted: bool) -> bool {
         self.window_focused
             && !self.window_occluded
+            && !self.shortcut_viewer.open
             && self.workspace_focus == WorkspaceFocus::Terminal
             && self.workspace_model.notice().is_none()
             && !self.terminal_scroll.active()
@@ -1585,10 +2094,7 @@ impl Application {
         let selected = self.model.scene().is_some_and(Scene::has_selected_content);
         let current = self.focused_link().is_some();
         let recognized = link_copy_shortcut(key, modifiers, selected, current);
-        if !self
-            .input
-            .consumes_host_shortcut(key, state, repeat, recognized)
-        {
+        if !self.input.consumes_shortcut(key, state, repeat, recognized) {
             return false;
         }
         if shortcut_is_ready(state, repeat) {
@@ -1636,6 +2142,8 @@ impl Application {
     }
 
     fn handle_link_button(&mut self, state: ElementState, button: MouseButton) -> bool {
+        let opens_link = native_pointer_shortcut(button, self.input.modifiers())
+            .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::OpenLink);
         if button != MouseButton::Left {
             return false;
         }
@@ -1643,7 +2151,7 @@ impl Application {
             && let Some(pressed) = self.links.pressed.take()
         {
             let released = self.pointer_link();
-            if released == Some(pressed) && self.input.modifiers() == session::Modifiers::CTRL {
+            if released == Some(pressed) && opens_link {
                 self.links.focus = Some(pressed);
                 self.activate_link(false);
             } else {
@@ -1655,9 +2163,7 @@ impl Application {
         }
         if state == ElementState::Pressed {
             self.links.pressed = None;
-            if self.input.modifiers() == session::Modifiers::CTRL
-                && let Some(focus) = self.pointer_link()
-            {
+            if opens_link && let Some(focus) = self.pointer_link() {
                 self.links.focus = Some(focus);
                 self.links.pressed = Some(focus);
                 self.refresh_client_view();
@@ -1677,13 +2183,15 @@ impl Application {
         let link_generation = self.link_scene().map(|(_, identity)| identity.generation);
         let status = self.status();
         let workspace = self.workspace_scene();
+        let shortcut_viewer = self.shortcut_viewer_scene();
         let scrollback_label = self.scrollback_label(workspace.as_ref());
         let workspace_focus = self.workspace_focus;
-        let ime_allowed = ime_allowed(
-            self.window_focused,
-            workspace_focus,
-            self.model.is_attached(),
-        );
+        let ime_allowed = shortcut_viewer.is_none()
+            && ime_allowed(
+                self.window_focused,
+                workspace_focus,
+                self.model.is_attached(),
+            );
         let Some(state) = &mut self.window else {
             return;
         };
@@ -1707,15 +2215,18 @@ impl Application {
             );
         }
         state.window.set_ime_allowed(ime_allowed);
-        state.window.set_cursor(if self.links.focus.is_some() {
-            CursorIcon::Pointer
-        } else {
-            CursorIcon::Default
-        });
+        state
+            .window
+            .set_cursor(if shortcut_viewer.is_none() && self.links.focus.is_some() {
+                CursorIcon::Pointer
+            } else {
+                CursorIcon::Default
+            });
         state.accessibility.update(
             &mut state.adapter,
             self.model.scene(),
             workspace.as_ref(),
+            shortcut_viewer.as_ref(),
             workspace_focus,
             &status,
             scrollback_label.as_deref(),
@@ -2000,6 +2511,7 @@ impl Application {
         };
         let preedit = self.input.preedit();
         let workspace = self.workspace_scene();
+        let shortcut_viewer = self.shortcut_viewer_scene();
         let workspace_focus = self.workspace_focus;
         let candidate = self.presentation_candidate(workspace.as_ref());
         let scroll_offset = self.window.as_ref().map_or(0.0, |state| {
@@ -2021,7 +2533,8 @@ impl Application {
                     && !self.model.scene().is_some_and(Scene::has_selected_content))
         });
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
-        let hovered_header = (self.window_focused
+        let hovered_header = (shortcut_viewer.is_none()
+            && self.window_focused
             && self.links.pointer_inside
             && !self.input.pointer_busy())
         .then(|| {
@@ -2049,6 +2562,7 @@ impl Application {
             self.model.scroll_preview(),
             scroll_offset,
             workspace.as_ref(),
+            shortcut_viewer.as_ref(),
             workspace_focus,
             status,
             self.blink_visible,
@@ -2095,6 +2609,7 @@ impl Application {
                         &mut state.adapter,
                         self.model.scene(),
                         workspace.as_ref(),
+                        shortcut_viewer.as_ref(),
                         workspace_focus,
                         notice,
                         scrollback_label.as_deref(),
@@ -2224,29 +2739,38 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.cancel_terminal_scroll();
                 self.input.set_modifiers(modifiers.state());
-                self.inspect_pointer_link();
+                if !self.shortcut_viewer.open {
+                    self.inspect_pointer_link();
+                }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 self.cancel_terminal_scroll();
                 if self
                     .input
                     .suppresses_retired_key(event.physical_key, event.state, event.repeat)
+                    || self.handle_shortcut_viewer_key(&event)
                     || self.handle_link_copy(event.physical_key, event.state, event.repeat)
                     || self.handle_workspace_key(&event)
                 {
-                } else if self.input.consumes_paste_shortcut(
-                    &event.key_without_modifiers(),
+                } else if self.input.consumes_shortcut(
                     event.physical_key,
                     event.state,
                     event.repeat,
+                    paste_shortcut(
+                        &event.key_without_modifiers(),
+                        event.physical_key,
+                        self.input.modifiers(),
+                    ),
                 ) {
                     if shortcut_is_ready(event.state, event.repeat) {
                         self.paste_clipboard();
                     }
-                } else if self.input.consumes_copy_shortcut(
+                } else if self.input.consumes_shortcut(
                     event.physical_key,
                     event.state,
                     event.repeat,
+                    native_key_shortcut(event.physical_key, self.input.modifiers())
+                        .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::Copy),
                 ) {
                     if copy_is_ready(self.input.is_selecting(), event.state, event.repeat) {
                         self.send_or_defer_selection(
@@ -2262,11 +2786,12 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::Ime(event) => {
                 self.cancel_terminal_scroll();
-                let allowed = ime_allowed(
-                    self.window_focused,
-                    workspace_focus,
-                    self.model.is_attached(),
-                );
+                let allowed = !self.shortcut_viewer.open
+                    && ime_allowed(
+                        self.window_focused,
+                        workspace_focus,
+                        self.model.is_attached(),
+                    );
                 if ime_reaches_terminal(allowed, &event)
                     && let Some(message) =
                         native_ime_message(&mut self.input, &mut self.model, event)
@@ -2284,13 +2809,19 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.links.focus = None;
                     self.cancel_pointer_sequence();
                 }
-                let message = self
-                    .input
-                    .native_focus(focused, terminal_focused(focused, workspace_focus));
+                let message = self.input.native_focus(
+                    focused,
+                    terminal_focused(focused, workspace_focus) && !self.shortcut_viewer.open,
+                );
                 self.send(message);
                 self.refresh_client_view();
             }
             WindowEvent::CursorMoved { position, .. } => {
+                if self.shortcut_viewer.open {
+                    self.cursor = position;
+                    self.links.pointer_inside = true;
+                    return;
+                }
                 let header_at = |position: PhysicalPosition<f64>| {
                     workspace.as_ref().and_then(|scene| {
                         match scene.hit_test(position.x as f32, position.y as f32) {
@@ -2342,6 +2873,9 @@ impl ApplicationHandler<UserEvent> for Application {
                 button,
                 ..
             } => {
+                if self.shortcut_viewer.open {
+                    return;
+                }
                 if button_state == ElementState::Pressed {
                     self.terminal_scroll.cancel();
                     state.renderer.reset_cursor_animation();
@@ -2414,6 +2948,17 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
+                if self.shortcut_viewer.open {
+                    let metrics = state.renderer.metrics();
+                    let pixels = match delta {
+                        MouseScrollDelta::LineDelta(_, vertical) => {
+                            -vertical * metrics.height * 3.0
+                        }
+                        MouseScrollDelta::PixelDelta(position) => -position.y as f32,
+                    };
+                    self.scroll_shortcut_viewer(pixels);
+                    return;
+                }
                 if self.input.is_selecting() {
                     return;
                 }
@@ -2869,39 +3414,46 @@ fn accessibility_workspace_focus(
     queue(CommonAction::FocusId(id)).then_some(focus)
 }
 
+fn shortcut_viewer_command(
+    open: bool,
+    code: KeyCode,
+    modifiers: session::Modifiers,
+    repeat: bool,
+) -> Option<ShortcutViewerCommand> {
+    if !repeat
+        && native_key_shortcut(PhysicalKey::Code(code), modifiers)
+            .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::ToggleViewer)
+    {
+        return Some(ShortcutViewerCommand::Toggle);
+    }
+    if !open || modifiers != session::Modifiers::empty() {
+        return None;
+    }
+    Some(match code {
+        KeyCode::Escape if !repeat => ShortcutViewerCommand::Close,
+        KeyCode::ArrowUp => ShortcutViewerCommand::ScrollLines(-1.0),
+        KeyCode::ArrowDown => ShortcutViewerCommand::ScrollLines(1.0),
+        KeyCode::PageUp => ShortcutViewerCommand::ScrollPages(-1.0),
+        KeyCode::PageDown => ShortcutViewerCommand::ScrollPages(1.0),
+        KeyCode::Home => ShortcutViewerCommand::Start,
+        KeyCode::End => ShortcutViewerCommand::End,
+        _ => return None,
+    })
+}
+
 fn workspace_shortcut(
     code: KeyCode,
     modifiers: orbit_protocol::session::Modifiers,
     active_tab: &str,
 ) -> Option<CommonAction> {
-    use orbit_protocol::session::Modifiers;
-
-    match (modifiers, code) {
-        (Modifiers::ALT, KeyCode::KeyH) => Some(CommonAction::Focus(WorkspaceDirection::Left)),
-        (Modifiers::ALT, KeyCode::KeyL) => Some(CommonAction::Focus(WorkspaceDirection::Right)),
-        (Modifiers::ALT, KeyCode::KeyK) => Some(CommonAction::Focus(WorkspaceDirection::Up)),
-        (Modifiers::ALT, KeyCode::KeyJ) => Some(CommonAction::Focus(WorkspaceDirection::Down)),
-        (Modifiers::ALT, KeyCode::KeyM) => Some(CommonAction::CreatePane),
-        (modifiers, KeyCode::KeyT) if modifiers == Modifiers::ALT.union(Modifiers::SHIFT) => {
-            Some(CommonAction::CreateTab)
-        }
-        (modifiers, KeyCode::KeyH) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(CommonAction::Move(WorkspaceDirection::Left))
-        }
-        (modifiers, KeyCode::KeyL) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(CommonAction::Move(WorkspaceDirection::Right))
-        }
-        (modifiers, KeyCode::KeyK) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(CommonAction::Move(WorkspaceDirection::Up))
-        }
-        (modifiers, KeyCode::KeyJ) if modifiers == Modifiers::CTRL.union(Modifiers::ALT) => {
-            Some(CommonAction::Move(WorkspaceDirection::Down))
-        }
-        (modifiers, KeyCode::KeyW) if modifiers == Modifiers::ALT.union(Modifiers::SHIFT) => {
-            Some(CommonAction::CloseTab {
-                tab: active_tab.into(),
-            })
-        }
+    match native_key_shortcut(PhysicalKey::Code(code), modifiers)?.action {
+        NativeShortcutAction::Focus(direction) => Some(CommonAction::Focus(direction)),
+        NativeShortcutAction::Move(direction) => Some(CommonAction::Move(direction)),
+        NativeShortcutAction::CreatePane => Some(CommonAction::CreatePane),
+        NativeShortcutAction::CreateTab => Some(CommonAction::CreateTab),
+        NativeShortcutAction::CloseTab => Some(CommonAction::CloseTab {
+            tab: active_tab.into(),
+        }),
         _ => None,
     }
 }
@@ -2910,9 +3462,9 @@ fn tab_shortcut_index(
     code: KeyCode,
     modifiers: orbit_protocol::session::Modifiers,
 ) -> Option<usize> {
-    use orbit_protocol::session::Modifiers;
-
-    if modifiers != Modifiers::ALT {
+    if native_key_shortcut(PhysicalKey::Code(code), modifiers)
+        .is_none_or(|shortcut| shortcut.action != NativeShortcutAction::FocusTabPosition)
+    {
         return None;
     }
     match code {
@@ -2936,22 +3488,7 @@ fn popup_shortcut(
     snapshot: &Snapshot,
     terminal_focused: bool,
 ) -> Option<WorkspaceAction> {
-    use eon_workspace_protocol::v5 as wire;
-    use orbit_protocol::session::Modifiers;
-    let normalized = [
-        (Modifiers::SHIFT, wire::SHIFT),
-        (Modifiers::CTRL, wire::CTRL),
-        (Modifiers::ALT, wire::ALT),
-        (Modifiers::SUPER, wire::SUPER),
-    ]
-    .into_iter()
-    .fold(0, |bits, (native, shared)| {
-        bits | if modifiers.contains(native) {
-            shared
-        } else {
-            0
-        }
-    });
+    let normalized = wire_modifiers(modifiers);
     // winit's physical KeyCode names are the canonical names in EONW v5.
     let key = format!("{code:?}");
     let entry = snapshot
@@ -5061,6 +5598,115 @@ mod tests {
             workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT), "t2"),
             None
         );
+    }
+
+    #[test]
+    fn shortcut_viewer_uses_live_rows_and_captures_its_local_sequence() {
+        use orbit_protocol::session::Modifiers;
+
+        let entries = vec![PopupEntry {
+            id: "project".into(),
+            label: "Money ops".into(),
+            shortcut: Shortcut {
+                modifiers: eon_workspace_protocol::v5::ALT,
+                key: "KeyZ".into(),
+            },
+        }];
+        let groups = shortcut_groups(&entries);
+        let rows = groups
+            .iter()
+            .flat_map(|group| &group.rows)
+            .map(|row| (row.shortcut.as_str(), row.action.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            groups
+                .iter()
+                .filter(|group| group.title != "Projects and tools")
+                .map(|group| group.rows.len())
+                .sum::<usize>(),
+            FIXED_SHORTCUTS.len()
+        );
+        for shortcut in FIXED_SHORTCUTS {
+            let display = shortcut.trigger.display_label();
+            assert_eq!(
+                rows.iter()
+                    .filter(|row| **row == (display.as_str(), shortcut.label))
+                    .count(),
+                1,
+                "{}",
+                display
+            );
+            match shortcut.trigger {
+                NativeShortcutTrigger::Key(code, modifiers) => assert!(std::ptr::eq(
+                    native_key_shortcut(PhysicalKey::Code(code), modifiers).unwrap(),
+                    shortcut
+                )),
+                NativeShortcutTrigger::AltDigits => {
+                    for code in [KeyCode::Digit1, KeyCode::Digit9, KeyCode::Digit0] {
+                        assert!(std::ptr::eq(
+                            native_key_shortcut(PhysicalKey::Code(code), Modifiers::ALT).unwrap(),
+                            shortcut
+                        ));
+                    }
+                }
+                NativeShortcutTrigger::Paste => {
+                    for (code, modifiers) in [
+                        (KeyCode::KeyV, CTRL_SHIFT),
+                        (KeyCode::Paste, Modifiers::empty()),
+                    ] {
+                        assert!(std::ptr::eq(
+                            native_key_shortcut(PhysicalKey::Code(code), modifiers).unwrap(),
+                            shortcut
+                        ));
+                    }
+                }
+                NativeShortcutTrigger::CtrlClick => assert!(std::ptr::eq(
+                    native_pointer_shortcut(MouseButton::Left, Modifiers::CTRL).unwrap(),
+                    shortcut
+                )),
+            }
+        }
+        assert_eq!(
+            rows.iter()
+                .filter(|(shortcut, _)| *shortcut == "Alt+/")
+                .count(),
+            1
+        );
+        assert!(rows.contains(&("Ctrl+click", "Open link")));
+        assert!(rows.contains(&("Alt+Z", "Money ops")));
+        assert!(
+            shortcut_groups(&[])
+                .iter()
+                .flat_map(|group| &group.rows)
+                .all(|row| row.action != "Money ops")
+        );
+
+        assert_eq!(
+            shortcut_viewer_command(false, KeyCode::Slash, Modifiers::ALT, false),
+            Some(ShortcutViewerCommand::Toggle)
+        );
+        assert_eq!(
+            shortcut_viewer_command(false, KeyCode::Slash, Modifiers::ALT, true),
+            None
+        );
+        assert_eq!(
+            shortcut_viewer_command(true, KeyCode::Escape, Modifiers::empty(), false),
+            Some(ShortcutViewerCommand::Close)
+        );
+        assert_eq!(
+            shortcut_viewer_command(true, KeyCode::KeyA, Modifiers::empty(), false),
+            None
+        );
+        assert_eq!(
+            workspace_shortcut(KeyCode::Slash, Modifiers::ALT, "t1"),
+            None
+        );
+
+        let mut input = InputState::default();
+        let slash = PhysicalKey::Code(KeyCode::Slash);
+        assert!(input.consumes_shortcut(slash, ElementState::Pressed, false, true));
+        assert!(input.consumes_shortcut(slash, ElementState::Pressed, true, false));
+        assert!(input.consumes_shortcut(slash, ElementState::Released, false, false));
     }
 
     #[test]

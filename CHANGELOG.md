@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an Alt+/ native shortcut viewer for the Eon surface. Fixed Venus
+  bindings share one owner with dispatch, enabled Project/tool rows follow the
+  live Eon catalog, and bounded scrolling keeps the dialog usable at narrow
+  sizes. Escape or Alt+/ closes it without sending terminal input or workspace
+  actions, and AccessKit exposes the grouped rows as a modal help dialog.
+
 - Number workspace tabs by their current position and update those numbers after
   reordering. Alt+1 through Alt+9 select positions 1 through 9; Alt+0 selects
   position 10. Stable Eon tab identities remain internal to actions and
