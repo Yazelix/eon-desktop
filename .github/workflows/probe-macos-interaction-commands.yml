@@ -45,7 +45,7 @@ jobs:
 
           /usr/bin/env -i HOME="$HOME" LC_ALL=en_US.UTF-8 \
             /usr/bin/pbcopy -pboard general < "$probe_dir/rtf"
-          swift -e 'import AppKit; import Darwin; let names = Set((NSPasteboard.general.types ?? []).map(\.rawValue)); print(names.sorted()); if !names.contains(NSPasteboard.PasteboardType.rtf.rawValue) || names.contains(NSPasteboard.PasteboardType.string.rawValue) { exit(1) }'
+          swift -e 'import AppKit; import Darwin; let names = Set((NSPasteboard.general.types ?? []).map(\.rawValue)); print(names.sorted()); if !names.contains(NSPasteboard.PasteboardType.rtf.rawValue) || !names.contains(NSPasteboard.PasteboardType.string.rawValue) { exit(1) }'
 
           uri='https://example.com/eon-native-probe?source=venus&case=argument'
           started=$SECONDS
