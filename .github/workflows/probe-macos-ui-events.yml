@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 25
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      VENUS_SOURCE: c0b74aca27cded517fedd798127af164c83b49f8
+      VENUS_SOURCE: ba93bcf7e103844ddc47a73a7c72ab6a2b06b171
     steps:
       - name: Check out exact Venus candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
