@@ -251,12 +251,14 @@ jobs:
           screencapture -x -l "$window_id" "$proof_dir/scrolled.png"
           kill -0 "$venus_pid"
 
+          "$events" activate "$venus_pid"
+
           swift -e 'import AppKit; NSPasteboard.general.clearContents()'
           "$events" shortcut "$venus_pid" 9
           sleep 1
           test ! -s "$input"
           screencapture -x -l "$window_id" "$proof_dir/empty-paste.png"
-          ! cmp -s "$proof_dir/scrolled.png" "$proof_dir/empty-paste.png"
+          if cmp -s "$proof_dir/scrolled.png" "$proof_dir/empty-paste.png"; then exit 1; fi
 
           swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data([0x89, 0x50, 0x4e, 0x47]), forType: .png))'
           "$events" shortcut "$venus_pid" 9
@@ -269,9 +271,7 @@ jobs:
           sleep 1
           test ! -s "$input"
           screencapture -x -l "$window_id" "$proof_dir/oversize-paste.png"
-          ! cmp -s "$proof_dir/non-text-paste.png" "$proof_dir/oversize-paste.png"
-
-          "$events" activate "$venus_pid"
+          if cmp -s "$proof_dir/non-text-paste.png" "$proof_dir/oversize-paste.png"; then exit 1; fi
 
           PASTE_VALUE=$'paste-é界\n' swift -e 'import AppKit; import Foundation; let p = NSPasteboard.general; p.clearContents(); precondition(p.setString(ProcessInfo.processInfo.environment["PASTE_VALUE"]!, forType: .string))'
           "$events" text "$venus_pid" 0 A
