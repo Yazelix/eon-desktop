@@ -281,8 +281,8 @@ jobs:
           test "$(/usr/bin/pbpaste)" = 'terminal-clipboard-é界'
 
           # shellcheck disable=SC2016
-          window_info=$(VENUS_PID="$venus_pid" swift -e 'import CoreGraphics; import Foundation; let pid = Int32(ProcessInfo.processInfo.environment["VENUS_PID"]!)!; let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)! as! [[String: Any]]; guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid && ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }), let number = window[kCGWindowNumber as String] as? NSNumber, let boundsValue = window[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: boundsValue) else { exit(2) }; print(number.intValue, Int(bounds.midX), Int(bounds.midY), Int(bounds.minX + bounds.width * 0.30), Int(bounds.minX + bounds.width * 0.70))')
-          read -r window_id center_x center_y drag_x1 drag_x2 <<< "$window_info"
+          window_info=$(VENUS_PID="$venus_pid" swift -e 'import CoreGraphics; import Foundation; let pid = Int32(ProcessInfo.processInfo.environment["VENUS_PID"]!)!; let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)! as! [[String: Any]]; guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid && ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }), let number = window[kCGWindowNumber as String] as? NSNumber, let boundsValue = window[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: boundsValue) else { exit(2) }; print(number.intValue, Int(bounds.midX), Int(bounds.midY), Int(bounds.minX + bounds.width * 0.30), Int(bounds.minX + bounds.width * 0.70), Int(bounds.maxY - 10))')
+          read -r window_id center_x center_y drag_x1 drag_x2 notice_y <<< "$window_info"
           test -n "$window_id"
           screencapture -x -l "$window_id" "$proof_dir/initial.png"
 
@@ -299,14 +299,14 @@ jobs:
 
           "$events" drag "$venus_pid" "$drag_x1" "$center_y" "$drag_x2"
           sleep 1
+          "$events" move "$venus_pid" "$center_x" "$notice_y"
+          screencapture -x -l "$window_id" "$proof_dir/selection.png"
           "$events" shortcut "$venus_pid" 8
           sleep 1
           /usr/bin/pbpaste > "$proof_dir/selection.txt"
           test -s "$proof_dir/selection.txt"
           test "$(cat "$proof_dir/selection.txt")" != "$uri"
           grep -Eq 'LINK|LLLL' "$proof_dir/selection.txt"
-          screencapture -x -l "$window_id" "$proof_dir/selection.png"
-
           swift -e 'import AppKit; NSPasteboard.general.clearContents()'
           "$events" shortcut "$venus_pid" 9
           sleep 1
