@@ -5565,15 +5565,16 @@ mod tests {
             link_hint_for(NativePlatform::Linux, target),
             "https://example.com/\\u{202e}abc\nCtrl+click Open · Ctrl+Shift+C Copy"
         );
+        let copy_modifiers = copy_paste_modifiers(NATIVE_PLATFORM);
         assert!(link_copy_shortcut(
             PhysicalKey::Code(KeyCode::KeyC),
-            session::Modifiers::CTRL.union(session::Modifiers::SHIFT),
+            copy_modifiers,
             false,
             true,
         ));
         assert!(!link_copy_shortcut(
             PhysicalKey::Code(KeyCode::KeyC),
-            session::Modifiers::CTRL.union(session::Modifiers::SHIFT),
+            copy_modifiers,
             true,
             true,
         ));
@@ -5588,7 +5589,7 @@ mod tests {
         ] {
             assert!(!link_copy_shortcut(
                 PhysicalKey::Code(key),
-                session::Modifiers::CTRL.union(session::Modifiers::SHIFT),
+                copy_modifiers,
                 false,
                 true,
             ));
