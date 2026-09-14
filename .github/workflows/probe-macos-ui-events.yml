@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 25
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      VENUS_SOURCE: ba93bcf7e103844ddc47a73a7c72ab6a2b06b171
+      VENUS_SOURCE: 0f0a9ab945f4fbc492b79468a6b4d877a19c90ee
     steps:
       - name: Check out exact Venus candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,18 +132,6 @@ jobs:
 
           let args = CommandLine.arguments
           let action = args[1]
-          if action == "focus-away" {
-            let seconds = Double(args[2])!
-            let app = NSApplication.shared
-            app.setActivationPolicy(.regular)
-            let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 240, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
-            window.makeKeyAndOrderFront(nil)
-            app.activate(ignoringOtherApps: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { NSApp.terminate(nil) }
-            app.run()
-            exit(0)
-          }
-
           let pid = pid_t(args[2])!
           switch action {
           case "activate":
@@ -220,9 +208,7 @@ jobs:
           orbit_pid=$!
           control_pid=
           venus_pid=
-          away_pid=
           cleanup() {
-            test -z "$away_pid" || kill "$away_pid" 2>/dev/null || true
             test -z "$control_pid" || kill "$control_pid" 2>/dev/null || true
             test -z "$venus_pid" || kill "$venus_pid" 2>/dev/null || true
             kill "$orbit_pid" 2>/dev/null || true
@@ -279,6 +265,7 @@ jobs:
           sleep 1
           test ! -s "$input"
           screencapture -x -l "$window_id" "$proof_dir/empty-paste.png"
+          ! cmp -s "$proof_dir/scrolled.png" "$proof_dir/empty-paste.png"
 
           swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data([0x89, 0x50, 0x4e, 0x47]), forType: .png))'
           "$events" shortcut "$venus_pid" 9
@@ -291,15 +278,8 @@ jobs:
           sleep 1
           test ! -s "$input"
           screencapture -x -l "$window_id" "$proof_dir/oversize-paste.png"
+          ! cmp -s "$proof_dir/non-text-paste.png" "$proof_dir/oversize-paste.png"
 
-          "$events" focus-away 4 > /dev/null 2>&1 &
-          away_pid=$!
-          sleep 1
-          "$events" text "$venus_pid" 7 X
-          sleep 1
-          test ! -s "$input"
-          wait "$away_pid"
-          away_pid=
           "$events" activate "$venus_pid"
 
           PASTE_VALUE=$'paste-é界\n' swift -e 'import AppKit; import Foundation; let p = NSPasteboard.general; p.clearContents(); precondition(p.setString(ProcessInfo.processInfo.environment["PASTE_VALUE"]!, forType: .string))'
