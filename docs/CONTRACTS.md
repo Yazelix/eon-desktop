@@ -933,8 +933,8 @@ qualified by the identities and boundaries below.
 
 ## VEN-C16 — Native Linux Wayland and Apple Silicon macOS platforms
 
-- **Status:** Proved for x86_64 Linux native Wayland; Apple Silicon macOS has an
-  implemented opaque foundation and remains unproved.
+- **Status:** Proved for x86_64 Linux native Wayland; Apple Silicon macOS has a
+  proved opaque foundation and remains unsupported.
 - **Consumer:** Every packaged Venus application launch.
 - **Trigger:** Build or launch the native application on an approved target.
 - **Result:** Venus uses native Wayland with Vulkan on Linux and the native
@@ -977,17 +977,21 @@ qualified by the identities and boundaries below.
   AccessKit initialization, Metal surface, opaque rendering, and target graph;
   pasteboard, interaction, accessibility acceptance, lifecycle identity,
   transparency/blur, exact Orbit dogfood, and the support claim remain open.
-- **Opaque foundation proof:** `6c4365b0f9fef9f31f2a1377cda6a1f4c45070e6`
+- **Opaque foundation proof:** `af3804a890ce4898f1ebd75eccf44075fc063559`
   - **Environment:** Standard GitHub `macos-15` M1, macOS 15.7.9 build 24G830,
     aarch64, rustc/cargo 1.98.1.
-  - **Evidence:** [Run 34815096985](https://github.com/Yazelix/eon-desktop/actions/runs/34815096985)
+  - **Evidence:** [Run 34819451958](https://github.com/Yazelix/eon-desktop/actions/runs/34819451958)
     passed locked metadata, target-tree assertions, all-target check, native
     build, and a real hidden-to-visible AppKit/AccessKit/Metal launch against
     accepted Orbit runtime `0233f4d34b294a50c5bc7f373859cf4ec04d2414`.
-    Startup admitted an 84 by 27 native-scale grid; a 976 by 650 screenshot
-    captured the deterministic text/color corpus; presentation-control EOF
-    closed Venus cleanly while Orbit remained alive. The ordinary Linux suite
-    passed 126 tests with five native-only checks ignored.
+    With `UID` and `XDG_RUNTIME_DIR` absent, Orbit and Venus found the same
+    effective-UID fallback socket without an explicit socket argument. Startup
+    admitted an 84 by 27 native-scale grid; a 976 by 650 screenshot captured
+    the deterministic text/color corpus (PNG SHA-256
+    `201d443bf2a1f5dd83cf897f37491ef7b4577db9a26b0d8e46ee707cf0b91151`);
+    presentation-control EOF closed Venus cleanly while Orbit remained alive.
+    The exact source also passed the locked Linux suite (131 tests, five
+    native-only checks ignored) and strict local Apple-target Clippy.
   - **Boundary:** This proves only the first opaque foundation child. It does
     not accept the remaining macOS behavior or change VEN-C16 support status.
 
