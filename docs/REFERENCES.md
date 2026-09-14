@@ -623,8 +623,28 @@ keeps its existing empty, UTF-8, and 1 MiB delivery checks. The dependency
 materializes a complete platform string before that bound; the user accepted
 this practical allocation tradeoff. Direct AppKit, runtime Swift/JXA, rich
 clipboard ownership, primary-selection emulation, and a second keymap remain
-rejected. Exact native interaction acceptance remains open until the committed
-candidate runs on M1 hardware.
+rejected.
+
+Hosted M1 run 34832511106 exercised exact Venus source
+`0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` against Orbit runtime
+`0233f4d34b294a50c5bc7f373859cf4ec04d2414` on macOS 15.7.9. Seventy-three
+selected tests, the Apple all-target check, and the native build passed. The
+native window delivered an OSC 52 Unicode value to the general pasteboard,
+copied one hovered URI with Command+C, and sent exact bytes
+`Aé界rrpaste-é界\r` from key text plus Command+V. Presentation-control EOF
+closed Venus with status zero while Orbit stayed alive.
+
+The hosted runner could not accept click/drag selection, focus loss, repeat,
+IME candidate behavior, or product-path Command+click Open. Process-targeted
+mouse button events did not reach winit, and a synthetic focus-away event still
+allowed input. M1 run 34831678536 retained distinct PNG-only and oversized paste
+failure notices and sent no PTY bytes; its empty-paste capture retained stale
+link feedback. Run 34832511106 exposed a proof-harness defect: Bash did not fail
+on negated `cmp`, and its failure screenshots retained that stale feedback. The
+corrected workflow failed before runner allocation in run 34833225890 because
+the account reached its payment or spending limit. Native empty-paste and
+host-access failure notices remain open with the other real-Mac interaction
+checks.
 
 ## Watchlist
 

@@ -125,7 +125,8 @@ ORBF v2 / ORBS v11 using the same dependency-free canonical package.
 
 - **Selected shape:** wl-clipboard-rs 0.9.3 on Linux and target-only arboard
   3.6.1 on macOS, both with default features disabled
-- **Status:** Active on native Linux Wayland; Apple Silicon macOS candidate
+- **Status:** Active on native Linux Wayland; implemented with partial native
+  proof on unsupported Apple Silicon macOS
 - **Owner consequence:** The host reads ordinary clipboard text once after an explicit paste
   shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects through
   Wayland data-control or the general macOS pasteboard. All macOS destinations collapse to
@@ -237,6 +238,14 @@ and raw-display lifecycle for no current Linux contract gap. Handwritten
 Wayland ownership was rejected as unsafe protocol code for one bounded effect.
 A future browser client replaces this isolated effect with the browser
 clipboard API rather than carrying a native backend across the boundary.
+
+M1 run 34832511106 at Venus source
+`0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` proved one Unicode terminal
+clipboard write through arboard and one Unicode Command+V paste into exact
+Orbit input. M1 run 34831678536 displayed distinct failure notices for PNG-only
+and oversized values without sending PTY bytes. Deterministic checks cover
+empty, non-text, oversized, and invalid UTF-8 admission. Native empty-paste and
+host-access failure notices remain open.
 
 ## Eon workspace protocol decision
 

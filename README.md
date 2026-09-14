@@ -69,10 +69,13 @@ cargo run --locked -- /path/to/orbit.sock
 
 On Linux, Venus requires a native Wayland display and fails before presentation
 attachment when one is unavailable. This is the only proved host. The Apple
-Silicon macOS implementation has a native-proved opaque AppKit, AccessKit, and
-Metal foundation plus an unproved native-interaction candidate, but remains
-unsupported until the rest of VEN-C16's proof succeeds. X11, Xwayland, and
-Intel macOS remain unsupported.
+Silicon macOS implementation has a proved opaque AppKit, AccessKit, and Metal
+foundation plus a partial native-interaction proof. M1 evidence covers Unicode
+terminal clipboard writes, Command+C link copy, ordinary and Unicode key text,
+Command+V paste, and supervised exit. Native IME composition, repeat, focus
+loss, click/drag selection, Command+click Open, and empty-paste or host-access
+failure notices remain unaccepted. macOS stays unsupported until VEN-C16 succeeds. X11,
+Xwayland, and Intel macOS remain unsupported.
 
 ### Typography and initial size
 
@@ -109,9 +112,10 @@ These are startup options; Eon owns persistent product configuration.
 ### Hyperlinks
 
 Hover an explicit OSC 8 link to highlight it and preview its actual target.
-Ctrl+left click opens it on Linux; Command+left click is the unproved macOS
+Ctrl+left click opens it on Linux; Command+left click is the unaccepted macOS
 mapping. Ctrl+Shift+C on Linux or Command+C on macOS copies the hovered target
 unless the terminal has selected text, in which case it copies that selection.
+The M1 proof covers Command+C on a hovered link.
 Ordinary clicks retain terminal mouse reporting and selection behavior;
 ordinary URL-looking text is not detected as a link. The accessibility tree
 exposes each current visible target as an Open link followed by a Copy button.
@@ -322,7 +326,10 @@ Terminal programs can also request bounded text writes through Orbit. On Linux,
 Venus sends the standard destination to the ordinary clipboard and sends the
 selection or primary destination to the primary clipboard. The macOS candidate
 uses Command+C and Command+V and maps every destination to the general native
-pasteboard; it does not emulate a primary selection.
+pasteboard; it does not emulate a primary selection. M1 proof covers one
+Unicode terminal clipboard write, one Unicode Command+V paste, and visible
+rejection of PNG-only and oversized values. Native empty-paste and host-access
+failure notices remain unaccepted.
 
 ## Architecture and evidence
 
@@ -357,10 +364,12 @@ background images, plugins, remote and web access, packaging, and distribution
 are outside this slice.
 
 The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
-with native Wayland and Vulkan. The unproved Apple Silicon host reuses the same
-renderer/model path with AppKit, AccessKit, Metal, and target-only arboard;
-native interaction and pasteboard are implemented but unaccepted, while
-lifecycle acceptance, effects, and composition remain open. The exact
+with native Wayland and Vulkan. The unsupported Apple Silicon host reuses the
+same renderer/model path with AppKit, AccessKit, Metal, and target-only arboard.
+Its opaque foundation and a bounded clipboard/key slice have native M1 proof;
+IME, repeat, focus loss, selection gestures, Command+click Open, empty-paste and
+host-access failure notices, lifecycle acceptance, effects, and composition
+remain open. The exact
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
 accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
 selection completion, routed native
@@ -377,13 +386,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 389 |
+| README | 398 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,809 |
+| Contracts and references | 1,899 |
 | Memory benchmark report | 158 |
-| Crate decisions | 277 |
+| Crate decisions | 286 |
 | Changelog | 259 |
 | Rust source, including unit tests | 18,307 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 33 |
-| **Total** | **22,489** |
+| **Total** | **22,597** |

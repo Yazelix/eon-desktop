@@ -145,14 +145,14 @@ Their distinct earlier proof identities and remaining limits stay qualified.
 
 ## VEN-C5 — Explicit native hyperlinks
 
-- **Status:** Proved
+- **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
 - **Consumer/trigger:** A Venus user hovers an Orbit-authored OSC 8 link or
   explicitly activates one.
-- **Result:** The hovered link is highlighted and its escaped target is
-  shown with only `Ctrl+click Open` and `Ctrl+Shift+C Copy`. Ctrl+left click opens
-  only when press and release identify the same current presented target.
-  Ctrl+Shift+C copies the current hovered target unless the terminal has selected
-  text, which retains copy precedence. AccessKit exposes each current visible
+- **Result:** The hovered link is highlighted and its escaped target is shown
+  with Open and Copy actions. Linux uses `Ctrl+click` and `Ctrl+Shift+C`; macOS
+  uses `Command+click` and `Command+C`. Opening requires a press and release on
+  the same current presented target. Copy uses the current hovered target unless
+  terminal selection retains precedence. AccessKit exposes each current visible
   target as an Open link followed by a Copy button, both using the native Click
   action. Ordinary terminal clicks, input and selection retain their owners.
 - **Failures:** Revision, attachment, geometry, presentation, focus, occlusion,
@@ -164,15 +164,16 @@ Their distinct earlier proof identities and remaining limits stay qualified.
   accessible notices. No URI is opened on hover or keyboard focus.
 - **Owners:** Orbit owns URI attributes; Scene derives spans; Venus presentation
   identity gates actions; the existing renderer, input, AccessKit status and
-  Wayland clipboard owners project them. Linux `gio open` on the host PATH
+  native clipboard owners project them. Linux `gio open` on the host PATH
   dispatches the exact URI as one argument to the desktop's registered handler.
   One launch runs at a time with a ten-second dispatcher deadline.
 - **Consumes:** Accepted Orbit and `ORB-C6` proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, ORBF v2 / ORBS v11.
 - **Boundary:** No heuristic detection, file/custom-scheme opening, URI rewrite,
   browser embedding, new crate, or protocol change. Host GIO and a registered
-  handler are required for opening; copy remains available without them.
-  Native Linux Wayland only; other platforms remain unsupported.
+  handler are required for Linux opening; copy remains available without them.
+  macOS uses fixed `/usr/bin/open -u` and the general pasteboard. Product-path
+  Command+click and accessibility activation remain unaccepted on macOS.
 - **Proof:** Accepted source
   `3730201d6dd27e15fdcd1a8b0662aa476a587eb6`.
   - **User-accepted simplification:** Nix package
@@ -228,6 +229,11 @@ Their distinct earlier proof identities and remaining limits stay qualified.
     Host-only XDG handler preferences were preserved. Eon's contract index and
     `ven-lq4` record the exact artifacts. Fractional scale and broader compositor
     quality remain unproved.
+  - **Apple Silicon partial proof:** Exact Venus source
+    `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` passed the deterministic
+    shortcut and URI-dispatch checks. M1 run 34832511106 copied an exact hovered
+    URI with Command+C. M1 mechanism run 34820510780 proved `/usr/bin/open -u`
+    dispatch, but product-path Command+click Open remains unaccepted.
 
 The `VEN-C1`, `VEN-C2` and `VEN-C4` proof revisions advance for this exact
 hyperlink slice. Their distinct earlier evidence and listed proof gaps remain
@@ -291,7 +297,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C2 — Native semantic interaction
 
-- **Status:** Proved
+- **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
 - **Consumer:** One focused Venus terminal surface.
 - **Trigger:** Native key, mouse, focus, paste, input-method, or resize activity.
 - **Result:** Venus maps native activity to canonical Orbit semantic input and
@@ -305,7 +311,8 @@ qualified by the identities and boundaries below.
   `c905bf9610581747f1b07565814b501ca66cfaa6` through canonical ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
-  Linux Wayland compositor behavior remain manual quality surfaces.
+  Linux Wayland compositor behavior remain manual quality surfaces. macOS IME
+  composition, repeat, focus loss, and click/drag gestures remain unaccepted.
 - **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
@@ -323,6 +330,11 @@ qualified by the identities and boundaries below.
     `6f919a6e3d2f51b661f76be644a4354a003a3404`,
     `ba7177ca9380f2f5800bcea20da3f81e96b090cd`, and
     `8929c9f9d151641a343813ddeb6005cb9c771286`
+  - **Apple Silicon partial proof:** M1 run 34832511106 at exact Venus source
+    `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` delivered ordinary and Unicode
+    key text plus Command+V as exact Orbit input. The selected deterministic
+    checks cover shared IME, repeat, focus, pointer, and scroll ownership; they
+    do not replace the open real-Mac observations.
 
 ## VEN-C3 — Transient client recovery
 
@@ -407,7 +419,8 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proved
+- **Status:** Proved on x86_64 Linux; Apple Silicon gesture acceptance remains
+  open.
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -457,7 +470,8 @@ qualified by the identities and boundaries below.
     presenting the authoritative completion revision reported by Orbit.
   - A successful selection release writes Orbit's frozen text to both the
     ordinary Wayland clipboard and primary selection. `Ctrl+Shift+C` remains an
-    explicit ordinary-clipboard copy.
+    explicit ordinary-clipboard copy. On macOS, every destination maps to the
+    general pasteboard.
 - **Important failures:** Future authority, stale coordinate- or phase-bound
   input, failed gesture admission, resize, capture loss, lifecycle change,
   terminal-owned routing, history edge, or Orbit rejection cancels synthetic
@@ -476,6 +490,8 @@ qualified by the identities and boundaries below.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
+  Apple Silicon click/drag selection and trackpad gesture quality remain
+  unaccepted.
 - **Scrollback review proof:** `74d22276e9039dc3ee6151d69b9283114ab02ea1`
   - Idle cleanup and rejected input preserve terminal-routing evidence; the
     selected pane label keeps its directory ending beside the count. Existing
@@ -541,6 +557,13 @@ qualified by the identities and boundaries below.
     both clipboard destinations, explicit frozen copy, and busy-workspace
     focus under appends, DEC 2026 batches, and active-screen redraws. The
     separate Eon Input Dogfood launcher remains prior evidence.
+- **Apple Silicon state:** Exact deterministic checks preserve the shared
+  pointer, scroll, selection, and destination owners at source
+  `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee`. M1 run 34832511106 posted
+  process-targeted pointer motion and precise-scroll events while the process
+  and attachment stayed live, but it recorded no gesture result. The runner did
+  not deliver synthetic button events, so native selection and gesture semantics
+  remain open.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -801,8 +824,8 @@ qualified by the identities and boundaries below.
 ## VEN-C10 — Native paste
 
 - **Status:** Partially proved
-- **Consumer:** One attached focused Linux terminal surface.
-- **Trigger:** Native Paste or logical Ctrl+Shift+V.
+- **Consumer:** One attached focused Venus terminal surface.
+- **Trigger:** Native Paste, Linux Ctrl+Shift+V, or macOS Command+V.
 - **Result:** Venus reads ordinary native clipboard text once, admits at most
   1 MiB, and submits exactly one canonical semantic paste to Orbit; Orbit alone
   owns normal and bracketed terminal encoding.
@@ -812,14 +835,23 @@ qualified by the identities and boundaries below.
   and visible failure.
 - **Consumes:** Orbit `ORB-C5` and canonical semantic paste at
   `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`, exact winit 0.30.13, and the
-  accepted Linux native clipboard owner.
+  selected native clipboard owner: wl-clipboard-rs 0.9.3 on Linux or target-only
+  arboard 3.6.1 on macOS.
 - **Boundary:** A hardware Paste key and native Wayland without data-control
-  remain unproved.
+  remain unproved. macOS empty-paste and host-access failure notices, plus focus
+  and overlap behavior, remain unaccepted.
 - **Proof:** `9c56eb17613e10ef7712a1852b049ed63cf22b18`
   - **Environment:** Deterministic checks plus isolated Sway 1.12 Wayland proof
   - **Evidence:** Overlapping shortcuts, layout-independent release pairing,
     multiline Unicode, normal mode, bracketed mode, and reattachment; native
     Sway source `eb67dac509d0c6033e4373caf8c63eb6e4c88868`
+- **Apple Silicon partial proof:** M1 run 34832511106 at exact Venus source
+  `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` delivered Command+V Unicode text
+  as the exact Orbit-owned terminal bytes, including newline-to-carriage-return
+  encoding. M1 run 34831678536 displayed distinct PNG-only and oversized paste
+  failure notices without sending PTY bytes. Deterministic tests cover all
+  admission and failure-notice paths; native empty-paste and host-access failure
+  observations remain open.
 - **Open proof:** Manual Zellij, Helix, and Yazi acceptance remains assigned to
   the user.
 
@@ -855,7 +887,8 @@ qualified by the identities and boundaries below.
 - **Trigger:** Orbit emits one canonical terminal clipboard-write effect.
 - **Result:** Venus delivers it once without storing, replaying, parsing, or
   reconstructing terminal text; Linux standard maps to ordinary clipboard and
-  selection or primary maps to primary selection.
+  selection or primary maps to primary selection. macOS maps every destination
+  to the general pasteboard.
 - **Important failures:** Pre-attachment effect, native failure, invalid
   destination, or Orbit rejection remains bounded and visible without changing
   Scene state or selection-copy behavior.
@@ -863,9 +896,11 @@ qualified by the identities and boundaries below.
   interpretation and text.
 - **Consumes:** Orbit `ORB-C11` through canonical ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c` and the accepted Linux native
-  clipboard owner.
+  clipboard owner; the current ORBS v11 consumer uses target-only arboard 3.6.1
+  on macOS.
 - **Boundary:** Ordinary clipboard delivery, Wayland without data-control, and
-  broader Linux compositor coverage remain unproved.
+  broader Linux compositor coverage remain unproved. macOS primary-selection
+  emulation stays outside scope, and native write-failure UX remains unaccepted.
 - **Proof:** `2d3498258920736eb1bdae2b8869b6547b9735d4`
   - **Environment:** Deterministic Venus checks with accepted x86_64 Linux
     Wayland primary-selection composition
@@ -873,6 +908,10 @@ qualified by the identities and boundaries below.
     preserved selection copy, and exact primary-selection dogfood through Eon
     `0e25ebc2311d7e41edf90c940f8211dd5839bb83` and Eonova
     `4fda9b67b0faa33561624633229135e5e2d579ea`
+- **Apple Silicon partial proof:** M1 run 34832511106 at exact Venus source
+  `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` delivered one OSC 52 Unicode
+  terminal clipboard-write to the general pasteboard. Deterministic tests cover
+  all destination mappings and failure ownership.
 
 ## VEN-C14 — Supervised native presentation lifecycle
 
@@ -934,7 +973,8 @@ qualified by the identities and boundaries below.
 ## VEN-C16 — Native Linux Wayland and Apple Silicon macOS platforms
 
 - **Status:** Proved for x86_64 Linux native Wayland; Apple Silicon macOS has a
-  proved opaque foundation and remains unsupported.
+  proved opaque foundation and a partial native-interaction proof, but remains
+  unsupported.
 - **Consumer:** Every packaged Venus application launch.
 - **Trigger:** Build or launch the native application on an approved target.
 - **Result:** Venus uses native Wayland with Vulkan on Linux and the native
@@ -954,10 +994,14 @@ qualified by the identities and boundaries below.
   `ORB-C14` source proof is
   `0233f4d34b294a50c5bc7f373859cf4ec04d2414`. Target-scoped AppKit/AccessKit
   and Metal features were selected by
-  `ven-qualify-venus-stack-apple-silicon-macos-ili`; no new direct dependency
-  or fork revision was required.
+  `ven-qualify-venus-stack-apple-silicon-macos-ili`; the interaction slice adds
+  target-only arboard 3.6.1 for general-pasteboard text without changing the
+  fork revision.
 - **Boundary:** X11, Xwayland, Intel macOS, signing, notarization, packaging,
-  distribution, and other native platforms remain unsupported.
+  distribution, and other native platforms remain unsupported. Apple Silicon
+  IME composition, repeat, focus loss, click/drag selection, Command+click Open,
+  empty-paste and host-access failure notices, accessibility, lifecycle
+  identity, effects, and Eon composition remain unaccepted.
 - **Linux proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
   - **Environment:** x86_64 Linux native Wayland
   - **Evidence:** Locked format/check/test/Clippy, exact dependency features,
@@ -975,8 +1019,10 @@ qualified by the identities and boundaries below.
   observations, failures, and limitations. Its first implementation child,
   `ven-bring-up-opaque-appkit-metal-g4a`, owns the hidden AppKit window,
   AccessKit initialization, Metal surface, opaque rendering, and target graph;
-  pasteboard, interaction, accessibility acceptance, lifecycle identity,
-  transparency/blur, exact Orbit dogfood, and the support claim remain open.
+  `ven-deliver-macos-input-pasteboard-links-zfw` owns the partial interaction
+  evidence below. The remaining native interactions, accessibility acceptance,
+  lifecycle identity, transparency/blur, exact Orbit dogfood, and support claim
+  stay open.
 - **Opaque foundation proof:** `af3804a890ce4898f1ebd75eccf44075fc063559`
   - **Environment:** Standard GitHub `macos-15` M1, macOS 15.7.9 build 24G830,
     aarch64, rustc/cargo 1.98.1.
@@ -994,6 +1040,30 @@ qualified by the identities and boundaries below.
     native-only checks ignored) and strict local Apple-target Clippy.
   - **Boundary:** This proves only the first opaque foundation child. It does
     not accept the remaining macOS behavior or change VEN-C16 support status.
+- **Native interaction partial proof:**
+  `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee`
+  - **Environment:** Standard GitHub `macos-15` M1, macOS 15.7.9 build 24G830,
+    aarch64, rustc/cargo 1.98.1, exact Orbit runtime
+    `0233f4d34b294a50c5bc7f373859cf4ec04d2414`.
+  - **Evidence:** [Run 34832511106](https://github.com/Yazelix/eon-desktop/actions/runs/34832511106)
+    passed 73 selected tests, the Apple all-target check, and native builds for
+    Venus and Orbit. One AppKit/Metal window delivered an OSC 52 Unicode value
+    to the general pasteboard, copied an exact hovered URI with Command+C, and
+    sent exact bytes `Aé界rrpaste-é界\r` from native key text plus Command+V.
+    Presentation-control EOF closed Venus with status zero while Orbit stayed
+    alive. Run 34831678536 displayed distinct PNG-only and oversized paste
+    failure notices without PTY input. Local Rust 1.96.0 checks passed 74
+    library, 42 application, and 17 integration tests plus strict Linux and
+    Apple-target Clippy.
+  - **Limits:** CI could not deliver mouse-button selection or a reliable focus
+    transition and could not distinguish native repeat from discrete key input.
+    The empty-paste capture retained stale link feedback, and the proof harness
+    used a non-failing negated `cmp`. Corrected run 34833225890 did not receive
+    a runner after GitHub reported a failed payment or spending limit.
+    Native IME, focus loss, repeat, click/drag selection, Command+click Open,
+    empty-paste and host-access failure notices, accessibility, lifecycle
+    identity, effects, and Eon composition remain open. This evidence does not
+    change macOS support status.
 
 ## VEN-C17 — Caller-owned native application identity
 
