@@ -97,10 +97,12 @@ jobs:
       - name: Exercise opaque AppKit and Metal presentation
         run: |
           set -euo pipefail
-          socket="$RUNNER_TEMP/orbit.sock"
-          control="$RUNNER_TEMP/venus-control"
-          log="$RUNNER_TEMP/venus.log"
-          screenshot="$RUNNER_TEMP/venus-macos.png"
+          proof_dir="$RUNNER_TEMP/venus-proof"
+          install -d -m 700 "$proof_dir"
+          socket="$proof_dir/orbit.sock"
+          control="$proof_dir/venus-control"
+          log="$proof_dir/venus.log"
+          screenshot="$proof_dir/venus-macos.png"
           orbit=.proof-deps/eon-sessions-runtime/target/debug/yazelix-orbit
           venus=target/aarch64-apple-darwin/debug/yazelix-venus
           "$orbit" serve "$socket" -- /bin/sh -c 'printf "\033[2J\033[HVENUS APPLE SILICON\nASCII 0123456789\nUnicode: café λ 界 🪐\n\033[31mred \033[32mgreen \033[34mblue\033[0m\n"; exec /bin/sleep 300' &
@@ -157,6 +159,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: venus-opaque-apple-silicon
-          path: ${{ runner.temp }}/venus-macos.png
+          path: ${{ runner.temp }}/venus-proof/venus-macos.png
           if-no-files-found: error
           retention-days: 1
