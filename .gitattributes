@@ -1,1 +1,1 @@
-.github/qualification/*.patch -whitespace
+.github/qualification/apple-silicon-macos.patch whitespace=-blank-at-eol
