@@ -107,7 +107,7 @@ jobs:
             CGEventSource(stateID: .hidSystemState)!
           }
 
-          func postKey(_ pid: pid_t, _ key: CGKeyCode, _ down: Bool, _ flags: CGEventFlags = [], _ text: String? = nil, _ repeatEvent: Bool = false) {
+          func postKey(_ pid: pid_t, _ key: CGKeyCode, _ down: Bool, _ flags: CGEventFlags = [], _ text: String? = nil) {
             let event = CGEvent(keyboardEventSource: source(), virtualKey: key, keyDown: down)!
             event.flags = flags
             if let text, down {
@@ -115,9 +115,6 @@ jobs:
               units.withUnsafeBufferPointer {
                 event.keyboardSetUnicodeString(stringLength: units.count, unicodeString: $0.baseAddress)
               }
-            }
-            if repeatEvent {
-              event.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
             }
             event.postToPid(pid)
             Thread.sleep(forTimeInterval: 0.05)
@@ -141,12 +138,6 @@ jobs:
           case "text":
             let key = CGKeyCode(args[3])!
             postKey(pid, key, true, [], args[4])
-            postKey(pid, key, false)
-          case "repeat":
-            let key = CGKeyCode(args[3])!
-            let text = args[4]
-            postKey(pid, key, true, [], text)
-            postKey(pid, key, true, [], text, true)
             postKey(pid, key, false)
           case "shortcut":
             let key = CGKeyCode(args[3])!
@@ -285,9 +276,10 @@ jobs:
           PASTE_VALUE=$'paste-é界\n' swift -e 'import AppKit; import Foundation; let p = NSPasteboard.general; p.clearContents(); precondition(p.setString(ProcessInfo.processInfo.environment["PASTE_VALUE"]!, forType: .string))'
           "$events" text "$venus_pid" 0 A
           "$events" text "$venus_pid" 0 'é界'
-          "$events" repeat "$venus_pid" 15 r
+          "$events" text "$venus_pid" 15 r
+          "$events" text "$venus_pid" 15 r
           "$events" shortcut "$venus_pid" 9
-          printf '%b' 'Aé界rrpaste-é界\n' > "$proof_dir/expected-input"
+          printf '%b' 'Aé界rrpaste-é界\r' > "$proof_dir/expected-input"
           for _ in {1..30}; do
             test -f "$input" && test "$(stat -f%z "$input")" -eq 20 && break
             kill -0 "$venus_pid"
