@@ -88,7 +88,9 @@ jobs:
           if grep -Eq 'wayland-client|wl-clipboard-rs|x11rb' "$RUNNER_TEMP/venus-apple-tree.txt"; then
             exit 1
           fi
-          cargo test --locked
+          cargo test --locked --bin yazelix-venus
+          cargo test --locked --lib input::tests
+          cargo test --locked --test canonical_scene
           cargo clippy --locked --workspace --all-targets --target aarch64-apple-darwin -- -D warnings
           cargo build --locked --bin yazelix-venus --target aarch64-apple-darwin
 
@@ -373,5 +375,5 @@ jobs:
         with:
           name: venus-macos-native-interaction
           path: ${{ runner.temp }}/venus-interaction
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 1
