@@ -33,19 +33,19 @@ jobs:
           /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/empty"
           test ! -s "$probe_dir/empty"
 
-          swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data([0x89, 0x50, 0x4e, 0x47]), forType: .png)); print(p.types.map(\.rawValue).joined(separator: ","))'
+          swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data([0x89, 0x50, 0x4e, 0x47]), forType: .png)); print((p.types ?? []).map(\.rawValue).joined(separator: ","))'
           /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/non-text"
           test ! -s "$probe_dir/non-text"
 
           printf '%s' '{\rtf1\ansi Venus}' > "$probe_dir/rtf"
-          swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data(#"{\rtf1\ansi Venus}"#.utf8), forType: .rtf)); print(p.types.map(\.rawValue).joined(separator: ","))'
+          swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data(#"{\rtf1\ansi Venus}"#.utf8), forType: .rtf)); print((p.types ?? []).map(\.rawValue).joined(separator: ","))'
           /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/rtf-output"
           cmp "$probe_dir/rtf" "$probe_dir/rtf-output"
           printf 'pbpaste_rtf_fallback_bytes=%s\n' "$(stat -f%z "$probe_dir/rtf-output")"
 
           /usr/bin/env -i HOME="$HOME" LC_ALL=en_US.UTF-8 \
             /usr/bin/pbcopy -pboard general < "$probe_dir/rtf"
-          swift -e 'import AppKit; import Darwin; let names = Set(NSPasteboard.general.types.map(\.rawValue)); print(names.sorted()); if !names.contains(NSPasteboard.PasteboardType.rtf.rawValue) || names.contains(NSPasteboard.PasteboardType.string.rawValue) { exit(1) }'
+          swift -e 'import AppKit; import Darwin; let names = Set((NSPasteboard.general.types ?? []).map(\.rawValue)); print(names.sorted()); if !names.contains(NSPasteboard.PasteboardType.rtf.rawValue) || names.contains(NSPasteboard.PasteboardType.string.rawValue) { exit(1) }'
 
           uri='https://example.com/eon-native-probe?source=venus&case=argument'
           started=$SECONDS
