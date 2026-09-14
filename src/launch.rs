@@ -1,5 +1,9 @@
 use crate::Result;
-use std::{env, ffi::OsString, fs, os::unix::fs::MetadataExt, path::PathBuf};
+#[cfg(target_os = "macos")]
+use std::process::Command;
+use std::{env, ffi::OsString, path::PathBuf};
+#[cfg(target_os = "linux")]
+use std::{fs, os::unix::fs::MetadataExt};
 use yazelix_venus::{Color, FontSettings};
 
 const DEFAULT_CURSOR_TAIL: (Color, f32) = (
@@ -241,8 +245,14 @@ fn default_socket_path() -> Result<PathBuf> {
     }
     #[cfg(target_os = "linux")]
     let uid = fs::metadata("/proc/self")?.uid();
-    #[cfg(not(target_os = "linux"))]
-    let uid: u32 = env::var("UID")?.parse()?;
+    #[cfg(target_os = "macos")]
+    let uid = {
+        let output = Command::new("/usr/bin/id").arg("-u").output()?;
+        if !output.status.success() {
+            return Err(format!("/usr/bin/id -u failed with {}", output.status).into());
+        }
+        std::str::from_utf8(&output.stdout)?.trim().parse::<u32>()?
+    };
     Ok(PathBuf::from(format!(
         "/tmp/yazelix-orbit-{uid}/orbit.sock"
     )))

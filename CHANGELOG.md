@@ -4,9 +4,11 @@
 
 - Establish the unsupported Apple Silicon macOS foundation with target-scoped
   AppKit/AccessKit and Metal dependencies, one shared renderer and model, and a
-  hidden-before-initialization window lifecycle. Native pasteboard operations
-  fail closed until the interaction slice is implemented; Linux keeps its
-  existing Wayland, Vulkan, and clipboard path.
+  hidden-before-initialization window lifecycle. On macOS, default standalone
+  attachment resolves Orbit's effective-UID socket without relying on a `UID`
+  environment variable. Native pasteboard operations fail closed until the
+  interaction slice is implemented; Linux keeps its existing Wayland, Vulkan,
+  and clipboard path.
 
 - Add an Alt+/ native shortcut viewer for the Eon surface. Fixed Venus
   bindings share one owner with dispatch, enabled Project/tool rows follow the

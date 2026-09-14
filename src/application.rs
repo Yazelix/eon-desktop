@@ -1010,6 +1010,10 @@ enum ShortcutViewerCommand {
 }
 
 struct Application {
+    #[cfg_attr(
+        target_os = "macos",
+        expect(dead_code, reason = "macOS application identity is not mapped yet")
+    )]
     application_id: String,
     orbit_socket: Option<PathBuf>,
     workspace_socket: Option<PathBuf>,

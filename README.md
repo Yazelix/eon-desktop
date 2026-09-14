@@ -130,7 +130,7 @@ open.
 
 Without an argument, Venus uses
 `$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
-`/tmp/yazelix-orbit-$UID/orbit.sock` when the runtime directory is unavailable.
+`/tmp/yazelix-orbit-{effective-uid}/orbit.sock` otherwise.
 Only one presentation client can attach to an Orbit session at a time.
 Venus may start before Orbit. A missing, refused, reset, or dropped local socket
 retries after 250 ms, 500 ms, 1 s, 2 s, 4 s, and then every 5 s. Venus retains
@@ -377,8 +377,8 @@ benchmark CSV data, and disposable qualification patches.
 | Contracts and references | 1,775 |
 | Memory benchmark report | 158 |
 | Crate decisions | 268 |
-| Changelog | 255 |
-| Rust source, including unit tests | 18,001 |
+| Changelog | 257 |
+| Rust source, including unit tests | 18,015 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 32 |
-| **Total** | **22,130** |
+| **Total** | **22,146** |
