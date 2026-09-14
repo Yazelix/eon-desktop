@@ -2581,14 +2581,17 @@ impl Application {
         if let Some(notice) = self.workspace_model.notice() {
             return notice.to_owned();
         }
-        if self.model.is_attached()
-            && !self.model.awaiting_current_frame()
-            && let Some(status) = self.link_status()
-        {
-            return status;
-        }
-        if let Some(notice) = self.model.notice() {
+        let links_available = self.model.is_attached() && !self.model.awaiting_current_frame();
+        if let Some(notice) = status_notice(
+            self.model.notice(),
+            links_available
+                .then_some(self.links.notice.as_deref())
+                .flatten(),
+        ) {
             return notice.to_owned();
+        }
+        if links_available && let Some(status) = self.link_status() {
+            return status;
         }
         if self.initial_scale_pending {
             return "Opening terminal.".into();
@@ -3467,6 +3470,10 @@ fn selection_presentation_is_ready(message: &ClientMessage, current: bool) -> bo
 
 fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
     source == LocalNoticeSource::Input
+}
+
+fn status_notice<'a>(model: Option<&'a str>, link: Option<&'a str>) -> Option<&'a str> {
+    model.or(link)
 }
 
 fn terminal_screen(
@@ -6165,6 +6172,14 @@ mod tests {
     fn resize_does_not_dismiss_clipboard_result() {
         assert!(!dismisses_clipboard_notice(LocalNoticeSource::Resize));
         assert!(dismisses_clipboard_notice(LocalNoticeSource::Input));
+    }
+
+    #[test]
+    fn clipboard_failure_outranks_stale_link_notice() {
+        assert_eq!(
+            status_notice(Some("paste failed"), Some("link copied")),
+            Some("paste failed")
+        );
     }
 
     #[test]
