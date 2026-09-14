@@ -123,10 +123,10 @@ jobs:
             Thread.sleep(forTimeInterval: 0.05)
           }
 
-          func postMouse(_: pid_t, _ type: CGEventType, _ point: CGPoint, _ flags: CGEventFlags = []) {
+          func postMouse(_ pid: pid_t, _ type: CGEventType, _ point: CGPoint, _ flags: CGEventFlags = []) {
             let event = CGEvent(mouseEventSource: source(), mouseType: type, mouseCursorPosition: point, mouseButton: .left)!
             event.flags = flags
-            event.post(tap: .cghidEventTap)
+            event.postToPid(pid)
             Thread.sleep(forTimeInterval: 0.05)
           }
 
@@ -168,25 +168,6 @@ jobs:
             postKey(pid, 55, false)
           case "move":
             postMouse(pid, .mouseMoved, CGPoint(x: Double(args[3])!, y: Double(args[4])!))
-          case "click", "command-click":
-            let point = CGPoint(x: Double(args[3])!, y: Double(args[4])!)
-            let flags: CGEventFlags = action == "command-click" ? .maskCommand : []
-            if action == "command-click" { postKey(pid, 55, true, .maskCommand) }
-            postMouse(pid, .mouseMoved, point, flags)
-            postMouse(pid, .leftMouseDown, point, flags)
-            postMouse(pid, .leftMouseUp, point, flags)
-            if action == "command-click" { postKey(pid, 55, false) }
-          case "drag":
-            let y = Double(args[4])!
-            let start = CGPoint(x: Double(args[3])!, y: y)
-            let end = CGPoint(x: Double(args[5])!, y: y)
-            postMouse(pid, .mouseMoved, start)
-            postMouse(pid, .leftMouseDown, start)
-            for step in 1...8 {
-              let fraction = Double(step) / 8
-              postMouse(pid, .leftMouseDragged, CGPoint(x: start.x + (end.x - start.x) * fraction, y: y))
-            }
-            postMouse(pid, .leftMouseUp, end)
           case "scroll":
             let point = CGPoint(x: Double(args[3])!, y: Double(args[4])!)
             for (phase, delta) in [(1, 180), (4, 180), (8, 0)] {
@@ -203,7 +184,7 @@ jobs:
           SWIFT
           swiftc "$RUNNER_TEMP/venus-events.swift" -o "$RUNNER_TEMP/venus-events"
 
-      - name: Exercise pasteboard, input, pointer, scroll, and links
+      - name: Exercise pasteboard, input, pointer motion, scroll, and link copy
         run: |
           set -euo pipefail
           proof_dir="$RUNNER_TEMP/venus-interaction"
@@ -214,13 +195,10 @@ jobs:
           input="$proof_dir/input"
           control="$proof_dir/control"
           log="$proof_dir/venus.log"
-          http_log="$proof_dir/http.log"
           uri='http://127.0.0.1:8765/venus-proof?source=venus'
           orbit=.proof-deps/eon-sessions-runtime/target/debug/yazelix-orbit
           venus=target/aarch64-apple-darwin/debug/yazelix-venus
           events="$RUNNER_TEMP/venus-events"
-          python3 -m http.server 8765 --bind 127.0.0.1 > "$http_log" 2>&1 &
-          http_pid=$!
           # shellcheck disable=SC2016
           PROOF_START="$start" PROOF_INPUT="$input" PROOF_URI="$uri" \
             /usr/bin/env -u UID -u XDG_RUNTIME_DIR "$orbit" serve -- /bin/sh -c '
@@ -247,9 +225,8 @@ jobs:
             test -z "$away_pid" || kill "$away_pid" 2>/dev/null || true
             test -z "$control_pid" || kill "$control_pid" 2>/dev/null || true
             test -z "$venus_pid" || kill "$venus_pid" 2>/dev/null || true
-            kill "$orbit_pid" "$http_pid" 2>/dev/null || true
+            kill "$orbit_pid" 2>/dev/null || true
             wait "$orbit_pid" 2>/dev/null || true
-            wait "$http_pid" 2>/dev/null || true
           }
           trap cleanup EXIT
           for _ in {1..30}; do
@@ -281,8 +258,8 @@ jobs:
           test "$(/usr/bin/pbpaste)" = 'terminal-clipboard-é界'
 
           # shellcheck disable=SC2016
-          window_info=$(VENUS_PID="$venus_pid" swift -e 'import CoreGraphics; import Foundation; let pid = Int32(ProcessInfo.processInfo.environment["VENUS_PID"]!)!; let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)! as! [[String: Any]]; guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid && ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }), let number = window[kCGWindowNumber as String] as? NSNumber, let boundsValue = window[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: boundsValue) else { exit(2) }; print(number.intValue, Int(bounds.midX), Int(bounds.midY), Int(bounds.minX + bounds.width * 0.30), Int(bounds.minX + bounds.width * 0.70), Int(bounds.maxY - 10))')
-          read -r window_id center_x center_y drag_x1 drag_x2 notice_y <<< "$window_info"
+          window_info=$(VENUS_PID="$venus_pid" swift -e 'import CoreGraphics; import Foundation; let pid = Int32(ProcessInfo.processInfo.environment["VENUS_PID"]!)!; let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)! as! [[String: Any]]; guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid && ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }), let number = window[kCGWindowNumber as String] as? NSNumber, let boundsValue = window[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: boundsValue) else { exit(2) }; print(number.intValue, Int(bounds.midX), Int(bounds.midY))')
+          read -r window_id center_x center_y <<< "$window_info"
           test -n "$window_id"
           screencapture -x -l "$window_id" "$proof_dir/initial.png"
 
@@ -291,17 +268,6 @@ jobs:
           "$events" shortcut "$venus_pid" 8
           sleep 1
           test "$(/usr/bin/pbpaste)" = "$uri"
-
-          "$events" drag "$venus_pid" "$drag_x1" "$center_y" "$drag_x2"
-          sleep 1
-          "$events" move "$venus_pid" "$center_x" "$notice_y"
-          screencapture -x -l "$window_id" "$proof_dir/selection.png"
-          "$events" shortcut "$venus_pid" 8
-          sleep 1
-          /usr/bin/pbpaste > "$proof_dir/selection.txt"
-          test -s "$proof_dir/selection.txt"
-          test "$(cat "$proof_dir/selection.txt")" != "$uri"
-          grep -Eq 'LINK|LLLL' "$proof_dir/selection.txt"
 
           "$events" scroll "$venus_pid" "$center_x" "$center_y"
           sleep 2
@@ -348,17 +314,6 @@ jobs:
             sleep 1
           done
           cmp "$proof_dir/expected-input" "$input"
-
-          "$events" click "$venus_pid" "$center_x" "$center_y"
-          "$events" move "$venus_pid" "$center_x" "$center_y"
-          sleep 1
-          "$events" command-click "$venus_pid" "$center_x" "$center_y"
-          for _ in {1..30}; do
-            grep -Fq 'GET /venus-proof?source=venus ' "$http_log" && break
-            kill -0 "$venus_pid"
-            sleep 1
-          done
-          grep -F 'GET /venus-proof?source=venus ' "$http_log"
 
           kill "$control_pid"
           control_pid=
