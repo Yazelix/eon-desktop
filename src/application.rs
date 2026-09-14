@@ -5562,7 +5562,7 @@ mod tests {
         assert!(validate_copy_uri("https://example.com/\n").is_err());
         let target = "https://example.com/\u{202e}abc";
         assert_eq!(
-            link_hint(target),
+            link_hint_for(NativePlatform::Linux, target),
             "https://example.com/\\u{202e}abc\nCtrl+click Open · Ctrl+Shift+C Copy"
         );
         assert!(link_copy_shortcut(
@@ -5779,7 +5779,10 @@ mod tests {
                 key: "KeyZ".into(),
             },
         }];
-        let groups = shortcut_groups(&entries);
+        let groups = shortcut_groups_for(NativePlatform::Linux, &entries);
+        let key_shortcut = |key, modifiers| {
+            native_key_shortcut_for(NativePlatform::Linux, key, modifiers).unwrap()
+        };
         let rows = groups
             .iter()
             .flat_map(|group| &group.rows)
@@ -5805,20 +5808,20 @@ mod tests {
             );
             match shortcut.trigger {
                 NativeShortcutTrigger::Key(code, modifiers) => assert!(std::ptr::eq(
-                    native_key_shortcut(PhysicalKey::Code(code), modifiers).unwrap(),
+                    key_shortcut(PhysicalKey::Code(code), modifiers),
                     shortcut
                 )),
                 NativeShortcutTrigger::AltDigits => {
                     for code in [KeyCode::Digit1, KeyCode::Digit9, KeyCode::Digit0] {
                         assert!(std::ptr::eq(
-                            native_key_shortcut(PhysicalKey::Code(code), Modifiers::ALT).unwrap(),
+                            key_shortcut(PhysicalKey::Code(code), Modifiers::ALT),
                             shortcut
                         ));
                     }
                 }
                 NativeShortcutTrigger::Copy => {
                     assert!(std::ptr::eq(
-                        native_key_shortcut(PhysicalKey::Code(KeyCode::KeyC), CTRL_SHIFT).unwrap(),
+                        key_shortcut(PhysicalKey::Code(KeyCode::KeyC), CTRL_SHIFT),
                         shortcut
                     ));
                 }
@@ -5828,13 +5831,18 @@ mod tests {
                         (KeyCode::Paste, Modifiers::empty()),
                     ] {
                         assert!(std::ptr::eq(
-                            native_key_shortcut(PhysicalKey::Code(code), modifiers).unwrap(),
+                            key_shortcut(PhysicalKey::Code(code), modifiers),
                             shortcut
                         ));
                     }
                 }
                 NativeShortcutTrigger::OpenLink => assert!(std::ptr::eq(
-                    native_pointer_shortcut(MouseButton::Left, Modifiers::CTRL).unwrap(),
+                    native_pointer_shortcut_for(
+                        NativePlatform::Linux,
+                        MouseButton::Left,
+                        Modifiers::CTRL,
+                    )
+                    .unwrap(),
                     shortcut
                 )),
             }
@@ -5848,7 +5856,7 @@ mod tests {
         assert!(rows.contains(&("Ctrl+click", "Open link")));
         assert!(rows.contains(&("Alt+Z", "Money ops")));
         assert!(
-            shortcut_groups(&[])
+            shortcut_groups_for(NativePlatform::Linux, &[])
                 .iter()
                 .flat_map(|group| &group.rows)
                 .all(|row| row.action != "Money ops")
@@ -6298,24 +6306,33 @@ mod tests {
         use NativeClipboard::{Both, Primary, Standard};
 
         assert!(matches!(
-            native_clipboard(&ClipboardEffect::SelectionCopy {
-                location: ClipboardLocation::Selection,
-                text: String::new(),
-            }),
+            native_clipboard_for(
+                NativePlatform::Linux,
+                &ClipboardEffect::SelectionCopy {
+                    location: ClipboardLocation::Selection,
+                    text: String::new(),
+                }
+            ),
             Both
         ));
         assert!(matches!(
-            native_clipboard(&ClipboardEffect::SelectionCopy {
-                location: ClipboardLocation::Standard,
-                text: String::new(),
-            }),
+            native_clipboard_for(
+                NativePlatform::Linux,
+                &ClipboardEffect::SelectionCopy {
+                    location: ClipboardLocation::Standard,
+                    text: String::new(),
+                }
+            ),
             Standard
         ));
         assert!(matches!(
-            native_clipboard(&ClipboardEffect::TerminalWrite {
-                location: ClipboardLocation::Selection,
-                text: String::new(),
-            }),
+            native_clipboard_for(
+                NativePlatform::Linux,
+                &ClipboardEffect::TerminalWrite {
+                    location: ClipboardLocation::Selection,
+                    text: String::new(),
+                }
+            ),
             Primary
         ));
         for effect in [
