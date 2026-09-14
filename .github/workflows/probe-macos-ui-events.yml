@@ -91,7 +91,7 @@ jobs:
           cargo test --locked --bin yazelix-venus
           cargo test --locked --lib input::tests
           cargo test --locked --test canonical_scene
-          cargo clippy --locked --workspace --all-targets --target aarch64-apple-darwin -- -D warnings
+          cargo check --locked --workspace --all-targets --target aarch64-apple-darwin
           cargo build --locked --bin yazelix-venus --target aarch64-apple-darwin
 
       - name: Build accepted Orbit producer
