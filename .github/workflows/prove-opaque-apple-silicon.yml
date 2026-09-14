@@ -50,12 +50,25 @@ jobs:
           git config --global url."file://$GITHUB_WORKSPACE/.proof-deps/eon".insteadOf https://github.com/Yazelix/eon.git
           git config --global url."file://$GITHUB_WORKSPACE/.proof-deps/eon-sessions".insteadOf https://github.com/Yazelix/eon-sessions.git
 
+      - name: Install Zig 0.15.2 for Orbit
+        run: |
+          curl --fail --location --silent --show-error --retry 3 \
+            --proto '=https' --proto-redir '=https' \
+            --output "$RUNNER_TEMP/zig.tar.xz" \
+            https://ziglang.org/download/0.15.2/zig-aarch64-macos-0.15.2.tar.xz
+          printf '%s  %s\n' \
+            '3cc2bab367e185cdfb27501c4b30b1b0653c28d9f73df8dc91488e66ece5fa6b' \
+            "$RUNNER_TEMP/zig.tar.xz" | shasum --algorithm 256 --check
+          tar --extract --xz --file "$RUNNER_TEMP/zig.tar.xz" --directory "$RUNNER_TEMP"
+          printf '%s\n' "$RUNNER_TEMP/zig-aarch64-macos-0.15.2" >> "$GITHUB_PATH"
+
       - name: Check the Apple target
         run: |
           test "$(uname -m)" = arm64
           sw_vers
           rustc --version --verbose
           cargo --version --verbose
+          zig version
           cargo fmt --all -- --check
           cargo metadata --locked --format-version 1 > /dev/null
           cargo tree --locked --target aarch64-apple-darwin > "$RUNNER_TEMP/venus-apple-tree.txt"
