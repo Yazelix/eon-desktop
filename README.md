@@ -70,8 +70,9 @@ cargo run --locked -- /path/to/orbit.sock
 On Linux, Venus requires a native Wayland display and fails before presentation
 attachment when one is unavailable. This is the only proved host. The Apple
 Silicon macOS implementation has a native-proved opaque AppKit, AccessKit, and
-Metal foundation, but remains unsupported until the rest of VEN-C16's proof
-succeeds. X11, Xwayland, and Intel macOS remain unsupported.
+Metal foundation plus an unproved native-interaction candidate, but remains
+unsupported until the rest of VEN-C16's proof succeeds. X11, Xwayland, and
+Intel macOS remain unsupported.
 
 ### Typography and initial size
 
@@ -108,23 +109,24 @@ These are startup options; Eon owns persistent product configuration.
 ### Hyperlinks
 
 Hover an explicit OSC 8 link to highlight it and preview its actual target.
-Ctrl+left click opens it. Ctrl+Shift+C copies the hovered target unless the
-terminal has selected text, in which case it copies that selection. Ordinary
-clicks retain terminal mouse reporting and selection behavior; ordinary
-URL-looking text is not detected as a link. The accessibility tree exposes each
-current visible target as an Open link followed by a Copy button. A changed
-frame retires both. Hover and actions pause during scroll animation and renderer
-recovery.
+Ctrl+left click opens it on Linux; Command+left click is the unproved macOS
+mapping. Ctrl+Shift+C on Linux or Command+C on macOS copies the hovered target
+unless the terminal has selected text, in which case it copies that selection.
+Ordinary clicks retain terminal mouse reporting and selection behavior;
+ordinary URL-looking text is not detected as a link. The accessibility tree
+exposes each current visible target as an Open link followed by a Copy button.
+A changed frame retires both. Hover and actions pause during scroll animation
+and renderer recovery.
 
 Opening accepts ASCII HTTP/HTTPS targets up to 4096 bytes, with a host and
 without credentials. Other schemes, malformed targets and oversized links
 produce an accessible notice. Copy accepts target text up to the same limit
 without control characters, including schemes that cannot be opened.
 The native Linux host must provide `gio` on PATH and a registered HTTP/HTTPS
-handler. Venus passes one exact URI argument without a shell, allows one
-dispatch at a time, and retires a stalled dispatcher after ten seconds.
-Copy does not require GIO. Broader compositor and fractional-scale proof remain
-open.
+handler; macOS uses fixed `/usr/bin/open`. Venus passes one exact URI argument
+without a shell, allows one dispatch at a time, and retires a stalled dispatcher
+after ten seconds. Copy does not require an opener. Broader compositor and
+fractional-scale proof remain open.
 
 ### Attachment
 
@@ -318,7 +320,9 @@ Press Ctrl+Shift+V or the native Paste key to read the ordinary clipboard once.
 Orbit applies normal or bracketed paste from its authoritative terminal mode.
 Terminal programs can also request bounded text writes through Orbit. On Linux,
 Venus sends the standard destination to the ordinary clipboard and sends the
-selection or primary destination to the primary clipboard.
+selection or primary destination to the primary clipboard. The macOS candidate
+uses Command+C and Command+V and maps every destination to the general native
+pasteboard; it does not emulate a primary selection.
 
 ## Architecture and evidence
 
@@ -354,8 +358,9 @@ are outside this slice.
 
 The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
 with native Wayland and Vulkan. The unproved Apple Silicon host reuses the same
-renderer/model path with AppKit, AccessKit, and Metal; native interaction,
-pasteboard, lifecycle acceptance, effects, and composition remain open. The exact
+renderer/model path with AppKit, AccessKit, Metal, and target-only arboard;
+native interaction and pasteboard are implemented but unaccepted, while
+lifecycle acceptance, effects, and composition remain open. The exact
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
 accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
 selection completion, routed native
@@ -372,13 +377,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 384 |
+| README | 389 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,779 |
+| Contracts and references | 1,809 |
 | Memory benchmark report | 158 |
-| Crate decisions | 268 |
-| Changelog | 257 |
-| Rust source, including unit tests | 18,015 |
+| Crate decisions | 277 |
+| Changelog | 258 |
+| Rust source, including unit tests | 18,274 |
 | Rust integration tests | 1,034 |
-| Cargo manifest | 32 |
-| **Total** | **22,150** |
+| Cargo manifest | 33 |
+| **Total** | **22,455** |

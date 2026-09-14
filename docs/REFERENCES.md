@@ -75,9 +75,12 @@ dispatcher without owning the browser lifetime. The existing host `gio open`
 command is the native seam; no crate or packaged dependency is added.
 `xdg-open` was rejected because some paths wait for the browser process itself;
 opener crates and direct portal bindings would add an unnecessary owner here.
-Official Apple `NSWorkspace.open` documentation was inspected as the Bead's
-required platform comparison; that proof remains Linux-only. Any macOS opener
-mapping belongs to the separately gated `VEN-C16` Apple Silicon proof.
+Official Apple `NSWorkspace.open` behavior was inspected for the macOS path.
+Hosted M1 run 34820510780 then proved fixed `/usr/bin/open -u URI` under a
+minimal environment, with immediate handoff. The Apple candidate uses that
+command behind the same validation, timeout, and child-reaping owner; it adds
+no shell, browser lifetime, or dependency. Native acceptance remains gated by
+`VEN-C16`.
 
 Foot is MIT and GLib LGPL-2.1-or-later. This is mechanism inspection, with no
 source copied into Venus. Native GIO, exact clipboard bytes, pointer/keyboard
@@ -595,6 +598,33 @@ documentation confirms the visibility and backing-pixel behavior. The existing
 native lifecycle, scale, resize, and surface recovery. No question remained
 that justified importing Rio or Ghostty architecture, raw AppKit code, a second
 renderer, or a platform framework.
+
+## Apple Silicon native interaction candidate
+
+`ven-deliver-macos-input-pasteboard-links-zfw` inspected the same exact winit
+fork's AppKit event path. It maps Command, Option, and Control independently to
+`SUPER`, `ALT`, and `CTRL`; clears preedit before committed IME text; updates
+pointer position before button and wheel delivery; preserves precise pixel
+deltas and native touch or momentum phases. Venus therefore keeps its shared
+input, IME, pointer, scroll, focus, and repeat owners. Only the existing Copy,
+Paste, and Open-link gestures select macOS Command; custom Alt and Control
+bindings keep their actions and display Apple key names. Apple's keyboard
+guidance supplies the standard Command-C/Command-V convention and the warning
+against repurposing platform shortcuts.
+
+Hosted M1 runs 34820414136 and 34820510780 reject `pbcopy`/`pbpaste`: `pbpaste`
+emitted raw RTF-only bytes as preferred text, while `pbcopy` advertised literal
+RTF-looking terminal text as rich and plain types. Target-only arboard 3.6.1,
+checksum `0348a1c054491f4bfe6ab86a7b6ab1e44e45d899005de92f58b3df180b36ddaf`,
+instead requests and writes only `NSPasteboardTypeString` through the general
+pasteboard. Its native unsafe code remains inside the dependency. Venus maps
+standard, selection, and primary destinations to that one macOS pasteboard and
+keeps its existing empty, UTF-8, and 1 MiB delivery checks. The dependency
+materializes a complete platform string before that bound; the user accepted
+this practical allocation tradeoff. Direct AppKit, runtime Swift/JXA, rich
+clipboard ownership, primary-selection emulation, and a second keymap remain
+rejected. Exact native interaction acceptance remains open until the committed
+candidate runs on M1 hardware.
 
 ## Watchlist
 

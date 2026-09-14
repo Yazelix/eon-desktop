@@ -123,12 +123,14 @@ ORBF v2 / ORBS v11 using the same dependency-free canonical package.
 
 ### Native text clipboard
 
-- **Selected shape:** wl-clipboard-rs 0.9.3 with default features disabled
-- **Status:** Active on native Linux Wayland
+- **Selected shape:** wl-clipboard-rs 0.9.3 on Linux and target-only arboard
+  3.6.1 on macOS, both with default features disabled
+- **Status:** Active on native Linux Wayland; Apple Silicon macOS candidate
 - **Owner consequence:** The host reads ordinary clipboard text once after an explicit paste
   shortcut and writes canonical bounded `CopiedText` and `ClipboardWrite` effects through
-  Wayland data-control. Orbit owns paste encoding and terminal text. Missing data-control
-  remains a visible bounded failure; there is no X11 fallback.
+  Wayland data-control or the general macOS pasteboard. All macOS destinations collapse to
+  that one pasteboard. Orbit owns paste encoding and terminal text. Native unavailability
+  remains a visible bounded failure; there is no X11 or macOS primary-selection fallback.
 
 The ORBF v2 / ORBS v11 advance keeps one direct package with no transitive, native, build,
 feature, or Nix change. Orbit's canonical codec owns bounded metadata values,
@@ -143,7 +145,7 @@ internal dependency decision makes no public-distribution claim.
 Minimal Rust 2024 scratch binaries were resolved and checked on Rust 1.96.0.
 Counts include the scratch root; lock counts include cross-target entries, while
 tree counts are unique Linux normal/build output lines. The implemented lock
-contains 324 packages including Venus, `eon-workspace-protocol`, and
+contains 336 packages including Venus, `eon-workspace-protocol`, and
 `orbit-protocol`; its current Linux
 normal/build tree has 272 unique lines.
 
@@ -175,11 +177,10 @@ normal/build tree has 272 unique lines.
 All four shapes passed `cargo check --locked`. Shared features enable only raw
 window handles, wgpu's standard library, and WGSL. Linux adds Wayland with
 dynamic loading, Vulkan, AccessKit Unix, and wl-clipboard-rs. Apple Silicon
-macOS adds Metal while AccessKit selects its AppKit adapter automatically.
+macOS adds Metal and arboard while AccessKit selects its AppKit adapter automatically.
 Wayland, xkbcommon, the Vulkan loader/driver, font discovery, and AT-SPI/D-Bus
 remain Linux runtime/Nix surfaces. AppKit, Metal, and the system accessibility
-API are native macOS surfaces; the stack adds no C++, Zig, vendored engine, or
-new direct dependency.
+API are native macOS surfaces; the stack adds no C++, Zig, or vendored engine.
 
 Full UI frameworks Iced 0.14.0 and Slint 1.17.1 own unnecessary widget,
 layout, runtime, and renderer policy for one custom surface. Skia-safe 0.99.0
@@ -222,9 +223,17 @@ plus one byte, validates UTF-8, and sends one bounded paste to Orbit. Missing
 data-control remains a visible bounded failure.
 
 External `wl-copy`, `xclip`, and `xsel` commands were rejected as undeclared
-runtime dependencies. Retaining arboard was rejected because its Linux backend
-always carries and can fall back to X11. smithay-clipboard would add another
-package and raw-display lifecycle for no current contract gap. Handwritten
+Linux runtime dependencies. A cross-platform arboard edge was rejected because
+its Linux backend can carry and fall back to X11; the selected edge exists only
+on macOS. There, arboard requests and writes only the general pasteboard string
+type. It adds two active Apple-target packages, though six other platform
+packages enter the shared lock. Reads materialize the complete native string
+before Venus enforces Orbit's 1 MiB delivery limit; the user accepted that
+allocation ceiling for this proof, and no partial value reaches Orbit.
+`pbcopy`/`pbpaste` were rejected after a real M1 probe showed rich-format
+fallback and classification that violate exact plain-text transfer. Direct
+AppKit would add local unsafe code. smithay-clipboard would add another package
+and raw-display lifecycle for no current Linux contract gap. Handwritten
 Wayland ownership was rejected as unsafe protocol code for one bounded effect.
 A future browser client replaces this isolated effect with the browser
 clipboard API rather than carrying a native backend across the boundary.
@@ -245,7 +254,7 @@ inputs. It owns no socket, window, GPU, or terminal handle.
 The native host maps winit events only into `orbit-protocol` values, keeps
 transport outside the renderer, and sends typed wakeups through
 `EventLoopProxy`. The selected shape adds no general async application runtime.
-The same host owns one lazy native clipboard handle. It reads after an explicit
+The same host owns one native clipboard adapter. It reads after an explicit
 paste shortcut and writes the exact `CopiedText` or `ClipboardWrite` effect
 returned by Orbit.
 

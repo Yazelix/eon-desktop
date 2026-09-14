@@ -55,6 +55,18 @@ const MIN_FLING_VELOCITY: f64 = 40.0;
 const MAX_FLING_VELOCITY: f64 = 8_000.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NativePlatform {
+    Linux,
+    Macos,
+}
+
+const NATIVE_PLATFORM: NativePlatform = if cfg!(target_os = "macos") {
+    NativePlatform::Macos
+} else {
+    NativePlatform::Linux
+};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NativeClipboard {
     Standard,
     Primary,
@@ -488,9 +500,15 @@ fn validate_open_uri(uri: &str) -> std::result::Result<(), &'static str> {
 }
 
 fn link_hint(uri: &str) -> String {
+    link_hint_for(NATIVE_PLATFORM, uri)
+}
+
+fn link_hint_for(platform: NativePlatform, uri: &str) -> String {
     format!(
-        "{}\nCtrl+click Open · Ctrl+Shift+C Copy",
-        uri.escape_default()
+        "{}\n{} Open · {} Copy",
+        uri.escape_default(),
+        NativeShortcutTrigger::OpenLink.display_label_for(platform),
+        NativeShortcutTrigger::Copy.display_label_for(platform),
     )
 }
 
@@ -533,19 +551,41 @@ enum NativeShortcutAction {
 enum NativeShortcutTrigger {
     Key(KeyCode, session::Modifiers),
     AltDigits,
+    Copy,
     Paste,
-    CtrlClick,
+    OpenLink,
 }
 
 impl NativeShortcutTrigger {
-    fn display_label(self) -> String {
+    fn display_label_for(self, platform: NativePlatform) -> String {
         match self {
-            Self::Key(code, modifiers) => {
-                physical_shortcut_label(wire_modifiers(modifiers), &format!("{code:?}"))
-            }
-            Self::AltDigits => "Alt+1…9 / Alt+0".into(),
-            Self::Paste => "Ctrl+Shift+V or Paste".into(),
-            Self::CtrlClick => "Ctrl+click".into(),
+            Self::Key(code, modifiers) => physical_shortcut_label_for(
+                platform,
+                wire_modifiers(modifiers),
+                &format!("{code:?}"),
+            ),
+            Self::AltDigits => match platform {
+                NativePlatform::Linux => "Alt+1…9 / Alt+0".into(),
+                NativePlatform::Macos => "Option+1…9 / Option+0".into(),
+            },
+            Self::Copy => physical_shortcut_label_for(
+                platform,
+                wire_modifiers(copy_paste_modifiers(platform)),
+                "KeyC",
+            ),
+            Self::Paste => format!(
+                "{} or Paste",
+                physical_shortcut_label_for(
+                    platform,
+                    wire_modifiers(copy_paste_modifiers(platform)),
+                    "KeyV",
+                )
+            ),
+            Self::OpenLink => physical_shortcut_label_for(
+                platform,
+                wire_modifiers(open_link_modifiers(platform)),
+                "click",
+            ),
         }
     }
 }
@@ -694,13 +734,12 @@ static FIXED_SHORTCUTS: &[NativeShortcut] = &[
         session::Modifiers::ALT,
         NativeShortcutAction::ToggleViewer,
     ),
-    NativeShortcut::key(
-        "Host",
-        "Copy selected text or focused link",
-        KeyCode::KeyC,
-        CTRL_SHIFT,
-        NativeShortcutAction::Copy,
-    ),
+    NativeShortcut {
+        group: "Host",
+        label: "Copy selected text or focused link",
+        trigger: NativeShortcutTrigger::Copy,
+        action: NativeShortcutAction::Copy,
+    },
     NativeShortcut {
         group: "Host",
         label: "Paste",
@@ -710,7 +749,7 @@ static FIXED_SHORTCUTS: &[NativeShortcut] = &[
     NativeShortcut {
         group: "Host",
         label: "Open link",
-        trigger: NativeShortcutTrigger::CtrlClick,
+        trigger: NativeShortcutTrigger::OpenLink,
         action: NativeShortcutAction::OpenLink,
     },
 ];
@@ -731,7 +770,12 @@ impl NativeShortcut {
         }
     }
 
-    fn matches_key(self, key: PhysicalKey, modifiers: session::Modifiers) -> bool {
+    fn matches_key(
+        self,
+        platform: NativePlatform,
+        key: PhysicalKey,
+        modifiers: session::Modifiers,
+    ) -> bool {
         match self.trigger {
             NativeShortcutTrigger::Key(code, expected) => {
                 key == PhysicalKey::Code(code) && modifiers == expected
@@ -754,18 +798,42 @@ impl NativeShortcut {
                         )
                     )
             }
+            NativeShortcutTrigger::Copy => {
+                key == PhysicalKey::Code(KeyCode::KeyC)
+                    && modifiers == copy_paste_modifiers(platform)
+            }
             NativeShortcutTrigger::Paste => {
                 key == PhysicalKey::Code(KeyCode::Paste)
-                    || key == PhysicalKey::Code(KeyCode::KeyV) && modifiers == CTRL_SHIFT
+                    || key == PhysicalKey::Code(KeyCode::KeyV)
+                        && modifiers == copy_paste_modifiers(platform)
             }
-            NativeShortcutTrigger::CtrlClick => false,
+            NativeShortcutTrigger::OpenLink => false,
         }
     }
 
-    fn matches_pointer(self, button: MouseButton, modifiers: session::Modifiers) -> bool {
-        matches!(self.trigger, NativeShortcutTrigger::CtrlClick)
+    fn matches_pointer(
+        self,
+        platform: NativePlatform,
+        button: MouseButton,
+        modifiers: session::Modifiers,
+    ) -> bool {
+        matches!(self.trigger, NativeShortcutTrigger::OpenLink)
             && button == MouseButton::Left
-            && modifiers == session::Modifiers::CTRL
+            && modifiers == open_link_modifiers(platform)
+    }
+}
+
+fn copy_paste_modifiers(platform: NativePlatform) -> session::Modifiers {
+    match platform {
+        NativePlatform::Linux => CTRL_SHIFT,
+        NativePlatform::Macos => session::Modifiers::SUPER,
+    }
+}
+
+fn open_link_modifiers(platform: NativePlatform) -> session::Modifiers {
+    match platform {
+        NativePlatform::Linux => session::Modifiers::CTRL,
+        NativePlatform::Macos => session::Modifiers::SUPER,
     }
 }
 
@@ -773,21 +841,44 @@ fn native_key_shortcut(
     key: PhysicalKey,
     modifiers: session::Modifiers,
 ) -> Option<&'static NativeShortcut> {
+    native_key_shortcut_for(NATIVE_PLATFORM, key, modifiers)
+}
+
+fn native_key_shortcut_for(
+    platform: NativePlatform,
+    key: PhysicalKey,
+    modifiers: session::Modifiers,
+) -> Option<&'static NativeShortcut> {
     FIXED_SHORTCUTS
         .iter()
-        .find(|shortcut| shortcut.matches_key(key, modifiers))
+        .find(|shortcut| shortcut.matches_key(platform, key, modifiers))
 }
 
 fn native_pointer_shortcut(
     button: MouseButton,
     modifiers: session::Modifiers,
 ) -> Option<&'static NativeShortcut> {
+    native_pointer_shortcut_for(NATIVE_PLATFORM, button, modifiers)
+}
+
+fn native_pointer_shortcut_for(
+    platform: NativePlatform,
+    button: MouseButton,
+    modifiers: session::Modifiers,
+) -> Option<&'static NativeShortcut> {
     FIXED_SHORTCUTS
         .iter()
-        .find(|shortcut| shortcut.matches_pointer(button, modifiers))
+        .find(|shortcut| shortcut.matches_pointer(platform, button, modifiers))
 }
 
 fn shortcut_groups(entries: &[eon_workspace_protocol::v5::PopupEntry]) -> Vec<ShortcutGroup> {
+    shortcut_groups_for(NATIVE_PLATFORM, entries)
+}
+
+fn shortcut_groups_for(
+    platform: NativePlatform,
+    entries: &[eon_workspace_protocol::v5::PopupEntry],
+) -> Vec<ShortcutGroup> {
     let mut groups = ["Navigate", "Tabs and panes", "Host"]
         .into_iter()
         .map(|title| {
@@ -797,7 +888,10 @@ fn shortcut_groups(entries: &[eon_workspace_protocol::v5::PopupEntry]) -> Vec<Sh
                     .iter()
                     .filter(|shortcut| shortcut.group == title)
                     .map(|shortcut| {
-                        ShortcutRow::new(shortcut.trigger.display_label(), shortcut.label)
+                        ShortcutRow::new(
+                            shortcut.trigger.display_label_for(platform),
+                            shortcut.label,
+                        )
                     })
                     .collect(),
             )
@@ -812,7 +906,11 @@ fn shortcut_groups(entries: &[eon_workspace_protocol::v5::PopupEntry]) -> Vec<Sh
                     .iter()
                     .map(|entry| {
                         ShortcutRow::new(
-                            physical_shortcut_label(entry.shortcut.modifiers, &entry.shortcut.key),
+                            physical_shortcut_label_for(
+                                platform,
+                                entry.shortcut.modifiers,
+                                &entry.shortcut.key,
+                            ),
                             entry.label.clone(),
                         )
                     })
@@ -823,16 +921,18 @@ fn shortcut_groups(entries: &[eon_workspace_protocol::v5::PopupEntry]) -> Vec<Sh
     groups
 }
 
-fn physical_shortcut_label(modifiers: u8, key: &str) -> String {
+fn physical_shortcut_label_for(platform: NativePlatform, modifiers: u8, key: &str) -> String {
     use eon_workspace_protocol::v5 as wire;
 
     let mut parts = Vec::with_capacity(5);
-    for (bit, label) in [
-        (wire::CTRL, "Ctrl"),
-        (wire::ALT, "Alt"),
-        (wire::SHIFT, "Shift"),
-        (wire::SUPER, "Super"),
-    ] {
+    let labels = match platform {
+        NativePlatform::Linux => ["Ctrl", "Alt", "Shift", "Super"],
+        NativePlatform::Macos => ["Control", "Option", "Shift", "Command"],
+    };
+    for (bit, label) in [wire::CTRL, wire::ALT, wire::SHIFT, wire::SUPER]
+        .into_iter()
+        .zip(labels)
+    {
         if modifiers & bit != 0 {
             parts.push(label);
         }
@@ -900,16 +1000,39 @@ struct LinkOpener {
     deadline: Instant,
 }
 
+fn link_command(platform: NativePlatform, uri: &str) -> Command {
+    let mut command = match platform {
+        NativePlatform::Linux => {
+            let mut command = Command::new("gio");
+            command.args(["open", "--", uri]);
+            command
+        }
+        NativePlatform::Macos => {
+            let mut command = Command::new("/usr/bin/open");
+            command.args(["-u", uri]);
+            command
+        }
+    };
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    command
+}
+
+fn link_spawn_error(platform: NativePlatform) -> &'static str {
+    match platform {
+        NativePlatform::Linux => "Cannot open link: install GIO (gio) on the desktop host PATH.",
+        NativePlatform::Macos => "Cannot open link: /usr/bin/open is unavailable.",
+    }
+}
+
 impl LinkOpener {
     fn start(uri: &str) -> std::result::Result<Self, &'static str> {
         validate_open_uri(uri)?;
-        let child = Command::new("gio")
-            .args(["open", "--", uri])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+        let child = link_command(NATIVE_PLATFORM, uri)
             .spawn()
-            .map_err(|_| "Cannot open link: install GIO (gio) on the desktop host PATH.")?;
+            .map_err(|_| link_spawn_error(NATIVE_PLATFORM))?;
         Ok(Self {
             child,
             deadline: Instant::now() + Duration::from_secs(10),
@@ -931,7 +1054,7 @@ impl LinkOpener {
 
 impl Drop for LinkOpener {
     fn drop(&mut self) {
-        // GIO dispatches a separate handler; retire only our dispatcher, never the browser.
+        // Native dispatchers hand off to a separate handler; retire only our child.
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -3643,10 +3766,11 @@ fn write_native_clipboard(
 }
 
 #[cfg(target_os = "macos")]
-fn write_native_clipboard(_: NativeClipboard, _: String) -> std::result::Result<(), io::Error> {
-    Err(io::Error::other(
-        "macOS pasteboard support is not implemented",
-    ))
+fn write_native_clipboard(
+    _: NativeClipboard,
+    text: String,
+) -> std::result::Result<(), arboard::Error> {
+    arboard::Clipboard::new()?.set_text(text)
 }
 
 #[cfg(target_os = "linux")]
@@ -3659,11 +3783,22 @@ fn read_native_clipboard() -> std::result::Result<impl Read, String> {
 }
 
 #[cfg(target_os = "macos")]
-fn read_native_clipboard() -> std::result::Result<io::Empty, String> {
-    Err("macOS pasteboard support is not implemented".into())
+fn read_native_clipboard() -> std::result::Result<io::Cursor<String>, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|error| error.to_string())?;
+    clipboard
+        .get_text()
+        .map(io::Cursor::new)
+        .map_err(|error| error.to_string())
 }
 
 fn native_clipboard(effect: &ClipboardEffect) -> NativeClipboard {
+    native_clipboard_for(NATIVE_PLATFORM, effect)
+}
+
+fn native_clipboard_for(platform: NativePlatform, effect: &ClipboardEffect) -> NativeClipboard {
+    if platform == NativePlatform::Macos {
+        return NativeClipboard::Standard;
+    }
     match effect {
         ClipboardEffect::SelectionCopy {
             location: ClipboardLocation::Selection,
@@ -5659,7 +5794,7 @@ mod tests {
             FIXED_SHORTCUTS.len()
         );
         for shortcut in FIXED_SHORTCUTS {
-            let display = shortcut.trigger.display_label();
+            let display = shortcut.trigger.display_label_for(NativePlatform::Linux);
             assert_eq!(
                 rows.iter()
                     .filter(|row| **row == (display.as_str(), shortcut.label))
@@ -5681,6 +5816,12 @@ mod tests {
                         ));
                     }
                 }
+                NativeShortcutTrigger::Copy => {
+                    assert!(std::ptr::eq(
+                        native_key_shortcut(PhysicalKey::Code(KeyCode::KeyC), CTRL_SHIFT).unwrap(),
+                        shortcut
+                    ));
+                }
                 NativeShortcutTrigger::Paste => {
                     for (code, modifiers) in [
                         (KeyCode::KeyV, CTRL_SHIFT),
@@ -5692,7 +5833,7 @@ mod tests {
                         ));
                     }
                 }
-                NativeShortcutTrigger::CtrlClick => assert!(std::ptr::eq(
+                NativeShortcutTrigger::OpenLink => assert!(std::ptr::eq(
                     native_pointer_shortcut(MouseButton::Left, Modifiers::CTRL).unwrap(),
                     shortcut
                 )),
@@ -5739,6 +5880,90 @@ mod tests {
         assert!(input.consumes_shortcut(slash, ElementState::Pressed, false, true));
         assert!(input.consumes_shortcut(slash, ElementState::Pressed, true, false));
         assert!(input.consumes_shortcut(slash, ElementState::Released, false, false));
+    }
+
+    #[test]
+    fn macos_uses_command_for_standard_host_actions_only() {
+        use orbit_protocol::session::Modifiers;
+
+        let action = |key, modifiers| {
+            native_key_shortcut_for(NativePlatform::Macos, PhysicalKey::Code(key), modifiers)
+                .map(|shortcut| shortcut.action)
+        };
+        assert_eq!(
+            action(KeyCode::KeyC, Modifiers::SUPER),
+            Some(NativeShortcutAction::Copy)
+        );
+        assert_eq!(
+            action(KeyCode::KeyV, Modifiers::SUPER),
+            Some(NativeShortcutAction::Paste)
+        );
+        assert_eq!(action(KeyCode::KeyC, CTRL_SHIFT), None);
+        assert_eq!(action(KeyCode::KeyV, CTRL_SHIFT), None);
+        assert_eq!(
+            action(KeyCode::KeyH, Modifiers::ALT),
+            Some(NativeShortcutAction::Focus(WorkspaceDirection::Left))
+        );
+        assert_eq!(
+            action(KeyCode::KeyH, CTRL_ALT),
+            Some(NativeShortcutAction::Move(WorkspaceDirection::Left))
+        );
+        assert_eq!(
+            native_pointer_shortcut_for(
+                NativePlatform::Macos,
+                MouseButton::Left,
+                Modifiers::SUPER,
+            )
+            .map(|shortcut| shortcut.action),
+            Some(NativeShortcutAction::OpenLink)
+        );
+        assert!(
+            native_pointer_shortcut_for(NativePlatform::Macos, MouseButton::Left, Modifiers::CTRL,)
+                .is_none()
+        );
+
+        let rows = shortcut_groups_for(NativePlatform::Macos, &[])
+            .into_iter()
+            .flat_map(|group| group.rows)
+            .map(|row| row.shortcut)
+            .collect::<Vec<_>>();
+        for label in [
+            "Command+C",
+            "Command+V or Paste",
+            "Command+click",
+            "Option+H",
+            "Control+Option+H",
+            "Option+/",
+        ] {
+            assert!(rows.iter().any(|row| row == label), "{label}");
+        }
+        assert_eq!(
+            link_hint_for(NativePlatform::Macos, "https://example.com/"),
+            "https://example.com/\nCommand+click Open · Command+C Copy"
+        );
+
+        for (platform, program, arguments) in [
+            (
+                NativePlatform::Linux,
+                "gio",
+                vec!["open", "--", "https://example.com/"],
+            ),
+            (
+                NativePlatform::Macos,
+                "/usr/bin/open",
+                vec!["-u", "https://example.com/"],
+            ),
+        ] {
+            let command = link_command(platform, "https://example.com/");
+            assert_eq!(command.get_program().to_str(), Some(program));
+            assert_eq!(
+                command
+                    .get_args()
+                    .map(|argument| argument.to_str().unwrap())
+                    .collect::<Vec<_>>(),
+                arguments
+            );
+        }
     }
 
     #[test]
@@ -6093,5 +6318,24 @@ mod tests {
             }),
             Primary
         ));
+        for effect in [
+            ClipboardEffect::SelectionCopy {
+                location: ClipboardLocation::Selection,
+                text: String::new(),
+            },
+            ClipboardEffect::SelectionCopy {
+                location: ClipboardLocation::Primary,
+                text: String::new(),
+            },
+            ClipboardEffect::TerminalWrite {
+                location: ClipboardLocation::Standard,
+                text: String::new(),
+            },
+        ] {
+            assert_eq!(
+                native_clipboard_for(NativePlatform::Macos, &effect),
+                Standard
+            );
+        }
     }
 }

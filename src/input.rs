@@ -681,6 +681,21 @@ mod tests {
 
     #[test]
     fn derives_layout_metadata_without_a_keyboard_map() {
+        let mut input = InputState::default();
+        input.set_modifiers(
+            ModifiersState::SHIFT
+                | ModifiersState::CONTROL
+                | ModifiersState::ALT
+                | ModifiersState::SUPER,
+        );
+        assert_eq!(
+            input.modifiers(),
+            Modifiers::SHIFT
+                .union(Modifiers::CTRL)
+                .union(Modifiers::ALT)
+                .union(Modifiers::SUPER)
+        );
+
         let character = |modifiers, text, unshifted: &str| {
             layout_metadata(modifiers, text, Key::Character(unshifted.into()))
         };
