@@ -15,21 +15,51 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 3
     steps:
-      - name: Probe native keyboard automation
+      - name: Probe native event injection
         run: |
           set -euo pipefail
           test "$(uname -m)" = arm64
           sw_vers
-          osascript <<'APPLESCRIPT'
-          tell application "TextEdit"
-            activate
-            make new document with properties {text:""}
-          end tell
-          delay 1
-          tell application "System Events"
-            keystroke "VENUS-UI-PROBE"
-          end tell
-          APPLESCRIPT
-          actual=$(osascript -e 'tell application "TextEdit" to get text of front document')
-          test "$actual" = VENUS-UI-PROBE
-          osascript -e 'tell application "TextEdit" to quit saving no'
+          cat > "$RUNNER_TEMP/event-probe.swift" <<'SWIFT'
+          import Cocoa
+          import CoreGraphics
+
+          final class ProbeView: NSView {
+            override var acceptsFirstResponder: Bool { true }
+
+            override func keyDown(with event: NSEvent) {
+              print("key=\(event.keyCode) command=\(event.modifierFlags.contains(.command))")
+              fflush(stdout)
+              NSApp.terminate(nil)
+            }
+          }
+
+          let app = NSApplication.shared
+          app.setActivationPolicy(.regular)
+          let view = ProbeView(frame: NSRect(x: 0, y: 0, width: 320, height: 160))
+          let window = NSWindow(
+            contentRect: view.frame,
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+          )
+          window.contentView = view
+          window.makeKeyAndOrderFront(nil)
+          window.makeFirstResponder(view)
+
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            for pressed in [true, false] {
+              let event = CGEvent(
+                keyboardEventSource: CGEventSource(stateID: .hidSystemState),
+                virtualKey: 8,
+                keyDown: pressed
+              )!
+              event.flags = .maskCommand
+              event.postToPid(getpid())
+            }
+          }
+          DispatchQueue.main.asyncAfter(deadline: .now() + 5) { exit(2) }
+          app.run()
+          SWIFT
+          swift "$RUNNER_TEMP/event-probe.swift" | tee "$RUNNER_TEMP/event-probe.log"
+          grep -Fx 'key=8 command=true' "$RUNNER_TEMP/event-probe.log"
