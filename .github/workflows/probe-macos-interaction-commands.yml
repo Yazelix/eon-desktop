@@ -1,0 +1,53 @@
+name: Probe macOS interaction commands
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Probe pasteboard and link commands
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          sw_vers
+          test -x /usr/bin/pbcopy
+          test -x /usr/bin/pbpaste
+          test -x /usr/bin/open
+          probe_dir="$RUNNER_TEMP/venus-interaction-probe"
+          install -d -m 700 "$probe_dir"
+
+          printf '%s' 'café λ 界 🪐' > "$probe_dir/expected"
+          /usr/bin/env -i HOME="$HOME" LC_ALL=en_US.UTF-8 \
+            /usr/bin/pbcopy -pboard general < "$probe_dir/expected"
+          /usr/bin/env -i HOME="$HOME" LC_ALL=en_US.UTF-8 \
+            /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/actual"
+          cmp "$probe_dir/expected" "$probe_dir/actual"
+
+          /usr/bin/pbcopy -pboard general < /dev/null
+          /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/empty"
+          test ! -s "$probe_dir/empty"
+
+          swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data([0x89, 0x50, 0x4e, 0x47]), forType: .png)); print(p.types.map(\.rawValue).joined(separator: ","))'
+          /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/non-text"
+          test ! -s "$probe_dir/non-text"
+
+          printf '%s' '{\rtf1\ansi Venus}' > "$probe_dir/rtf"
+          swift -e 'import AppKit; let p = NSPasteboard.general; p.clearContents(); precondition(p.setData(Data(#"{\rtf1\ansi Venus}"#.utf8), forType: .rtf)); print(p.types.map(\.rawValue).joined(separator: ","))'
+          /usr/bin/pbpaste -pboard general -Prefer txt > "$probe_dir/rtf-output"
+          cmp "$probe_dir/rtf" "$probe_dir/rtf-output"
+          printf 'pbpaste_rtf_fallback_bytes=%s\n' "$(stat -f%z "$probe_dir/rtf-output")"
+
+          /usr/bin/env -i HOME="$HOME" LC_ALL=en_US.UTF-8 \
+            /usr/bin/pbcopy -pboard general < "$probe_dir/rtf"
+          swift -e 'import AppKit; import Darwin; let names = Set(NSPasteboard.general.types.map(\.rawValue)); print(names.sorted()); if !names.contains(NSPasteboard.PasteboardType.rtf.rawValue) || names.contains(NSPasteboard.PasteboardType.string.rawValue) { exit(1) }'
+
+          uri='https://example.com/eon-native-probe?source=venus&case=argument'
+          started=$SECONDS
+          /usr/bin/env -i HOME="$HOME" /usr/bin/open -u "$uri"
+          printf 'open_dispatch_seconds=%s\n' "$((SECONDS - started))"

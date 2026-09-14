@@ -372,8 +372,9 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 384 |
+| README | 385 |
 | Repository attributes and ignore rules | 7 |
+| Hosted probe workflow | 53 |
 | Contracts and references | 1,779 |
 | Memory benchmark report | 158 |
 | Crate decisions | 268 |
@@ -381,4 +382,4 @@ benchmark CSV data, and disposable qualification patches.
 | Rust source, including unit tests | 18,015 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 32 |
-| **Total** | **22,150** |
+| **Total** | **22,204** |
