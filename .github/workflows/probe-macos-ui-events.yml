@@ -123,10 +123,10 @@ jobs:
             Thread.sleep(forTimeInterval: 0.05)
           }
 
-          func postMouse(_ pid: pid_t, _ type: CGEventType, _ point: CGPoint, _ flags: CGEventFlags = []) {
+          func postMouse(_: pid_t, _ type: CGEventType, _ point: CGPoint, _ flags: CGEventFlags = []) {
             let event = CGEvent(mouseEventSource: source(), mouseType: type, mouseCursorPosition: point, mouseButton: .left)!
             event.flags = flags
-            event.postToPid(pid)
+            event.post(tap: .cghidEventTap)
             Thread.sleep(forTimeInterval: 0.05)
           }
 
