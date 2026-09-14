@@ -292,11 +292,6 @@ jobs:
           sleep 1
           test "$(/usr/bin/pbpaste)" = "$uri"
 
-          "$events" scroll "$venus_pid" "$center_x" "$center_y"
-          sleep 2
-          screencapture -x -l "$window_id" "$proof_dir/scrolled.png"
-          kill -0 "$venus_pid"
-
           "$events" drag "$venus_pid" "$drag_x1" "$center_y" "$drag_x2"
           sleep 1
           "$events" move "$venus_pid" "$center_x" "$notice_y"
@@ -307,6 +302,12 @@ jobs:
           test -s "$proof_dir/selection.txt"
           test "$(cat "$proof_dir/selection.txt")" != "$uri"
           grep -Eq 'LINK|LLLL' "$proof_dir/selection.txt"
+
+          "$events" scroll "$venus_pid" "$center_x" "$center_y"
+          sleep 2
+          screencapture -x -l "$window_id" "$proof_dir/scrolled.png"
+          kill -0 "$venus_pid"
+
           swift -e 'import AppKit; NSPasteboard.general.clearContents()'
           "$events" shortcut "$venus_pid" 9
           sleep 1
