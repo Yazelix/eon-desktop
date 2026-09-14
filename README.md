@@ -69,8 +69,8 @@ cargo run --locked -- /path/to/orbit.sock
 
 On Linux, Venus requires a native Wayland display and fails before presentation
 attachment when one is unavailable. This is the only proved host. The Apple
-Silicon macOS implementation has an opaque AppKit, AccessKit, and Metal
-foundation, but remains unsupported until the rest of VEN-C16's native proof
+Silicon macOS implementation has a native-proved opaque AppKit, AccessKit, and
+Metal foundation, but remains unsupported until the rest of VEN-C16's proof
 succeeds. X11, Xwayland, and Intel macOS remain unsupported.
 
 ### Typography and initial size
@@ -374,12 +374,11 @@ benchmark CSV data, and disposable qualification patches.
 | Agent policy inputs | 216 |
 | README | 384 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,762 |
+| Contracts and references | 1,775 |
 | Memory benchmark report | 158 |
 | Crate decisions | 268 |
 | Changelog | 255 |
-| Hosted proof workflow | 164 |
 | Rust source, including unit tests | 18,001 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 32 |
-| **Total** | **22,282** |
+| **Total** | **22,130** |
