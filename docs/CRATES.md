@@ -172,11 +172,14 @@ normal/build tree has 272 unique lines.
    layout foundation. Its alpha renderer, compute requirement, wgpu version
    skew, and general UI policy exceed the accepted one-window surface.
 
-All four shapes passed `cargo check --locked`. The selected host enables only
-Wayland and dynamic Wayland loading; the selected wgpu features enable only
-Vulkan and WGSL. Wayland, xkbcommon, the Vulkan loader/driver, font discovery,
-and AT-SPI/D-Bus are the relevant Linux runtime/Nix surfaces; the stack adds no
-C++, Zig, or vendored native rendering engine.
+All four shapes passed `cargo check --locked`. Shared features enable only raw
+window handles, wgpu's standard library, and WGSL. Linux adds Wayland with
+dynamic loading, Vulkan, AccessKit Unix, and wl-clipboard-rs. Apple Silicon
+macOS adds Metal while AccessKit selects its AppKit adapter automatically.
+Wayland, xkbcommon, the Vulkan loader/driver, font discovery, and AT-SPI/D-Bus
+remain Linux runtime/Nix surfaces. AppKit, Metal, and the system accessibility
+API are native macOS surfaces; the stack adds no C++, Zig, vendored engine, or
+new direct dependency.
 
 Full UI frameworks Iced 0.14.0 and Slint 1.17.1 own unnecessary widget,
 layout, runtime, and renderer policy for one custom surface. Skia-safe 0.99.0

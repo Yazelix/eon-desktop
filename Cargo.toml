@@ -6,15 +6,23 @@ publish = false
 
 [dependencies]
 accesskit = "=0.24.1"
-accesskit_winit = { version = "=0.33.2", default-features = false, features = ["accesskit_unix", "async-io", "rwh_06"] }
+accesskit_winit = { version = "=0.33.2", default-features = false, features = ["rwh_06"] }
 eon-workspace-protocol = { git = "https://github.com/Yazelix/eon.git", rev = "0cc8f477298681ae3945903e8fdb5852d487c5ab" }
 glyphon = "=0.12.0"
 orbit-protocol = { git = "https://github.com/Yazelix/eon-sessions.git", rev = "ea9fd28ce0908f218cf65d4e6df368f0a4e565f5" }
 pollster = { version = "=1.0.1", default-features = false }
 unicode-script = "=0.5.8"
-wgpu = { version = "=30.0.0", default-features = false, features = ["std", "vulkan", "wgsl"] }
-winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "wayland", "wayland-dlopen"] }
+wgpu = { version = "=30.0.0", default-features = false, features = ["std", "wgsl"] }
+winit = { version = "=0.30.13", default-features = false, features = ["rwh_06"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+accesskit_winit = { version = "=0.33.2", default-features = false, features = ["accesskit_unix", "async-io"] }
+wgpu = { version = "=30.0.0", default-features = false, features = ["vulkan"] }
+winit = { version = "=0.30.13", default-features = false, features = ["wayland", "wayland-dlopen"] }
 wl-clipboard-rs = { version = "=0.9.3", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wgpu = { version = "=30.0.0", default-features = false, features = ["metal"] }
 
 [patch.crates-io]
 winit = { git = "https://github.com/chiyuki0325/winit-0.30.git", rev = "fb45fbf901fbe70cc9a877b5d651d0b60c206b08" }

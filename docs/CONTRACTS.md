@@ -933,12 +933,12 @@ qualified by the identities and boundaries below.
 
 ## VEN-C16 — Native Linux Wayland and Apple Silicon macOS platforms
 
-- **Status:** Proved for x86_64 Linux native Wayland; Apple Silicon macOS is
-  planned and unproved.
+- **Status:** Proved for x86_64 Linux native Wayland; Apple Silicon macOS has an
+  implemented opaque foundation and remains unproved.
 - **Consumer:** Every packaged Venus application launch.
 - **Trigger:** Build or launch the native application on an approved target.
-- **Result:** Venus uses native Wayland with Vulkan on Linux and will use the
-  native application/window lifecycle with Metal on `aarch64-darwin`. Both
+- **Result:** Venus uses native Wayland with Vulkan on Linux and the native
+  AppKit window lifecycle with Metal on `aarch64-darwin`. Both
   targets share protocol validation, model, scene, draw inputs, renderer,
   accessibility tree, semantic actions, and workspace composition; only native
   host mechanics vary.
@@ -949,9 +949,13 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus native host and dependency feature selection.
 - **Consumes:** User-approved `EON-C7`; proved Linux uses exact winit 0.30.13 at
   `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and
-  wl-clipboard-rs 0.9.3 with unchanged ORBS v4 and EONW v3. The macOS path must
-  consume accepted Orbit `ORB-C14` at `0233f4d34b294a50c5bc7f373859cf4ec04d2414`;
-  native feature or crate changes remain gated on the stack qualification.
+  wl-clipboard-rs 0.9.3 with ORBF v2 / ORBS v11 and EONW v5. The macOS path
+  consumes Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, whose accepted
+  `ORB-C14` source proof is
+  `0233f4d34b294a50c5bc7f373859cf4ec04d2414`. Target-scoped AppKit/AccessKit
+  and Metal features were selected by
+  `ven-qualify-venus-stack-apple-silicon-macos-ili`; no new direct dependency
+  or fork revision was required.
 - **Boundary:** X11, Xwayland, Intel macOS, signing, notarization, packaging,
   distribution, and other native platforms remain unsupported.
 - **Linux proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
@@ -968,7 +972,11 @@ qualified by the identities and boundaries below.
     or broader compositor coverage.
 - **Open macOS proof:** `ven-prove-venus-apple-silicon-macos-nm7` must record
   exact hardware, OS, toolchain, artifacts, automated checks, interactive
-  observations, failures, and limitations.
+  observations, failures, and limitations. Its first implementation child,
+  `ven-bring-up-opaque-appkit-metal-g4a`, owns the hidden AppKit window,
+  AccessKit initialization, Metal surface, opaque rendering, and target graph;
+  pasteboard, interaction, accessibility acceptance, lifecycle identity,
+  transparency/blur, exact Orbit dogfood, and the support claim remain open.
 
 ## VEN-C17 — Caller-owned native application identity
 

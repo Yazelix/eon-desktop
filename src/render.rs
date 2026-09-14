@@ -3423,6 +3423,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn long_workspace_labels_stay_on_the_visible_line() {
         use eon_workspace_protocol::v5::{Pane, Snapshot, Tab};

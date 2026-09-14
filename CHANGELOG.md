@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Establish the unsupported Apple Silicon macOS foundation with target-scoped
+  AppKit/AccessKit and Metal dependencies, one shared renderer and model, and a
+  hidden-before-initialization window lifecycle. Native pasteboard operations
+  fail closed until the interaction slice is implemented; Linux keeps its
+  existing Wayland, Vulkan, and clipboard path.
+
 - Add an Alt+/ native shortcut viewer for the Eon surface. Fixed Venus
   bindings share one owner with dispatch, enabled Project/tool rows follow the
   live Eon catalog, and bounded scrolling keeps the dialog usable at narrow

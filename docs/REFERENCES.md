@@ -578,6 +578,24 @@ FrankenTUI `479436597890a14e82676d0067e3917b2a9de8f5` ADR-002 supplies
 required complete-state projection evidence. Its MIT rider was evaluated for
 independent user-directed inspection; no source was copied, adapted or executed.
 
+## Apple Silicon native-window foundation
+
+`ven-bring-up-opaque-appkit-metal-g4a` inspected the exact locked
+[winit 0.30.13 fork](https://github.com/chiyuki0325/winit-0.30/tree/fb45fbf901fbe70cc9a877b5d651d0b60c206b08),
+AccessKit 0.24.1 / accesskit_winit 0.33.2, wgpu 30.0.0, glyphon 0.12.0,
+and raw-window-handle 0.6.2 sources. Winit's AppKit backend maps the existing
+hidden/show API to `orderOut` and `makeKeyAndOrderFront`;
+[AccessKit](https://docs.rs/accesskit_winit/0.33.2/accesskit_winit/struct.Adapter.html#method.with_mixed_handlers)
+requires its adapter before the first show; and wgpu creates its Metal surface
+from the AppKit `NSView` through a `CAMetalLayer`.
+[Apple's `NSWindow`](https://developer.apple.com/documentation/appkit/nswindow/makekeyandorderfront%28_%3A%29)
+and [`CAMetalLayer`](https://developer.apple.com/documentation/quartzcore/cametallayer/drawablesize)
+documentation confirms the visibility and backing-pixel behavior. The existing
+`ApplicationHandler`, `WindowEvent`, and `Renderer` owners therefore suffice for
+native lifecycle, scale, resize, and surface recovery. No question remained
+that justified importing Rio or Ghostty architecture, raw AppKit code, a second
+renderer, or a platform framework.
+
 ## Watchlist
 
 - [MetalTerm](https://metalterm.dev/) is source-unavailable comparison evidence

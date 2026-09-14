@@ -54,6 +54,13 @@ const SCROLL_DECAY: f64 = 4.0;
 const MIN_FLING_VELOCITY: f64 = 40.0;
 const MAX_FLING_VELOCITY: f64 = 8_000.0;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NativeClipboard {
+    Standard,
+    Primary,
+    Both,
+}
+
 #[derive(Debug, Default)]
 struct TerminalScroll {
     pixels: f64,
@@ -1167,6 +1174,7 @@ impl Application {
             self.pane_frames,
             fonts,
         ))?;
+        window.set_visible(true);
         let scale_factor = window.scale_factor();
 
         self.window = Some(WindowState {
@@ -2126,7 +2134,7 @@ impl Application {
     fn activate_uri(&mut self, uri: String, copy: bool) {
         let result = if copy {
             validate_copy_uri(&uri).and_then(|()| {
-                write_native_clipboard(wl_clipboard_rs::copy::ClipboardType::Regular, uri)
+                write_native_clipboard(NativeClipboard::Standard, uri)
                     .map(|()| "Link copied.")
                     .map_err(|_| "Could not copy the link to the native clipboard.")
             })
@@ -2389,7 +2397,7 @@ impl Application {
     }
 
     fn write_clipboard(&mut self, effect: ClipboardEffect) {
-        let clipboard = wayland_clipboard_type(&effect);
+        let clipboard = native_clipboard(&effect);
         let text = match effect {
             ClipboardEffect::SelectionCopy { text, .. }
             | ClipboardEffect::TerminalWrite { text, .. } => text,
@@ -2636,6 +2644,7 @@ fn window_attributes(
 ) -> WindowAttributes {
     Window::default_attributes()
         .with_title("Venus")
+        .with_visible(false)
         .with_inner_size(LogicalSize::new(960.0, 600.0))
         .with_decorations(decorations)
         .with_transparent(background_opacity < 1.0)
@@ -3518,17 +3527,15 @@ fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repea
 }
 
 fn clipboard_notice<E: std::fmt::Display>(
-    clipboard: wl_clipboard_rs::copy::ClipboardType,
+    clipboard: NativeClipboard,
     result: std::result::Result<(), E>,
 ) -> String {
-    use wl_clipboard_rs::copy::ClipboardType;
-
     result.map_or_else(
         |error| format!("Venus could not write the native clipboard: {error}"),
         |()| match clipboard {
-            ClipboardType::Regular => "Text copied to the native clipboard.".into(),
-            ClipboardType::Primary => "Text copied to the native primary selection.".into(),
-            ClipboardType::Both => {
+            NativeClipboard::Standard => "Text copied to the native clipboard.".into(),
+            NativeClipboard::Primary => "Text copied to the native primary selection.".into(),
+            NativeClipboard::Both => {
                 "Text copied to the native clipboard and primary selection.".into()
             }
         },
@@ -3615,17 +3622,30 @@ fn clipboard_paste_notice(error: impl std::fmt::Display) -> String {
     format!("Venus could not paste from the native clipboard: {error}")
 }
 
+#[cfg(target_os = "linux")]
 fn write_native_clipboard(
-    clipboard: wl_clipboard_rs::copy::ClipboardType,
+    clipboard: NativeClipboard,
     text: String,
 ) -> std::result::Result<(), wl_clipboard_rs::copy::Error> {
-    use wl_clipboard_rs::copy::{MimeType, Options, Source};
+    use wl_clipboard_rs::copy::{ClipboardType, MimeType, Options, Source};
 
     let mut options = Options::new();
-    options.clipboard(clipboard);
+    options.clipboard(match clipboard {
+        NativeClipboard::Standard => ClipboardType::Regular,
+        NativeClipboard::Primary => ClipboardType::Primary,
+        NativeClipboard::Both => ClipboardType::Both,
+    });
     options.copy(Source::Bytes(text.into_bytes().into()), MimeType::Text)
 }
 
+#[cfg(target_os = "macos")]
+fn write_native_clipboard(_: NativeClipboard, _: String) -> std::result::Result<(), io::Error> {
+    Err(io::Error::other(
+        "macOS pasteboard support is not implemented",
+    ))
+}
+
+#[cfg(target_os = "linux")]
 fn read_native_clipboard() -> std::result::Result<impl Read, String> {
     use wl_clipboard_rs::paste::{self, ClipboardType, MimeType, Seat};
 
@@ -3634,14 +3654,17 @@ fn read_native_clipboard() -> std::result::Result<impl Read, String> {
     Ok(pipe)
 }
 
-fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::ClipboardType {
-    use wl_clipboard_rs::copy::ClipboardType;
+#[cfg(target_os = "macos")]
+fn read_native_clipboard() -> std::result::Result<io::Empty, String> {
+    Err("macOS pasteboard support is not implemented".into())
+}
 
+fn native_clipboard(effect: &ClipboardEffect) -> NativeClipboard {
     match effect {
         ClipboardEffect::SelectionCopy {
             location: ClipboardLocation::Selection,
             ..
-        } => ClipboardType::Both,
+        } => NativeClipboard::Both,
         ClipboardEffect::SelectionCopy {
             location: ClipboardLocation::Standard,
             ..
@@ -3649,7 +3672,7 @@ fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::Cl
         | ClipboardEffect::TerminalWrite {
             location: ClipboardLocation::Standard,
             ..
-        } => ClipboardType::Regular,
+        } => NativeClipboard::Standard,
         ClipboardEffect::SelectionCopy {
             location: ClipboardLocation::Primary,
             ..
@@ -3657,7 +3680,7 @@ fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::Cl
         | ClipboardEffect::TerminalWrite {
             location: ClipboardLocation::Selection | ClipboardLocation::Primary,
             ..
-        } => ClipboardType::Primary,
+        } => NativeClipboard::Primary,
     }
 }
 
@@ -3756,7 +3779,7 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
 pub(super) fn run(arguments: LaunchArguments) -> Result {
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()
-        .map_err(|_| io::Error::other("Venus requires a native Wayland display"))?;
+        .map_err(|_| io::Error::other("Venus requires a native display"))?;
     let mut application = Application::new(arguments, event_loop.create_proxy());
     if application.startup_admission && application.workspace_socket.is_some() {
         let response = yazelix_venus::read_workspace_response(&mut io::stdin().lock())?;
@@ -3819,6 +3842,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display"]
     fn typography_without_grid_waits_for_and_validates_workspace_geometry() {
         use winit::platform::wayland::EventLoopBuilderExtWayland;
@@ -3884,17 +3908,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
     fn native_initial_grid_survives_compositor_scale_admission() {
         native_startup(true);
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
     fn native_font_only_startup_completes_without_input() {
         native_startup(false);
     }
 
+    #[cfg(target_os = "linux")]
     fn native_startup(explicit_grid: bool) {
         use winit::platform::wayland::EventLoopBuilderExtWayland;
         struct Probe {
@@ -4059,6 +4086,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn live_output_keeps_application_input_admitted_before_repaint() {
         use eon_workspace_protocol::v5 as workspace;
@@ -5903,10 +5931,10 @@ mod tests {
 
     #[test]
     fn clipboard_results_are_attributed_without_copying_terminal_cells() {
-        use wl_clipboard_rs::copy::ClipboardType::{Both, Regular};
+        use NativeClipboard::{Both, Standard};
 
         assert_eq!(
-            clipboard_notice(Regular, Ok::<(), &str>(())),
+            clipboard_notice(Standard, Ok::<(), &str>(())),
             "Text copied to the native clipboard."
         );
         assert_eq!(
@@ -5914,7 +5942,7 @@ mod tests {
             "Text copied to the native clipboard and primary selection."
         );
         assert_eq!(
-            clipboard_notice(Regular, Err("display unavailable")),
+            clipboard_notice(Standard, Err("display unavailable")),
             "Venus could not write the native clipboard: display unavailable"
         );
     }
@@ -6037,25 +6065,25 @@ mod tests {
     }
 
     #[test]
-    fn clipboard_effects_use_distinct_wayland_targets() {
-        use wl_clipboard_rs::copy::ClipboardType::{Both, Primary, Regular};
+    fn clipboard_effects_preserve_native_targets() {
+        use NativeClipboard::{Both, Primary, Standard};
 
         assert!(matches!(
-            wayland_clipboard_type(&ClipboardEffect::SelectionCopy {
+            native_clipboard(&ClipboardEffect::SelectionCopy {
                 location: ClipboardLocation::Selection,
                 text: String::new(),
             }),
             Both
         ));
         assert!(matches!(
-            wayland_clipboard_type(&ClipboardEffect::SelectionCopy {
+            native_clipboard(&ClipboardEffect::SelectionCopy {
                 location: ClipboardLocation::Standard,
                 text: String::new(),
             }),
-            Regular
+            Standard
         ));
         assert!(matches!(
-            wayland_clipboard_type(&ClipboardEffect::TerminalWrite {
+            native_clipboard(&ClipboardEffect::TerminalWrite {
                 location: ClipboardLocation::Selection,
                 text: String::new(),
             }),

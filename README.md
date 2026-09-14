@@ -67,10 +67,11 @@ Pass the Eon Sessions Orbit Unix socket to the Venus client:
 cargo run --locked -- /path/to/orbit.sock
 ```
 
-Venus requires a native Wayland display and fails before presentation
-attachment when one is unavailable. This is the only proved host. Apple Silicon
-macOS is the active Nix-only expansion and remains unsupported until VEN-C16's
-native proof succeeds; X11, Xwayland, and Intel macOS remain unsupported.
+On Linux, Venus requires a native Wayland display and fails before presentation
+attachment when one is unavailable. This is the only proved host. The Apple
+Silicon macOS implementation has an opaque AppKit, AccessKit, and Metal
+foundation, but remains unsupported until the rest of VEN-C16's native proof
+succeeds. X11, Xwayland, and Intel macOS remain unsupported.
 
 ### Typography and initial size
 
@@ -352,8 +353,9 @@ background images, plugins, remote and web access, packaging, and distribution
 are outside this slice.
 
 The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
-with native Wayland and Vulkan. The approved but unproved Apple Silicon host
-must reuse the same renderer/model path with narrow native mechanics. The exact
+with native Wayland and Vulkan. The unproved Apple Silicon host reuses the same
+renderer/model path with AppKit, AccessKit, and Metal; native interaction,
+pasteboard, lifecycle acceptance, effects, and composition remain open. The exact
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
 accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
 selection completion, routed native
@@ -370,13 +372,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 382 |
+| README | 384 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,736 |
+| Contracts and references | 1,762 |
 | Memory benchmark report | 158 |
-| Crate decisions | 265 |
-| Changelog | 249 |
-| Rust source, including unit tests | 17,972 |
+| Crate decisions | 268 |
+| Changelog | 255 |
+| Rust source, including unit tests | 18,001 |
 | Rust integration tests | 1,034 |
-| Cargo manifest | 24 |
-| **Total** | **22,043** |
+| Cargo manifest | 32 |
+| **Total** | **22,117** |

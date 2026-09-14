@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-#[cfg(not(target_os = "linux"))]
-compile_error!("Venus supports only Linux");
+#[cfg(not(any(target_os = "linux", all(target_os = "macos", target_arch = "aarch64"))))]
+compile_error!("Venus supports only Linux and Apple Silicon macOS");
 
 mod application;
 mod launch;
