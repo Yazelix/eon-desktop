@@ -1,0 +1,600 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index c377217..608b789 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -394,6 +394,15 @@ dependencies = [
+  "objc2 0.5.2",
+ ]
+ 
++[[package]]
++name = "block2"
++version = "0.6.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
++dependencies = [
++ "objc2 0.6.4",
++]
++
+ [[package]]
+ name = "blocking"
+ version = "1.6.2"
+@@ -1340,7 +1349,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e4e89ad9e3d7d297152b17d39ed92cd50ca8063a89a9fa569046d41568891eff"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "libc",
+  "objc2 0.5.2",
+  "objc2-core-data",
+@@ -1356,7 +1365,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "74dd3b56391c7a0596a295029734d3c1c5e7e510a4cb30245f8221ccea96b009"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-core-location",
+  "objc2-foundation 0.2.2",
+@@ -1368,7 +1377,7 @@ version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a5ff520e9c33812fd374d8deecef01d4a840e7b41862d849513de77e44aa4889"
+ dependencies = [
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-foundation 0.2.2",
+ ]
+@@ -1380,7 +1389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "617fbf49e071c178c0b24c080767db52958f716d9eabdf0890523aeae54773ef"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-foundation 0.2.2",
+ ]
+@@ -1396,13 +1405,25 @@ dependencies = [
+  "objc2 0.6.4",
+ ]
+ 
++[[package]]
++name = "objc2-core-graphics"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
++dependencies = [
++ "dispatch2",
++ "objc2 0.6.4",
++ "objc2-core-foundation",
++ "objc2-io-surface",
++]
++
+ [[package]]
+ name = "objc2-core-image"
+ version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "55260963a527c99f1819c4f8e3b47fe04f9650694ef348ffd2227e8196d34c80"
+ dependencies = [
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-foundation 0.2.2",
+  "objc2-metal 0.2.2",
+@@ -1414,7 +1435,7 @@ version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "000cfee34e683244f284252ee206a27953279d370e309649dc3ee317b37e5781"
+ dependencies = [
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-contacts",
+  "objc2-foundation 0.2.2",
+@@ -1433,7 +1454,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0ee638a5da3799329310ad4cfa62fbf045d5f56e3ef5ba4149e7452dcf89d5a8"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "dispatch",
+  "libc",
+  "objc2 0.5.2",
+@@ -1450,13 +1471,24 @@ dependencies = [
+  "objc2-core-foundation",
+ ]
+ 
++[[package]]
++name = "objc2-io-surface"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
++dependencies = [
++ "bitflags 2.13.1",
++ "objc2 0.6.4",
++ "objc2-core-foundation",
++]
++
+ [[package]]
+ name = "objc2-link-presentation"
+ version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a1a1ae721c5e35be65f01a03b6d2ac13a54cb4fa70d8a5da293d7b0020261398"
+ dependencies = [
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-app-kit",
+  "objc2-foundation 0.2.2",
+@@ -1469,7 +1501,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "dd0cba1276f6023976a406a14ffa85e1fdd19df6b0f737b063b95f6c8c7aadd6"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-foundation 0.2.2",
+ ]
+@@ -1481,6 +1513,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a0125f776a10d00af4152d74616409f0d4a2053a6f57fa5b7d6aa2854ac04794"
+ dependencies = [
+  "bitflags 2.13.1",
++ "block2 0.6.2",
+  "objc2 0.6.4",
+  "objc2-foundation 0.3.2",
+ ]
+@@ -1492,7 +1525,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e42bee7bff906b14b167da2bac5efe6b6a07e6f7c0a21a7308d40c960242dc7a"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-foundation 0.2.2",
+  "objc2-metal 0.2.2",
+@@ -1507,6 +1540,7 @@ dependencies = [
+  "bitflags 2.13.1",
+  "objc2 0.6.4",
+  "objc2-core-foundation",
++ "objc2-core-graphics",
+  "objc2-foundation 0.3.2",
+  "objc2-metal 0.3.2",
+ ]
+@@ -1528,7 +1562,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "b8bb46798b20cd6b91cbd113524c490f1686f4c4e8f49502431415f3512e2b6f"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-cloud-kit",
+  "objc2-core-data",
+@@ -1548,7 +1582,7 @@ version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "44fa5f9748dbfe1ca6c0b79ad20725a11eca7c2218bceb4b005cb1be26273bfe"
+ dependencies = [
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-foundation 0.2.2",
+ ]
+@@ -1560,7 +1594,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "76cfcbf642358e8689af64cee815d139339f3ed8ad05103ed5eaf73db8d84cb3"
+ dependencies = [
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "objc2 0.5.2",
+  "objc2-core-location",
+  "objc2-foundation 0.2.2",
+@@ -2701,12 +2735,22 @@ dependencies = [
+  "rustc-hash 1.1.0",
+  "smallvec",
+  "thiserror 2.0.19",
++ "wgpu-core-deps-apple",
+  "wgpu-core-deps-windows-linux-android",
+  "wgpu-hal",
+  "wgpu-naga-bridge",
+  "wgpu-types",
+ ]
+ 
++[[package]]
++name = "wgpu-core-deps-apple"
++version = "30.0.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "061f3d319a40d39d00b1ecc2c33b89fe21d4e6fe01859df3500a3a8ecccd6b68"
++dependencies = [
++ "wgpu-hal",
++]
++
+ [[package]]
+ name = "wgpu-core-deps-windows-linux-android"
+ version = "30.0.0"
+@@ -2726,6 +2770,7 @@ dependencies = [
+  "arrayvec",
+  "ash",
+  "bitflags 2.13.1",
++ "block2 0.6.2",
+  "bytemuck",
+  "cfg-if",
+  "cfg_aliases",
+@@ -2736,6 +2781,12 @@ dependencies = [
+  "log",
+  "naga",
+  "naga-types",
++ "objc2 0.6.4",
++ "objc2-core-foundation",
++ "objc2-core-graphics",
++ "objc2-foundation 0.3.2",
++ "objc2-metal 0.3.2",
++ "objc2-quartz-core 0.3.2",
+  "ordered-float",
+  "parking_lot",
+  "portable-atomic",
+@@ -2997,7 +3048,7 @@ dependencies = [
+  "android-activity",
+  "atomic-waker",
+  "bitflags 2.13.1",
+- "block2",
++ "block2 0.5.1",
+  "calloop",
+  "cfg_aliases",
+  "concurrent-queue",
+diff --git a/Cargo.toml b/Cargo.toml
+index 16700e8..02b935b 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -6,16 +6,24 @@ publish = false
+ 
+ [dependencies]
+ accesskit = "=0.24.1"
+-accesskit_winit = { version = "=0.33.2", default-features = false, features = ["accesskit_unix", "async-io", "rwh_06"] }
++accesskit_winit = { version = "=0.33.2", default-features = false, features = ["rwh_06"] }
+ eon-workspace-protocol = { git = "https://github.com/Yazelix/eon.git", rev = "0cc8f477298681ae3945903e8fdb5852d487c5ab" }
+ glyphon = "=0.12.0"
+ orbit-protocol = { git = "https://github.com/Yazelix/eon-sessions.git", rev = "ea9fd28ce0908f218cf65d4e6df368f0a4e565f5" }
+ pollster = { version = "=1.0.1", default-features = false }
+ unicode-script = "=0.5.8"
+-wgpu = { version = "=30.0.0", default-features = false, features = ["std", "vulkan", "wgsl"] }
+-winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "wayland", "wayland-dlopen"] }
++wgpu = { version = "=30.0.0", default-features = false, features = ["std", "wgsl"] }
++winit = { version = "=0.30.13", default-features = false, features = ["rwh_06"] }
++
++[target.'cfg(target_os = "linux")'.dependencies]
++accesskit_winit = { version = "=0.33.2", default-features = false, features = ["accesskit_unix", "async-io"] }
++wgpu = { version = "=30.0.0", default-features = false, features = ["vulkan"] }
++winit = { version = "=0.30.13", default-features = false, features = ["wayland", "wayland-dlopen"] }
+ wl-clipboard-rs = { version = "=0.9.3", default-features = false }
+ 
++[target.'cfg(target_os = "macos")'.dependencies]
++wgpu = { version = "=30.0.0", default-features = false, features = ["metal"] }
++
+ [patch.crates-io]
+ winit = { git = "https://github.com/chiyuki0325/winit-0.30.git", rev = "fb45fbf901fbe70cc9a877b5d651d0b60c206b08" }
+ 
+diff --git a/src/application.rs b/src/application.rs
+index a2baef5..3c9b119 100644
+--- a/src/application.rs
++++ b/src/application.rs
+@@ -54,6 +54,13 @@ const SCROLL_DECAY: f64 = 4.0;
+ const MIN_FLING_VELOCITY: f64 = 40.0;
+ const MAX_FLING_VELOCITY: f64 = 8_000.0;
+ 
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++enum NativeClipboard {
++    Standard,
++    Primary,
++    Both,
++}
++
+ #[derive(Debug, Default)]
+ struct TerminalScroll {
+     pixels: f64,
+@@ -1142,6 +1149,8 @@ impl Application {
+         #[cfg(target_os = "linux")]
+         let attributes = attributes.with_name(self.application_id.as_str(), "yazelix-venus");
+         let window = Arc::new(event_loop.create_window(attributes)?);
++        #[cfg(target_os = "macos")]
++        eprintln!("VENUS_QUALIFICATION native_window=appkit");
+         if self.initial_scale_pending && window.scale_factor() != 1.0 {
+             let initial = initial_window_size(
+                 self.columns,
+@@ -1159,6 +1168,8 @@ impl Application {
+             accessibility.activation(),
+             self.proxy.clone(),
+         );
++        #[cfg(target_os = "macos")]
++        eprintln!("VENUS_QUALIFICATION accesskit=initialized");
+         let renderer = pollster::block_on(Renderer::new(
+             Arc::clone(&window),
+             event_loop,
+@@ -1167,6 +1178,9 @@ impl Application {
+             self.pane_frames,
+             fonts,
+         ))?;
++        window.set_visible(true);
++        #[cfg(target_os = "macos")]
++        eprintln!("VENUS_QUALIFICATION window=visible");
+         let scale_factor = window.scale_factor();
+ 
+         self.window = Some(WindowState {
+@@ -2126,7 +2140,7 @@ impl Application {
+     fn activate_uri(&mut self, uri: String, copy: bool) {
+         let result = if copy {
+             validate_copy_uri(&uri).and_then(|()| {
+-                write_native_clipboard(wl_clipboard_rs::copy::ClipboardType::Regular, uri)
++                write_native_clipboard(NativeClipboard::Standard, uri)
+                     .map(|()| "Link copied.")
+                     .map_err(|_| "Could not copy the link to the native clipboard.")
+             })
+@@ -2389,7 +2403,7 @@ impl Application {
+     }
+ 
+     fn write_clipboard(&mut self, effect: ClipboardEffect) {
+-        let clipboard = wayland_clipboard_type(&effect);
++        let clipboard = native_clipboard(&effect);
+         let text = match effect {
+             ClipboardEffect::SelectionCopy { text, .. }
+             | ClipboardEffect::TerminalWrite { text, .. } => text,
+@@ -2636,6 +2650,7 @@ fn window_attributes(
+ ) -> WindowAttributes {
+     Window::default_attributes()
+         .with_title("Venus")
++        .with_visible(false)
+         .with_inner_size(LogicalSize::new(960.0, 600.0))
+         .with_decorations(decorations)
+         .with_transparent(background_opacity < 1.0)
+@@ -3518,17 +3533,15 @@ fn sends_workspace_shortcut(action: &WorkspaceAction, state: ElementState, repea
+ }
+ 
+ fn clipboard_notice<E: std::fmt::Display>(
+-    clipboard: wl_clipboard_rs::copy::ClipboardType,
++    clipboard: NativeClipboard,
+     result: std::result::Result<(), E>,
+ ) -> String {
+-    use wl_clipboard_rs::copy::ClipboardType;
+-
+     result.map_or_else(
+         |error| format!("Venus could not write the native clipboard: {error}"),
+         |()| match clipboard {
+-            ClipboardType::Regular => "Text copied to the native clipboard.".into(),
+-            ClipboardType::Primary => "Text copied to the native primary selection.".into(),
+-            ClipboardType::Both => {
++            NativeClipboard::Standard => "Text copied to the native clipboard.".into(),
++            NativeClipboard::Primary => "Text copied to the native primary selection.".into(),
++            NativeClipboard::Both => {
+                 "Text copied to the native clipboard and primary selection.".into()
+             }
+         },
+@@ -3615,33 +3628,49 @@ fn clipboard_paste_notice(error: impl std::fmt::Display) -> String {
+     format!("Venus could not paste from the native clipboard: {error}")
+ }
+ 
++#[cfg(target_os = "linux")]
+ fn write_native_clipboard(
+-    clipboard: wl_clipboard_rs::copy::ClipboardType,
++    clipboard: NativeClipboard,
+     text: String,
+-) -> std::result::Result<(), wl_clipboard_rs::copy::Error> {
+-    use wl_clipboard_rs::copy::{MimeType, Options, Source};
++) -> std::result::Result<(), String> {
++    use wl_clipboard_rs::copy::{ClipboardType, MimeType, Options, Source};
+ 
+     let mut options = Options::new();
+-    options.clipboard(clipboard);
+-    options.copy(Source::Bytes(text.into_bytes().into()), MimeType::Text)
++    options.clipboard(match clipboard {
++        NativeClipboard::Standard => ClipboardType::Regular,
++        NativeClipboard::Primary => ClipboardType::Primary,
++        NativeClipboard::Both => ClipboardType::Both,
++    });
++    options
++        .copy(Source::Bytes(text.into_bytes().into()), MimeType::Text)
++        .map_err(|error| error.to_string())
+ }
+ 
+-fn read_native_clipboard() -> std::result::Result<impl Read, String> {
++#[cfg(target_os = "macos")]
++fn write_native_clipboard(_: NativeClipboard, _: String) -> std::result::Result<(), String> {
++    Err("the macOS pasteboard adapter is not qualified".into())
++}
++
++#[cfg(target_os = "linux")]
++fn read_native_clipboard() -> std::result::Result<Box<dyn Read>, String> {
+     use wl_clipboard_rs::paste::{self, ClipboardType, MimeType, Seat};
+ 
+     let (pipe, _) = paste::get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Text)
+         .map_err(|error| error.to_string())?;
+-    Ok(pipe)
++    Ok(Box::new(pipe))
+ }
+ 
+-fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::ClipboardType {
+-    use wl_clipboard_rs::copy::ClipboardType;
++#[cfg(target_os = "macos")]
++fn read_native_clipboard() -> std::result::Result<Box<dyn Read>, String> {
++    Err("the macOS pasteboard adapter is not qualified".into())
++}
+ 
++fn native_clipboard(effect: &ClipboardEffect) -> NativeClipboard {
+     match effect {
+         ClipboardEffect::SelectionCopy {
+             location: ClipboardLocation::Selection,
+             ..
+-        } => ClipboardType::Both,
++        } => NativeClipboard::Both,
+         ClipboardEffect::SelectionCopy {
+             location: ClipboardLocation::Standard,
+             ..
+@@ -3649,7 +3678,7 @@ fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::Cl
+         | ClipboardEffect::TerminalWrite {
+             location: ClipboardLocation::Standard,
+             ..
+-        } => ClipboardType::Regular,
++        } => NativeClipboard::Standard,
+         ClipboardEffect::SelectionCopy {
+             location: ClipboardLocation::Primary,
+             ..
+@@ -3657,7 +3686,7 @@ fn wayland_clipboard_type(effect: &ClipboardEffect) -> wl_clipboard_rs::copy::Cl
+         | ClipboardEffect::TerminalWrite {
+             location: ClipboardLocation::Selection | ClipboardLocation::Primary,
+             ..
+-        } => ClipboardType::Primary,
++        } => NativeClipboard::Primary,
+     }
+ }
+ 
+@@ -3756,7 +3785,7 @@ fn surface_size(screen: PhysicalSize<u32>, metrics: CellMetrics) -> Option<Surfa
+ pub(super) fn run(arguments: LaunchArguments) -> Result {
+     let event_loop = EventLoop::<UserEvent>::with_user_event()
+         .build()
+-        .map_err(|_| io::Error::other("Venus requires a native Wayland display"))?;
++        .map_err(|_| io::Error::other("Venus requires a native display"))?;
+     let mut application = Application::new(arguments, event_loop.create_proxy());
+     if application.startup_admission && application.workspace_socket.is_some() {
+         let response = yazelix_venus::read_workspace_response(&mut io::stdin().lock())?;
+@@ -3819,6 +3848,7 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(target_os = "linux")]
+     #[ignore = "requires an isolated native Wayland display"]
+     fn typography_without_grid_waits_for_and_validates_workspace_geometry() {
+         use winit::platform::wayland::EventLoopBuilderExtWayland;
+@@ -3884,17 +3914,20 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(target_os = "linux")]
+     #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
+     fn native_initial_grid_survives_compositor_scale_admission() {
+         native_startup(true);
+     }
+ 
+     #[test]
++    #[cfg(target_os = "linux")]
+     #[ignore = "requires an isolated native Wayland display and Vulkan renderer; use fractional output scale"]
+     fn native_font_only_startup_completes_without_input() {
+         native_startup(false);
+     }
+ 
++    #[cfg(target_os = "linux")]
+     fn native_startup(explicit_grid: bool) {
+         use winit::platform::wayland::EventLoopBuilderExtWayland;
+         struct Probe {
+@@ -4059,6 +4092,7 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(target_os = "linux")]
+     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
+     fn live_output_keeps_application_input_admitted_before_repaint() {
+         use eon_workspace_protocol::v5 as workspace;
+@@ -5903,10 +5937,10 @@ mod tests {
+ 
+     #[test]
+     fn clipboard_results_are_attributed_without_copying_terminal_cells() {
+-        use wl_clipboard_rs::copy::ClipboardType::{Both, Regular};
++        use NativeClipboard::{Both, Standard};
+ 
+         assert_eq!(
+-            clipboard_notice(Regular, Ok::<(), &str>(())),
++            clipboard_notice(Standard, Ok::<(), &str>(())),
+             "Text copied to the native clipboard."
+         );
+         assert_eq!(
+@@ -5914,7 +5948,7 @@ mod tests {
+             "Text copied to the native clipboard and primary selection."
+         );
+         assert_eq!(
+-            clipboard_notice(Regular, Err("display unavailable")),
++            clipboard_notice(Standard, Err("display unavailable")),
+             "Venus could not write the native clipboard: display unavailable"
+         );
+     }
+@@ -6037,25 +6071,25 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn clipboard_effects_use_distinct_wayland_targets() {
+-        use wl_clipboard_rs::copy::ClipboardType::{Both, Primary, Regular};
++    fn clipboard_effects_preserve_native_targets() {
++        use NativeClipboard::{Both, Primary, Standard};
+ 
+         assert!(matches!(
+-            wayland_clipboard_type(&ClipboardEffect::SelectionCopy {
++            native_clipboard(&ClipboardEffect::SelectionCopy {
+                 location: ClipboardLocation::Selection,
+                 text: String::new(),
+             }),
+             Both
+         ));
+         assert!(matches!(
+-            wayland_clipboard_type(&ClipboardEffect::SelectionCopy {
++            native_clipboard(&ClipboardEffect::SelectionCopy {
+                 location: ClipboardLocation::Standard,
+                 text: String::new(),
+             }),
+-            Regular
++            Standard
+         ));
+         assert!(matches!(
+-            wayland_clipboard_type(&ClipboardEffect::TerminalWrite {
++            native_clipboard(&ClipboardEffect::TerminalWrite {
+                 location: ClipboardLocation::Selection,
+                 text: String::new(),
+             }),
+diff --git a/src/main.rs b/src/main.rs
+index 1e5c543..157ce5e 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,8 +1,5 @@
+ #![forbid(unsafe_code)]
+ 
+-#[cfg(not(target_os = "linux"))]
+-compile_error!("Venus supports only Linux");
+-
+ mod application;
+ mod launch;
+ 
+diff --git a/src/render.rs b/src/render.rs
+index 22e9bf8..0acfe31 100644
+--- a/src/render.rs
++++ b/src/render.rs
+@@ -756,6 +756,20 @@ impl Renderer {
+             })
+             .await
+             .map_err(display_error("no compatible Venus GPU adapter"))?;
++        #[cfg(target_os = "macos")]
++        {
++            let info = adapter.get_info();
++            if info.backend != wgpu::Backend::Metal {
++                return Err(RenderError(format!(
++                    "expected the Metal backend, got {:?}",
++                    info.backend
++                )));
++            }
++            eprintln!(
++                "VENUS_QUALIFICATION gpu_backend={:?} gpu_name={}",
++                info.backend, info.name
++            );
++        }
+         let (device, queue) = adapter
+             .request_device(&DeviceDescriptor::default())
+             .await
+@@ -790,6 +804,8 @@ impl Renderer {
+         ensure_device_available(&device_lost)?;
+         surface.configure(&device, &config);
+         ensure_device_available(&device_lost)?;
++        #[cfg(target_os = "macos")]
++        eprintln!("VENUS_QUALIFICATION surface=configured");
+ 
+         let shader = device.create_shader_module(ShaderModuleDescriptor {
+             label: Some("venus rectangles"),
+@@ -3423,6 +3439,7 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(target_os = "linux")]
+     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
+     fn long_workspace_labels_stay_on_the_visible_line() {
+         use eon_workspace_protocol::v5::{Pane, Snapshot, Tab};

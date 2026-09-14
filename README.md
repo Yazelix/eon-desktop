@@ -364,14 +364,15 @@ revision must be available in the Git checkout cache or published to GitHub.
 ## LOC scorecard
 
 The scorecard counts tracked handwritten text and code. It excludes `.git/`,
-Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`
-and benchmark CSV data.
+Beads data, lock files, and generated artifacts, including rendered `AGENTS.md`,
+benchmark CSV data, and disposable qualification patches.
 
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 382 |
-| Repository ignore rules | 6 |
+| README | 383 |
+| Repository attributes and ignore rules | 7 |
+| Qualification workflow | 113 |
 | Contracts and references | 1,736 |
 | Memory benchmark report | 158 |
 | Crate decisions | 265 |
@@ -379,4 +380,4 @@ and benchmark CSV data.
 | Rust source, including unit tests | 17,972 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 24 |
-| **Total** | **22,042** |
+| **Total** | **22,157** |
