@@ -42,11 +42,21 @@ jobs:
           ssh-key: ${{ secrets.VENUS_PROOF_EON_SESSIONS_DEPLOY_KEY }}
           persist-credentials: false
 
+      - name: Check out accepted native Orbit runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Yazelix/eon-sessions
+          ref: 0233f4d34b294a50c5bc7f373859cf4ec04d2414
+          path: .proof-deps/eon-sessions-runtime
+          ssh-key: ${{ secrets.VENUS_PROOF_EON_SESSIONS_DEPLOY_KEY }}
+          persist-credentials: false
+
       - name: Pin private dependency fetches
         run: |
           test "$(git rev-parse HEAD)" = "$VENUS_SOURCE"
           test "$(git -C .proof-deps/eon rev-parse HEAD)" = 0cc8f477298681ae3945903e8fdb5852d487c5ab
           test "$(git -C .proof-deps/eon-sessions rev-parse HEAD)" = ea9fd28ce0908f218cf65d4e6df368f0a4e565f5
+          test "$(git -C .proof-deps/eon-sessions-runtime rev-parse HEAD)" = 0233f4d34b294a50c5bc7f373859cf4ec04d2414
           git config --global url."file://$GITHUB_WORKSPACE/.proof-deps/eon".insteadOf https://github.com/Yazelix/eon.git
           git config --global url."file://$GITHUB_WORKSPACE/.proof-deps/eon-sessions".insteadOf https://github.com/Yazelix/eon-sessions.git
 
@@ -82,7 +92,7 @@ jobs:
           cargo build --locked --bin yazelix-venus --target aarch64-apple-darwin
 
       - name: Build accepted Orbit producer
-        run: cargo build --locked --manifest-path .proof-deps/eon-sessions/Cargo.toml --bin yazelix-orbit
+        run: cargo build --locked --manifest-path .proof-deps/eon-sessions-runtime/Cargo.toml --bin yazelix-orbit
 
       - name: Exercise opaque AppKit and Metal presentation
         run: |
@@ -91,7 +101,7 @@ jobs:
           control="$RUNNER_TEMP/venus-control"
           log="$RUNNER_TEMP/venus.log"
           screenshot="$RUNNER_TEMP/venus-macos.png"
-          orbit=.proof-deps/eon-sessions/target/debug/yazelix-orbit
+          orbit=.proof-deps/eon-sessions-runtime/target/debug/yazelix-orbit
           venus=target/aarch64-apple-darwin/debug/yazelix-venus
           "$orbit" serve "$socket" -- /bin/sh -c 'printf "\033[2J\033[HVENUS APPLE SILICON\nASCII 0123456789\nUnicode: café λ 界 🪐\n\033[31mred \033[32mgreen \033[34mblue\033[0m\n"; exec /bin/sleep 300' &
           orbit_pid=$!
