@@ -1,0 +1,35 @@
+name: Probe macOS UI events
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: venus-macos-ui-event-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 3
+    steps:
+      - name: Probe native keyboard automation
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          sw_vers
+          osascript <<'APPLESCRIPT'
+          tell application "TextEdit"
+            activate
+            make new document with properties {text:""}
+          end tell
+          delay 1
+          tell application "System Events"
+            keystroke "VENUS-UI-PROBE"
+          end tell
+          APPLESCRIPT
+          actual=$(osascript -e 'tell application "TextEdit" to get text of front document')
+          test "$actual" = VENUS-UI-PROBE
+          osascript -e 'tell application "TextEdit" to quit saving no'
