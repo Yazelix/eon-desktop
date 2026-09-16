@@ -686,7 +686,7 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 [[package]]
 name = "dpi"
 version = "0.1.1"
-source = "git+https://github.com/chiyuki0325/winit-0.30.git?rev=fb45fbf901fbe70cc9a877b5d651d0b60c206b08#fb45fbf901fbe70cc9a877b5d651d0b60c206b08"
+source = "git+https://github.com/Yazelix/winit-0.30.git?rev=7c209ec5bebbd2963f75a39f79b320af6b03f72c#7c209ec5bebbd2963f75a39f79b320af6b03f72c"
 
 [[package]]
 name = "endi"
@@ -3103,7 +3103,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/chiyuki0325/winit-0.30.git?rev=fb45fbf901fbe70cc9a877b5d651d0b60c206b08#fb45fbf901fbe70cc9a877b5d651d0b60c206b08"
+source = "git+https://github.com/Yazelix/winit-0.30.git?rev=7c209ec5bebbd2963f75a39f79b320af6b03f72c#7c209ec5bebbd2963f75a39f79b320af6b03f72c"
 dependencies = [
  "ahash",
  "android-activity",

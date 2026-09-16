@@ -492,7 +492,7 @@ qualified by the identities and boundaries below.
 - **Consumes:** Orbit `ORB-C4`, `ORB-C5`, `ORB-C6`, `ORB-C8`, and `ORB-C9`
   through canonical ORBF v2 / ORBS v11 at
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`; exact patched winit
-  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and glyphon
+  `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
@@ -975,7 +975,8 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus owns one boolean request, winit owns native protocol lifecycle,
   and the compositor owns the effect.
 - **Consumes:** Exact patched winit 0.30.13 at
-  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, backporting upstream
+  `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, retaining the
+  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` backport of upstream
   `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`; unchanged `VEN-C11`, ORBS v4,
   and EONW v3.
 - **Boundary:** Stable crates.io winit lacks the mechanism; non-COSMIC Linux
@@ -1006,21 +1007,22 @@ qualified by the identities and boundaries below.
   attachment with a bounded explicit error. Evaluation or compilation alone is
   not native runtime proof.
 - **Owner:** Venus native host and dependency feature selection.
-- **Consumes:** User-approved `EON-C7`; proved Linux uses exact winit 0.30.13 at
-  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, wgpu 30.0.0, and
+- **Consumes:** User-approved `EON-C7`; current source uses exact winit 0.30.13 at
+  `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, wgpu 30.0.0, and
   wl-clipboard-rs 0.9.3 with ORBF v2 / ORBS v11 and EONW v5. The macOS path
   consumes Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, whose accepted
   `ORB-C14` source proof is
   `0233f4d34b294a50c5bc7f373859cf4ec04d2414`. Target-scoped AppKit/AccessKit
   and Metal features were selected by
   `ven-qualify-venus-stack-apple-silicon-macos-ili`; the interaction slice adds
-  target-only arboard 3.6.1 for general-pasteboard text without changing the
-  fork revision.
+  target-only arboard 3.6.1 for general-pasteboard text. The IME correction
+  changes only the exact fork revision and retains the dependency graph.
 - **Boundary:** X11, Xwayland, Intel macOS, signing, notarization, packaging,
   distribution, and other native platforms remain unsupported. Apple Silicon
-  IME composition, held-key repeat, physical trackpad gesture quality, a
-  host-access failure notice, accessibility, lifecycle identity, effects, and
-  Eon composition remain unaccepted.
+  IME behavior beyond the proved Kotoeri Roman-to-kanji path, held-key repeat,
+  physical trackpad gesture quality, a host-access failure notice,
+  accessibility, lifecycle identity, effects, and Eon composition remain
+  unaccepted.
 - **Linux proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
   - **Environment:** x86_64 Linux native Wayland
   - **Evidence:** Locked format/check/test/Clippy, exact dependency features,
@@ -1094,11 +1096,32 @@ qualified by the identities and boundaries below.
     pairs exited zero with their sockets removed and no process left. Captures,
     logs, inputs, source identities, and SHA-256 sums are retained in
     `~/.local/state/eon/proofs/ven-macos-scaleway-m1-2026-09-16/`.
+  - **Kotoeri composition extension:** Venus candidate
+    `fdac7776b73f035474238b489dd66435f7871650`, tree
+    `43a7a9829d190bba014315d6990fa181a43bca3a`, consumes guard-only winit
+    fork `92722876415d5f2e3e97b2897b84c9a768c79b82`. Its source archive SHA-256 is
+    `9ad76f60fb0591b81d25aa7bf0fd898aecbb4c65dfef7cda13ad39e3351a6cbd`,
+    Cargo.lock SHA-256 is
+    `e53d0591c31ecc2407cd905aa4451efcc0acf0f5f88f556c07aac1de50a5b77e`, and
+    physical-M1 arm64 release artifact SHA-256 is
+    `3bcabd43070b4234f2cb466d7eb502527ba2842e817ceabc95fffa13de1bc803`.
+    Local locked checks passed 74 library, 42 application, and 17 integration
+    tests plus strict Linux and Apple-target Clippy; the M1 passed all 42
+    application tests. Native Kotoeri converted `にほん` to the selected `日本`
+    candidate and, after its separate select and commit Enters, Orbit received
+    exactly one six-byte UTF-8 value `e697a5e69cac`, SHA-256
+    `cf2abf0c5be326cb922a70f8163f91079c4d9aa8655c60ead89ad545c9de2e92`.
+    It remained six bytes after three seconds. The isolated Venus and Orbit
+    processes stopped, the private socket was removed, and the temporary host
+    credential was restored. Selected fork tip
+    `7c209ec5bebbd2963f75a39f79b320af6b03f72c` reverts the unneeded PR 4650
+    experiment and has the exact same source tree
+    `4e4784e6bbfee70d901000fa4c47470ff6ef52d2` as the proved guard-only commit.
   - **Physical-host limits:** ARD/VNC delivered only one byte for a held key and
-    plain `e` for Option-E then E, so native repeat and IME composition remain
+    plain `e` for Option-E then E, so native repeat and dead-key behavior remain
     unaccepted. The route cannot prove physical trackpad touch or momentum, and
-    no host-pasteboard access failure was induced. Accessibility, lifecycle
-    identity, effects, Eon composition, and macOS support remain open.
+    no host-pasteboard access failure was induced. Other IMEs, accessibility,
+    lifecycle identity, effects, Eon composition, and macOS support remain open.
 
 ## VEN-C17 — Caller-owned native application identity
 
@@ -1115,7 +1138,7 @@ qualified by the identities and boundaries below.
 - **Owner:** The caller owns identity choice and desktop metadata; Venus owns
   direct CLI validation and native Wayland materialization.
 - **Consumes:** Exact winit 0.30.13 commit
-  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`; Eon owns the selected value.
+  `7c209ec5bebbd2963f75a39f79b320af6b03f72c`; Eon owns the selected value.
 - **Boundary:** Native mapping only; no branding framework or mutable identity.
 - **Proof:** `ab24961bd6b2f9403736e52ebbac8cc266488a41`
   - **Environment:** x86_64 Linux Wayland with installed Eonova acceptance

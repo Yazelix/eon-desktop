@@ -37,7 +37,7 @@ one-pixel clips of the existing rounded fill keep separators inside its corners.
 Scene reserves a small bottom margin and includes it in initial grid overhead.
 Selected and hovered header bands clip the same shared rounded shape, avoiding
 pill ends inside the stack. The gap uses the existing terminal background and
-opacity. Pinned winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, Wayland
+opacity. Pinned winit `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, Wayland
 `window/state.rs::set_blur`, already requests blur over the entire surface; its
 `types/bgr_effects.rs` routes compositor support. An alpha-zero gap on a black
 proof background hid the missing paint, so the regression uses a colored underlay.
@@ -54,7 +54,7 @@ default/off interaction are the falsifiers. Eon delivery remains separate.
 for cell-authored targets and inspection of the actual URI. The preserved
 2020-05-31 document supplies protocol semantics, not current terminal support
 claims. Current Ghostty and Kitty documentation supplied UX comparisons only.
-The exact selected winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` cursor and
+The exact selected winit `7c209ec5bebbd2963f75a39f79b320af6b03f72c` cursor and
 event APIs own the native pointer boundary. Foot
 `85655c74a4ded119392ea8b632626c3920042807` (`url-mode.c`, `doc/foot.ini.5.scd`)
 demonstrates explicit keyboard traversal, clipboard activation and a distinct
@@ -94,7 +94,7 @@ and unicode-script 0.5.8's `Script`. Explicit primary names preserve ordered
 fallback before generic family search. Keep the existing font fitter and
 `CellMetrics`; reject another resolver or geometry owner.
 
-Patched winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08` owns native sizing.
+Patched winit `7c209ec5bebbd2963f75a39f79b320af6b03f72c` owns native sizing.
 Its Wayland event loop consumes `ScaleFactorChanged`'s `InnerSizeWriter`
 synchronously; use that one admission to preserve the requested grid when the
 initial output scale arrives after the first buffer. Later user size/scale
@@ -394,7 +394,7 @@ revision-bound nearest-first row window and one signed atomic viewport commit;
 Venus does not infer routing, edges, cells, or revisions.
 
 Patched winit 0.30.13 at
-`fb45fbf901fbe70cc9a877b5d651d0b60c206b08` maps Wayland discrete axes to
+`7c209ec5bebbd2963f75a39f79b320af6b03f72c` maps Wayland discrete axes to
 `LineDelta`, continuous axes to physical `PixelDelta`, and available axis-stop
 to `Ended`. It discards axis source and hardware event time and documents that
 discrete wheel sequences may lack `Ended`. Venus therefore gives momentum only
@@ -456,7 +456,7 @@ Venus's presentation owner separates content dirtiness from input geometry:
 ordinary frames with unchanged dimensions/screen advance the renderer cache
 without withdrawing the last actually presented revision. Structural changes
 still invalidate publication. Finish retains its authoritative presentation
-gate. Patched winit `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`
+gate. Patched winit `7c209ec5bebbd2963f75a39f79b320af6b03f72c`
 `Window::request_redraw` gives no strong ordering guarantee, so input eligibility
 cannot depend on the next output frame being repainted first.
 
@@ -523,11 +523,11 @@ Venus setting is introduced.
 
 ## Required for compositor-owned background blur
 
-`ven-wayland-background-blur-e06` keeps exact winit 0.30.13 and patches only its
-source to `chiyuki0325/winit-0.30` commit
-`fb45fbf901fbe70cc9a877b5d651d0b60c206b08`. That commit is directly above the
-v0.30.13 tag and is an exact backport of verified merged upstream commit
-`c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. It prefers
+The current exact winit 0.30.13 patch is `Yazelix/winit-0.30` commit
+`7c209ec5bebbd2963f75a39f79b320af6b03f72c`. It retains ancestor
+`fb45fbf901fbe70cc9a877b5d651d0b60c206b08`, directly above the v0.30.13 tag
+and an exact backport of verified merged upstream commit
+`c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`. That ancestor prefers
 `ext-background-effect-v1`, retains the KDE fallback, and leaves the public
 `WindowAttributes::with_blur` contract unchanged. The fork and upstream remain
 Apache-2.0.
@@ -535,7 +535,7 @@ Apache-2.0.
 ## Required for caller-owned application identity
 
 Exact patched winit 0.30.13 commit
-`fb45fbf901fbe70cc9a877b5d651d0b60c206b08` documents and implements
+`7c209ec5bebbd2963f75a39f79b320af6b03f72c` documents and implements
 `WindowAttributesExtWayland::with_name`: its general name becomes the Wayland
 application ID and should match the distributed desktop-file ID; its instance
 name is unused on Wayland. VEN-C17 reuses only this existing native window
@@ -601,8 +601,9 @@ renderer, or a platform framework.
 
 ## Apple Silicon native interaction candidate
 
-`ven-deliver-macos-input-pasteboard-links-zfw` inspected the same exact winit
-fork's AppKit event path. It maps Command, Option, and Control independently to
+`ven-deliver-macos-input-pasteboard-links-zfw` inspected exact winit fork
+`7c209ec5bebbd2963f75a39f79b320af6b03f72c` and its AppKit event path. It maps
+Command, Option, and Control independently to
 `SUPER`, `ALT`, and `CTRL`; clears preedit before committed IME text; updates
 pointer position before button and wheel delivery; preserves precise pixel
 deltas and native touch or momentum phases. Venus therefore keeps its shared
@@ -611,6 +612,27 @@ Paste, and Open-link gestures select macOS Command; custom Alt and Control
 bindings keep their actions and display Apple key names. Apple's keyboard
 guidance supplies the standard Command-C/Command-V convention and the warning
 against repurposing platform shortcuts.
+
+Physical M1 tracing found that Kotoeri reached marked text `にほん`, then winit
+treated a selected-input-source identity change as immediate IME deactivation
+before AppKit interpreted the commit key. Upstream PR 4087 removed the same
+transition but also routed ordinary input through IME commit and was rejected.
+Guard-only fork candidate `92722876415d5f2e3e97b2897b84c9a768c79b82`
+added `!hasMarkedText()` to that deactivation guard. An initial one-Enter
+diagnostic stopped after candidate selection and incorrectly suggested the
+separate `unmarkText`/`insertText` change in upstream PR 4650 was also needed.
+The corrected Kotoeri sequence uses one Enter to select and a second to commit;
+an A/B run then proved the guard-only candidate delivered exact `日本`. The
+published fork tip reverts the temporary PR 4650 addition and has the same tree
+`4e4784e6bbfee70d901000fa4c47470ff6ef52d2` as the guard-only commit. AppKit
+remains the marked-text owner, non-composition source changes keep their prior
+behavior, and Venus gains no platform-specific input branch.
+
+On the physical Macmini9,1 M1, exact guard-only Venus candidate `fdac777` with
+fork `9272287` preserved Kotoeri conversion from `にほん` to the selected `日本`
+candidate. Kotoeri used one Enter to accept the candidate and a second to
+commit; Orbit then received exactly one UTF-8 `日本` (`e697a5e69cac`) and no
+duplicate. The selected fork tip is tree-identical to this proved candidate.
 
 Hosted M1 runs 34820414136 and 34820510780 reject `pbcopy`/`pbpaste`: `pbpaste`
 emitted raw RTF-only bytes as preferred text, while `pbcopy` advertised literal

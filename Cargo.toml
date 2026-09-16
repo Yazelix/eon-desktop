@@ -26,7 +26,7 @@ arboard = { version = "=3.6.1", default-features = false }
 wgpu = { version = "=30.0.0", default-features = false, features = ["metal"] }
 
 [patch.crates-io]
-winit = { git = "https://github.com/chiyuki0325/winit-0.30.git", rev = "fb45fbf901fbe70cc9a877b5d651d0b60c206b08" }
+winit = { git = "https://github.com/Yazelix/winit-0.30.git", rev = "7c209ec5bebbd2963f75a39f79b320af6b03f72c" }
 
 [profile.release]
 lto = "thin"

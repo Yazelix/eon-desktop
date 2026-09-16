@@ -72,14 +72,14 @@ ORBF v2 / ORBS v11 using the same dependency-free canonical package.
 ### Native host
 
 - **Selected shape:** winit 0.30.13 with Wayland, dynamic Wayland loading, and
-  raw-window-handle 0.6 only, patched to exact `chiyuki0325/winit-0.30` commit
-  `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`
+  raw-window-handle 0.6 only, patched to exact `Yazelix/winit-0.30` commit
+  `7c209ec5bebbd2963f75a39f79b320af6b03f72c`
 - **Status:** Active on native Linux Wayland
 - **Owner consequence:** The host owns window and event-loop lifecycle, native input and IME
   collection, compositor blur protocol selection, resize, surface recovery, socket
   scheduling, and bounded client failure UX. X11 and Xwayland compatibility are unsupported.
-  Replace the patch with the first accepted stable winit containing upstream
-  `c4afadbfabf7b1e7989b40b493db1a4c7bd8ff4e`.
+  Replace the patch with the first accepted stable winit containing the
+  background-effect backport and marked-text source-transition correction.
 
 ### GPU and text
 
@@ -194,11 +194,12 @@ duplicate windowing, GPU, shaping, font fallback, and accessibility.
 ## Native background blur decision
 
 Stable winit 0.30.13 exposes blur but binds only KDE's Wayland protocol. The
-selected exact fork commit is one commit above that release and backports the
-merged upstream `ext-background-effect-v1` implementation: 200 additions and
-30 deletions across eight winit files, with no new Venus dependency, native
-library, build tool, service, unsafe code, or event-loop owner. One winit remains
-shared with `accesskit_winit`.
+selected exact fork retains `fb45fbf901fbe70cc9a877b5d651d0b60c206b08`,
+which backports the merged upstream `ext-background-effect-v1` implementation:
+200 additions and 30 deletions across eight winit files. Its only additional
+change is the AppKit IME guard below. No new Venus dependency, native library,
+build tool, service, unsafe code, or event-loop owner is added. One winit
+remains shared with `accesskit_winit`.
 
 The Git workspace resolves `dpi` 0.1.1 instead of registry 0.1.2. The older
 source lacks only the later no-std and inset additions, which neither winit
@@ -210,6 +211,22 @@ and portability cost for the same request. Exact Venus proof
 the complete locked suite, and visibly applies blur on COSMIC Wayland 1.0.0 at
 `091583ac84abac02967ae358cf9570ddfef63b31`. Other compositors remain best
 effort because the public API exposes neither capability nor acceptance.
+
+## Native AppKit IME decision
+
+The selected fork adds one condition to winit's existing input-source
+transition: while AppKit reports marked text, keep the current IME state until
+`interpretKeyEvents` can commit or update that composition. Source changes with
+no marked text retain the existing `Ime::Disabled` event. Physical Kotoeri
+proof converted `にほん` and committed selected `日本` exactly once to Orbit.
+Upstream PR 4087 removed the source transition as part of a broader rewrite and
+remains rejected because ordinary input entered the IME commit path. PR 4650
+was tested after an incomplete one-Enter diagnostic suggested a second ordering
+failure; a corrected two-Enter A/B proved the guard-only candidate already
+committed successfully, so the published fork reverts that extra patch. The
+selected tree is identical to guard-only commit
+`92722876415d5f2e3e97b2897b84c9a768c79b82` and adds no package, API, Venus
+branch, or second input owner.
 
 ## Native clipboard decision
 
