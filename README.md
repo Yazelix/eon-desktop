@@ -72,10 +72,11 @@ attachment when one is unavailable. This is the only proved host. The Apple
 Silicon macOS implementation has a proved opaque AppKit, AccessKit, and Metal
 foundation plus a partial native-interaction proof. M1 evidence covers Unicode
 terminal clipboard writes, Command+C link copy, ordinary and Unicode key text,
-Command+V paste, and supervised exit. Native IME composition, repeat, focus
-loss, click/drag selection, Command+click Open, and empty-paste or host-access
-failure notices remain unaccepted. macOS stays unsupported until VEN-C16 succeeds. X11,
-Xwayland, and Intel macOS remain unsupported.
+Command+V paste, focus loss and resumption, click-drag selection and exact copy,
+Command+click Open, an empty-paste failure notice, and supervised exit. Native
+IME composition, held-key repeat, physical trackpad gestures, and a host-access
+failure notice remain unaccepted. macOS stays unsupported until VEN-C16 succeeds.
+X11, Xwayland, and Intel macOS remain unsupported.
 
 ### Typography and initial size
 
@@ -112,10 +113,10 @@ These are startup options; Eon owns persistent product configuration.
 ### Hyperlinks
 
 Hover an explicit OSC 8 link to highlight it and preview its actual target.
-Ctrl+left click opens it on Linux; Command+left click is the unaccepted macOS
-mapping. Ctrl+Shift+C on Linux or Command+C on macOS copies the hovered target
+Ctrl+left click opens it on Linux; Command+left click opens it on macOS.
+Ctrl+Shift+C on Linux or Command+C on macOS copies the hovered target
 unless the terminal has selected text, in which case it copies that selection.
-The M1 proof covers Command+C on a hovered link.
+Physical M1 proof covers both Command actions on an exact hovered link.
 Ordinary clicks retain terminal mouse reporting and selection behavior;
 ordinary URL-looking text is not detected as a link. The accessibility tree
 exposes each current visible target as an Open link followed by a Copy button.
@@ -328,8 +329,8 @@ selection or primary destination to the primary clipboard. The macOS candidate
 uses Command+C and Command+V and maps every destination to the general native
 pasteboard; it does not emulate a primary selection. M1 proof covers one
 Unicode terminal clipboard write, one Unicode Command+V paste, and visible
-rejection of PNG-only and oversized values. Native empty-paste and host-access
-failure notices remain unaccepted.
+rejection of empty, PNG-only, and oversized values. A native host-access failure
+notice remains unaccepted.
 
 ## Architecture and evidence
 
@@ -367,9 +368,8 @@ The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
 with native Wayland and Vulkan. The unsupported Apple Silicon host reuses the
 same renderer/model path with AppKit, AccessKit, Metal, and target-only arboard.
 Its opaque foundation and a bounded clipboard/key slice have native M1 proof;
-IME, repeat, focus loss, selection gestures, Command+click Open, empty-paste and
-host-access failure notices, lifecycle acceptance, effects, and composition
-remain open. The exact
+IME, held-key repeat, physical trackpad gesture quality, a host-access failure
+notice, lifecycle acceptance, effects, and composition remain open. The exact
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
 accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
 selection completion, routed native
@@ -388,11 +388,11 @@ benchmark CSV data, and disposable qualification patches.
 | Agent policy inputs | 216 |
 | README | 398 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,899 |
+| Contracts and references | 1,934 |
 | Memory benchmark report | 158 |
 | Crate decisions | 286 |
 | Changelog | 260 |
 | Rust source, including unit tests | 18,337 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 33 |
-| **Total** | **22,628** |
+| **Total** | **22,663** |

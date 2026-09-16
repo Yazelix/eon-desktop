@@ -173,7 +173,7 @@ Their distinct earlier proof identities and remaining limits stay qualified.
   browser embedding, new crate, or protocol change. Host GIO and a registered
   handler are required for Linux opening; copy remains available without them.
   macOS uses fixed `/usr/bin/open -u` and the general pasteboard. Product-path
-  Command+click and accessibility activation remain unaccepted on macOS.
+  accessibility activation remains unaccepted on macOS.
 - **Proof:** Accepted source
   `3730201d6dd27e15fdcd1a8b0662aa476a587eb6`.
   - **User-accepted simplification:** Nix package
@@ -232,8 +232,10 @@ Their distinct earlier proof identities and remaining limits stay qualified.
   - **Apple Silicon partial proof:** Exact Venus source
     `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` passed the deterministic
     shortcut and URI-dispatch checks. M1 run 34832511106 copied an exact hovered
-    URI with Command+C. M1 mechanism run 34820510780 proved `/usr/bin/open -u`
-    dispatch, but product-path Command+click Open remains unaccepted.
+    URI with Command+C. On a physical Macmini9,1 M1 running macOS 26.6.1 build
+    25G76, vncdotool 1.4.2 hovered the exact OSC 8 target and product-path
+    Command+click opened Safari at that exact URI. M1 mechanism run 34820510780
+    separately proved `/usr/bin/open -u` dispatch.
 
 The `VEN-C1`, `VEN-C2` and `VEN-C4` proof revisions advance for this exact
 hyperlink slice. Their distinct earlier evidence and listed proof gaps remain
@@ -312,7 +314,8 @@ qualified by the identities and boundaries below.
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
 - **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
   Linux Wayland compositor behavior remain manual quality surfaces. macOS IME
-  composition, repeat, focus loss, and click/drag gestures remain unaccepted.
+  composition and held-key repeat remain unaccepted; physical trackpad gesture
+  quality remains with VEN-C7.
 - **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
@@ -333,8 +336,13 @@ qualified by the identities and boundaries below.
   - **Apple Silicon partial proof:** M1 run 34832511106 at exact Venus source
     `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee` delivered ordinary and Unicode
     key text plus Command+V as exact Orbit input. The selected deterministic
-    checks cover shared IME, repeat, focus, pointer, and scroll ownership; they
-    do not replace the open real-Mac observations.
+    checks cover shared IME, repeat, focus, pointer, and scroll ownership. On a
+    physical Macmini9,1 M1 running macOS 26.6.1 build 25G76, the same source
+    delivered `F`, suppressed `X` after Finder took focus, and delivered `R`
+    after Venus reactivation. A native drag selected one exact 24-byte terminal
+    row and Command+C wrote those exact bytes to the general pasteboard. A
+    three-second VNC key-down delivered only one byte, and Option-E then E
+    delivered plain `e`, so held-key repeat and IME composition remain open.
 
 ## VEN-C3 — Transient client recovery
 
@@ -419,8 +427,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proved on x86_64 Linux; Apple Silicon gesture acceptance remains
-  open.
+- **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
   explicit copy.
@@ -490,8 +497,7 @@ qualified by the identities and boundaries below.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
-  Apple Silicon click/drag selection and trackpad gesture quality remain
-  unaccepted.
+  Apple Silicon physical trackpad gesture quality remains unaccepted.
 - **Scrollback review proof:** `74d22276e9039dc3ee6151d69b9283114ab02ea1`
   - Idle cleanup and rejected input preserve terminal-routing evidence; the
     selected pane label keeps its directory ending beside the count. Existing
@@ -561,9 +567,14 @@ qualified by the identities and boundaries below.
   pointer, scroll, selection, and destination owners at source
   `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee`. M1 run 34832511106 posted
   process-targeted pointer motion and precise-scroll events while the process
-  and attachment stayed live, but it recorded no gesture result. The runner did
-  not deliver synthetic button events, so native selection and gesture semantics
-  remain open.
+  and attachment stayed live, but its synthetic button events produced no
+  gesture result. A later physical Macmini9,1 M1 run through Scaleway ARD/VNC
+  delivered a native left-button drag that selected exactly
+  `SELECT-THIS-TEXT-EXACTLY`; Command+C wrote its exact 24 bytes to the general
+  pasteboard at SHA-256
+  `34d2a7bacbb20cc60132ac65035667da81034ab0e52fd62743a795efec689c10`.
+  ARD/VNC does not expose Apple trackpad touch or momentum phases, so trackpad
+  gesture quality remains open.
 
 ## VEN-C8 — Eon workspace presentation
 
@@ -838,8 +849,8 @@ qualified by the identities and boundaries below.
   selected native clipboard owner: wl-clipboard-rs 0.9.3 on Linux or target-only
   arboard 3.6.1 on macOS.
 - **Boundary:** A hardware Paste key and native Wayland without data-control
-  remain unproved. macOS empty-paste and host-access failure notices, plus focus
-  and overlap behavior, remain unaccepted.
+  remain unproved. A macOS host-access failure notice and overlap behavior
+  remain unaccepted.
 - **Proof:** `9c56eb17613e10ef7712a1852b049ed63cf22b18`
   - **Environment:** Deterministic checks plus isolated Sway 1.12 Wayland proof
   - **Evidence:** Overlapping shortcuts, layout-independent release pairing,
@@ -850,8 +861,16 @@ qualified by the identities and boundaries below.
   as the exact Orbit-owned terminal bytes, including newline-to-carriage-return
   encoding. M1 run 34831678536 displayed distinct PNG-only and oversized paste
   failure notices without sending PTY bytes. Deterministic tests cover all
-  admission and failure-notice paths; native empty-paste and host-access failure
-  observations remain open.
+  admission and failure-notice paths. A physical Macmini9,1 M1 run found that
+  source cleared the correct empty-paste notice on the Command-key release.
+  Exact correction `cd881e701183a83c5212d171551d0eae452d9351` retains clipboard
+  notices across key releases while clearing them on substantive input. Its
+  Mach-O arm64 artifact
+  `8231c07af04580646e82db77fb507aa585bb1cfd9aba1bfe222039c3305e6b71`
+  passed all 42 macOS application tests. An ordinary Command+V press and release
+  against the empty general pasteboard left the exact failure visible with zero
+  PTY bytes; the following `Z` cleared it and delivered exactly byte `5a`.
+  Native host-access failure remains open.
 - **Open proof:** Manual Zellij, Helix, and Yazi acceptance remains assigned to
   the user.
 
@@ -999,9 +1018,9 @@ qualified by the identities and boundaries below.
   fork revision.
 - **Boundary:** X11, Xwayland, Intel macOS, signing, notarization, packaging,
   distribution, and other native platforms remain unsupported. Apple Silicon
-  IME composition, repeat, focus loss, click/drag selection, Command+click Open,
-  empty-paste and host-access failure notices, accessibility, lifecycle
-  identity, effects, and Eon composition remain unaccepted.
+  IME composition, held-key repeat, physical trackpad gesture quality, a
+  host-access failure notice, accessibility, lifecycle identity, effects, and
+  Eon composition remain unaccepted.
 - **Linux proof:** `e033efadf023492ae02eb1e9036de98ad93d2f98`
   - **Environment:** x86_64 Linux native Wayland
   - **Evidence:** Locked format/check/test/Clippy, exact dependency features,
@@ -1041,7 +1060,8 @@ qualified by the identities and boundaries below.
   - **Boundary:** This proves only the first opaque foundation child. It does
     not accept the remaining macOS behavior or change VEN-C16 support status.
 - **Native interaction partial proof:**
-  `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee`
+  `0f0a9ab945f4fbc492b79468a6b4d877a19c90ee`, with empty-paste notice
+  correction `cd881e701183a83c5212d171551d0eae452d9351`
   - **Environment:** Standard GitHub `macos-15` M1, macOS 15.7.9 build 24G830,
     aarch64, rustc/cargo 1.98.1, exact Orbit runtime
     `0233f4d34b294a50c5bc7f373859cf4ec04d2414`.
@@ -1055,15 +1075,30 @@ qualified by the identities and boundaries below.
     failure notices without PTY input. Local Rust 1.96.0 checks passed 74
     library, 42 application, and 17 integration tests plus strict Linux and
     Apple-target Clippy.
-  - **Limits:** CI could not deliver mouse-button selection or a reliable focus
+  - **Hosted limits:** CI could not deliver mouse-button selection or a reliable focus
     transition and could not distinguish native repeat from discrete key input.
     The empty-paste capture retained stale link feedback, and the proof harness
     used a non-failing negated `cmp`. Corrected run 34833225890 did not receive
     a runner after GitHub reported a failed payment or spending limit.
-    Native IME, focus loss, repeat, click/drag selection, Command+click Open,
-    empty-paste and host-access failure notices, accessibility, lifecycle
-    identity, effects, and Eon composition remain open. This evidence does not
-    change macOS support status.
+  - **Physical-host extension:** A Scaleway physical Macmini9,1 with Apple M1,
+    8 GiB RAM, and macOS 26.6.1 build 25G76 ran exact Orbit
+    `0233f4d34b294a50c5bc7f373859cf4ec04d2414` and Venus through vncdotool
+    1.4.2 over native ARD/VNC at 1920 by 1080. Source `0f0a9ab` proved focus
+    loss and resumption, exact click-drag selection and Command+C copy, and
+    product-path Command+click opening the exact hovered URI in Safari. It also
+    exposed the empty-paste notice release defect. Exact correction `cd881e7`
+    passed all 42 macOS application tests and a native regression: ordinary
+    Command+V against an empty general pasteboard kept the exact notice visible
+    after both keys were released, sent zero PTY bytes, and let the next `Z`
+    dismiss the notice while delivering exactly byte `5a`. Both supervised
+    pairs exited zero with their sockets removed and no process left. Captures,
+    logs, inputs, source identities, and SHA-256 sums are retained in
+    `~/.local/state/eon/proofs/ven-macos-scaleway-m1-2026-09-16/`.
+  - **Physical-host limits:** ARD/VNC delivered only one byte for a held key and
+    plain `e` for Option-E then E, so native repeat and IME composition remain
+    unaccepted. The route cannot prove physical trackpad touch or momentum, and
+    no host-pasteboard access failure was induced. Accessibility, lifecycle
+    identity, effects, Eon composition, and macOS support remain open.
 
 ## VEN-C17 — Caller-owned native application identity
 
