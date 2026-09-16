@@ -628,11 +628,11 @@ published fork tip reverts the temporary PR 4650 addition and has the same tree
 remains the marked-text owner, non-composition source changes keep their prior
 behavior, and Venus gains no platform-specific input branch.
 
-On the physical Macmini9,1 M1, exact guard-only Venus candidate `fdac777` with
-fork `9272287` preserved Kotoeri conversion from `にほん` to the selected `日本`
+On the physical Macmini9,1 M1, exact final Venus candidate `f0cf58f` with fork
+`7c209ec5` preserved Kotoeri conversion from `にほん` to the selected `日本`
 candidate. Kotoeri used one Enter to accept the candidate and a second to
 commit; Orbit then received exactly one UTF-8 `日本` (`e697a5e69cac`) and no
-duplicate. The selected fork tip is tree-identical to this proved candidate.
+duplicate.
 
 Hosted M1 runs 34820414136 and 34820510780 reject `pbcopy`/`pbpaste`: `pbpaste`
 emitted raw RTF-only bytes as preferred text, while `pbcopy` advertised literal
@@ -664,9 +664,9 @@ failure notices and sent no PTY bytes; its empty-paste capture retained stale
 link feedback. Run 34832511106 exposed a proof-harness defect: Bash did not fail
 on negated `cmp`, and its failure screenshots retained that stale feedback. The
 corrected workflow failed before runner allocation in run 34833225890 because
-the account reached its payment or spending limit. Native empty-paste and
-host-access failure notices remain open with the other real-Mac interaction
-checks.
+the account reached its payment or spending limit. That hosted evidence left
+native empty-paste and host-access failure notices open; VEN-C16's later
+physical proof accepts empty-paste only.
 
 ## Watchlist
 

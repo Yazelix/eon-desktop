@@ -219,12 +219,9 @@ transition: while AppKit reports marked text, keep the current IME state until
 `interpretKeyEvents` can commit or update that composition. Source changes with
 no marked text retain the existing `Ime::Disabled` event. Physical Kotoeri
 proof converted `にほん` and committed selected `日本` exactly once to Orbit.
-Upstream PR 4087 removed the source transition as part of a broader rewrite and
-remains rejected because ordinary input entered the IME commit path. PR 4650
-was tested after an incomplete one-Enter diagnostic suggested a second ordering
-failure; a corrected two-Enter A/B proved the guard-only candidate already
-committed successfully, so the published fork reverts that extra patch. The
-selected tree is identical to guard-only commit
+Upstream PR 4087 remains rejected because its broader rewrite routes ordinary
+input through IME commit; corrected two-Enter A/B showed PR 4650 unnecessary.
+The selected tree is identical to guard-only commit
 `92722876415d5f2e3e97b2897b84c9a768c79b82` and adds no package, API, Venus
 branch, or second input owner.
 

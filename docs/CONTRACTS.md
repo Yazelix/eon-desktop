@@ -312,10 +312,10 @@ qualified by the identities and boundaries below.
 - **Consumes:** Orbit `ORB-C5` proof
   `c905bf9610581747f1b07565814b501ca66cfaa6` through canonical ORBS v4 at
   `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`.
-- **Boundary:** Candidate-list IMEs, physical mixed-monitor hardware, and broader
-  Linux Wayland compositor behavior remain manual quality surfaces. macOS IME
-  composition and held-key repeat remain unaccepted; physical trackpad gesture
-  quality remains with VEN-C7.
+- **Boundary:** Physical mixed-monitor hardware and broader Linux Wayland compositor
+  behavior remain manual quality surfaces. On macOS, only VEN-C16's Kotoeri
+  Roman-to-kanji IME path is accepted; held-key repeat, dead keys, and other IMEs
+  remain unaccepted. Physical trackpad gesture quality remains with VEN-C7.
 - **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
@@ -340,9 +340,9 @@ qualified by the identities and boundaries below.
     physical Macmini9,1 M1 running macOS 26.6.1 build 25G76, the same source
     delivered `F`, suppressed `X` after Finder took focus, and delivered `R`
     after Venus reactivation. A native drag selected one exact 24-byte terminal
-    row and Command+C wrote those exact bytes to the general pasteboard. A
-    three-second VNC key-down delivered only one byte, and Option-E then E
-    delivered plain `e`, so held-key repeat and IME composition remain open.
+    row and Command+C wrote those exact bytes to the general pasteboard. A three-second
+    VNC key-down delivered only one byte; Option-E then E delivered plain `e`.
+    VEN-C16 later proves Kotoeri only; repeat, dead keys, and other IMEs remain open.
 
 ## VEN-C3 — Transient client recovery
 
@@ -1097,14 +1097,14 @@ qualified by the identities and boundaries below.
     logs, inputs, source identities, and SHA-256 sums are retained in
     `~/.local/state/eon/proofs/ven-macos-scaleway-m1-2026-09-16/`.
   - **Kotoeri composition extension:** Venus candidate
-    `fdac7776b73f035474238b489dd66435f7871650`, tree
-    `43a7a9829d190bba014315d6990fa181a43bca3a`, consumes guard-only winit
-    fork `92722876415d5f2e3e97b2897b84c9a768c79b82`. Its source archive SHA-256 is
-    `9ad76f60fb0591b81d25aa7bf0fd898aecbb4c65dfef7cda13ad39e3351a6cbd`,
+    `f0cf58f1783c7ef33462ff114158eba9d3f29ee1`, tree
+    `6f7c81c5750ef71a13f4fd51ae1a1703c16601b8`, consumes selected winit fork
+    `7c209ec5bebbd2963f75a39f79b320af6b03f72c`. Its source archive SHA-256 is
+    `28e8e420dfb4dda30fdaa3a7f55f8536a5ffd7106bfffbdc78e44eed383fc320`,
     Cargo.lock SHA-256 is
-    `e53d0591c31ecc2407cd905aa4451efcc0acf0f5f88f556c07aac1de50a5b77e`, and
+    `552dc37ce50caa9eebf9035ac84c15058beb787b3e5d08258278e5dfe3d33d1f`, and
     physical-M1 arm64 release artifact SHA-256 is
-    `3bcabd43070b4234f2cb466d7eb502527ba2842e817ceabc95fffa13de1bc803`.
+    `e6c615793c0ee5532b5bc6bdee714294e785a109ed2b22676576546471837263`.
     Local locked checks passed 74 library, 42 application, and 17 integration
     tests plus strict Linux and Apple-target Clippy; the M1 passed all 42
     application tests. Native Kotoeri converted `にほん` to the selected `日本`
@@ -1113,10 +1113,7 @@ qualified by the identities and boundaries below.
     `cf2abf0c5be326cb922a70f8163f91079c4d9aa8655c60ead89ad545c9de2e92`.
     It remained six bytes after three seconds. The isolated Venus and Orbit
     processes stopped, the private socket was removed, and the temporary host
-    credential was restored. Selected fork tip
-    `7c209ec5bebbd2963f75a39f79b320af6b03f72c` reverts the unneeded PR 4650
-    experiment and has the exact same source tree
-    `4e4784e6bbfee70d901000fa4c47470ff6ef52d2` as the proved guard-only commit.
+    credential was restored.
   - **Physical-host limits:** ARD/VNC delivered only one byte for a held key and
     plain `e` for Option-E then E, so native repeat and dead-key behavior remain
     unaccepted. The route cannot prove physical trackpad touch or momentum, and

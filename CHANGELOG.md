@@ -8,8 +8,8 @@
   attachment resolves Orbit's effective-UID socket without relying on a `UID`
   environment variable. Copy, paste, and link opening use Command conventions,
   the general native pasteboard, and `/usr/bin/open`; all other input continues
-  through the shared semantic path. Active marked-text composition survives a
-  native input-source identity change until AppKit commits or updates it.
+  through the shared semantic path. Kotoeri marked-text composition survives a
+  native input-source identity change while AppKit still reports marked text.
   Clipboard failures take priority over stale link feedback and remain visible
   after the shortcut's release. Linux keeps its existing Ctrl shortcuts,
   Wayland/Vulkan host, data-control clipboard, and GIO opener.

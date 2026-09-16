@@ -74,10 +74,10 @@ foundation plus a partial native-interaction proof. M1 evidence covers Unicode
 terminal clipboard writes, Command+C link copy, ordinary and Unicode key text,
 Command+V paste, focus loss and resumption, click-drag selection and exact copy,
 Command+click Open, an empty-paste failure notice, Kotoeri `にほん` to `日本`
-composition, and supervised exit. Held-key repeat, physical trackpad gestures,
-other IMEs, and a host-access failure notice remain unaccepted. macOS stays
-unsupported until VEN-C16 succeeds. X11, Xwayland, and Intel macOS remain
-unsupported.
+composition, and supervised exit. Held-key repeat, dead keys, other IMEs,
+physical trackpad gestures, and a host-access failure notice remain unaccepted.
+macOS stays unsupported until VEN-C16 succeeds. X11, Xwayland, and Intel macOS
+remain unsupported.
 
 ### Typography and initial size
 
@@ -369,9 +369,9 @@ The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
 with native Wayland and Vulkan. The unsupported Apple Silicon host reuses the
 same renderer/model path with AppKit, AccessKit, Metal, and target-only arboard.
 Its opaque foundation and a bounded clipboard/key slice have native M1 proof;
-held-key repeat, other IMEs, physical trackpad gesture quality, a host-access
-failure notice, lifecycle acceptance, effects, and composition remain open. The exact
-`ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
+held-key repeat, dead keys, other IMEs, physical trackpad gesture quality, a
+host-access failure notice, lifecycle acceptance, effects, and Eon composition remain open.
+The exact `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
 accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
 selection completion, routed native
 left-pointer gestures that survive compatible live output, bounded row-window
@@ -389,11 +389,11 @@ benchmark CSV data, and disposable qualification patches.
 | Agent policy inputs | 216 |
 | README | 399 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,979 |
+| Contracts and references | 1,976 |
 | Memory benchmark report | 158 |
-| Crate decisions | 303 |
+| Crate decisions | 300 |
 | Changelog | 261 |
 | Rust source, including unit tests | 18,337 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 33 |
-| **Total** | **22,727** |
+| **Total** | **22,721** |
