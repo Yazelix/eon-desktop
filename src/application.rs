@@ -2399,6 +2399,7 @@ impl Application {
         } else {
             LocalNoticeSource::Input
         };
+        let dismisses_clipboard = dismisses_clipboard_notice(notice_source, &message);
         if !self.model.is_attached() {
             return false;
         }
@@ -2417,8 +2418,8 @@ impl Application {
             self.input.cancel_selection();
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
-        let clipboard_cleared = dismisses_clipboard_notice(notice_source)
-            && self.model.clear_venus_notice(LocalNoticeSource::Clipboard);
+        let clipboard_cleared =
+            dismisses_clipboard && self.model.clear_venus_notice(LocalNoticeSource::Clipboard);
         if self.model.clear_venus_notice(notice_source) || queue_recovered || clipboard_cleared {
             self.refresh_client_view();
         }
@@ -3468,8 +3469,15 @@ fn selection_presentation_is_ready(message: &ClientMessage, current: bool) -> bo
     current || matches!(message, ClientMessage::Selection(SelectionAction::Copy))
 }
 
-fn dismisses_clipboard_notice(source: LocalNoticeSource) -> bool {
+fn dismisses_clipboard_notice(source: LocalNoticeSource, message: &ClientMessage) -> bool {
     source == LocalNoticeSource::Input
+        && !matches!(
+            message,
+            ClientMessage::Key(session::KeyEvent {
+                action: session::KeyAction::Release,
+                ..
+            })
+        )
 }
 
 fn status_notice<'a>(model: Option<&'a str>, link: Option<&'a str>) -> Option<&'a str> {
@@ -6169,9 +6177,31 @@ mod tests {
     }
 
     #[test]
-    fn resize_does_not_dismiss_clipboard_result() {
-        assert!(!dismisses_clipboard_notice(LocalNoticeSource::Resize));
-        assert!(dismisses_clipboard_notice(LocalNoticeSource::Input));
+    fn key_release_does_not_dismiss_clipboard_result() {
+        let key = |action| {
+            ClientMessage::Key(session::KeyEvent {
+                action,
+                key: session::PhysicalKey::UNIDENTIFIED,
+                modifiers: session::Modifiers::empty(),
+                consumed_modifiers: session::Modifiers::empty(),
+                composing: false,
+                text: None,
+                unshifted_codepoint: None,
+            })
+        };
+
+        assert!(!dismisses_clipboard_notice(
+            LocalNoticeSource::Resize,
+            &key(session::KeyAction::Press)
+        ));
+        assert!(!dismisses_clipboard_notice(
+            LocalNoticeSource::Input,
+            &key(session::KeyAction::Release)
+        ));
+        assert!(dismisses_clipboard_notice(
+            LocalNoticeSource::Input,
+            &key(session::KeyAction::Press)
+        ));
     }
 
     #[test]

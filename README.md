@@ -391,8 +391,8 @@ benchmark CSV data, and disposable qualification patches.
 | Contracts and references | 1,899 |
 | Memory benchmark report | 158 |
 | Crate decisions | 286 |
-| Changelog | 259 |
-| Rust source, including unit tests | 18,307 |
+| Changelog | 260 |
+| Rust source, including unit tests | 18,337 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 33 |
-| **Total** | **22,597** |
+| **Total** | **22,628** |

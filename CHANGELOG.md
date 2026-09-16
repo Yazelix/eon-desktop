@@ -9,8 +9,9 @@
   environment variable. Copy, paste, and link opening use Command conventions,
   the general native pasteboard, and `/usr/bin/open`; all other input continues
   through the shared semantic path. Clipboard failures take priority over stale
-  link feedback. Linux keeps its existing Ctrl shortcuts, Wayland/Vulkan host,
-  data-control clipboard, and GIO opener.
+  link feedback and remain visible after the shortcut's release. Linux keeps
+  its existing Ctrl shortcuts, Wayland/Vulkan host, data-control clipboard, and
+  GIO opener.
 
 - Add an Alt+/ native shortcut viewer for the Eon surface. Fixed Venus
   bindings share one owner with dispatch, enabled Project/tool rows follow the
