@@ -20,6 +20,41 @@ terminal glyphs out of path previews without another renderer or dependency.
 Different label widths, valid cluster cuts, overflow/reveal, accessible clipped
 bounds and isolated native hover/focus rendering are the falsifiers.
 
+## Native Eon Bar workspace header
+
+`ven-native-eon-bar-header-iqj` inspects Nova Bar at exact Apache-2.0 source
+`bfbf8a7be28b69f9d822c0843bf2dd5066dd49e3`. Its runtime template keeps tabs
+on the leading side, assigns deterministic left/center/right precedence, and
+hides secondary content on overlength. Venus adopts only that tab-first priority
+evidence; it reuses no Nova source, Zellij/zjstatus/WASM mechanism, KDL,
+configuration, widget tray, polling, styling, notification, or controller.
+
+[GNOME header-bar guidance](https://developer.gnome.org/hig/patterns/containers/header-bars.html)
+supports a small set of primary controls, tooltips, narrow-width restraint, and
+some blank draggable space.
+[Apple toolbar guidance](https://developer.apple.com/design/human-interface-guidelines/toolbars)
+supports deliberate item count, logical grouping, and retaining important
+trailing actions under width pressure.
+[VS Code status-bar guidance](https://code.visualstudio.com/api/ux-guidelines/status-bar)
+supports short labels, clear icon metaphors, and restrained secondary content.
+[Ghostty's official configuration reference](https://ghostty.org/docs/config/reference)
+supplies comparison evidence that integrated titlebar tabs save vertical space
+and leave only non-tab titlebar areas draggable. These are UX comparisons, not
+dependencies or implementation sources.
+
+Exact patched winit 0.30.13 at
+`7c209ec5bebbd2963f75a39f79b320af6b03f72c` owns native movement. Its
+`Window::drag_window` contract requires an immediately preceding left press;
+the Wayland implementation uses the latest pointer-button serial and requires
+the cursor inside the window. Venus therefore exposes one Scene-owned empty
+rectangle, calls winit directly from its immediate left press, and consumes a
+returned failure without workspace or terminal input. Existing Scene rectangles,
+renderer batches, EONW actions, VEN-C20 viewer state, and AccessKit nodes remain
+the only owners. A second row, generic toolbar, dependency, protocol change,
+inactive-tab close, copied mechanism, and macOS claim are rejected. Ordinary,
+overflow, narrow, and tiny layout/hit/action/accessibility checks plus isolated
+native Wayland interaction are the falsifiers.
+
 ## Rounded pane frames
 
 `ven-pane-stack-chrome-suu` inspects Nova

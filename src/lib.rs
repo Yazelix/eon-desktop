@@ -22,7 +22,7 @@ pub use render::{CellMetrics, FontSettings, FontSetup, PresentOutcome, RenderErr
 pub use scene::{
     Color, DrawCell, DrawCursor, DrawRow, DrawStyle, GlyphRun, Hyperlink, PaneMetadata, Scene,
     ScenePreview, SceneRect, ShortcutGroup, ShortcutRow, ShortcutViewerScene, WorkspaceFocus,
-    WorkspaceHit, WorkspacePane, WorkspaceScene, WorkspaceTab,
+    WorkspaceHeaderControl, WorkspaceHit, WorkspacePane, WorkspaceScene, WorkspaceTab,
 };
 pub use transport::{
     MetadataEvent, MetadataTransport, SendError, Transport, TransportEvent, WorkspaceEvent,

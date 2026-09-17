@@ -1275,6 +1275,62 @@ qualified by the identities and boundaries below.
   interaction in `eon-deliver-native-shortcut-viewer-rif`. Apple Silicon macOS
   remains under its separately approved proof chain.
 
+## VEN-C21 — Native Eon Bar workspace header
+
+- **Status:** Candidate
+- **Consumer:** One person using a Venus surface controlled by a full Eon
+  workspace.
+- **Trigger:** The person points at, focuses, or activates the workspace header;
+  uses New tab, Keyboard shortcuts, or active-tab Close; scrolls the tab region;
+  or left-presses its empty drag region.
+- **Result:** The existing workspace tab strip remains one row at its existing
+  height. Scrollable tabs keep the leading space and retain their labels,
+  overflow, reveal, selection, hover path, stable identity, and accessibility.
+  Fixed trailing New tab, Keyboard shortcuts, and active-tab Close buttons use
+  the existing CreateTab and exact-active-tab CloseTab EONW actions and the
+  existing local VEN-C20 viewer. Their tooltips and accessible names are
+  `New tab — Alt+Shift+T`, `Keyboard shortcuts — Alt+/`, and
+  `Close tab — Alt+Shift+W`. A bounded empty region between tabs and controls
+  starts compositor-owned window movement only from its immediate left press.
+  It yields before tabs or controls when width contracts. Tab and Shift+Tab
+  traverse focused header controls; Enter and Space activate them. Hover,
+  pressed, and focus states remain distinct, and focus includes an outline.
+- **Important failures:** Buttons, tab gaps, pane chrome, terminal content,
+  popup content, tooltips, and the shortcut viewer never become drag targets.
+  Narrow surfaces preserve an active-tab region and all three controls without
+  overlap. A failed native drag is consumed without workspace action, terminal
+  input, crash, or state mutation. Existing stale-presentation and stable-target
+  gates continue to reject obsolete actions.
+- **Owner:** Venus Scene owns header geometry and hit identity; the renderer
+  owns its native presentation; the application owns input, local viewer state,
+  and action routing; AccessKit projects the same rectangles and identities.
+  Eon retains workspace topology and action-policy ownership; winit and the
+  compositor own native window movement.
+- **Consumes:** VEN-C8, VEN-C20, EONW v5 at exact source
+  `0cc8f477298681ae3945903e8fdb5852d487c5ab`, Orbit ORBF v2 / ORBS v11 at
+  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, and patched winit 0.30.13 at
+  `7c209ec5bebbd2963f75a39f79b320af6b03f72c`.
+- **Boundary:** No second row, widget framework, status/quota data, polling,
+  configuration, Nova compatibility, inactive-tab close, protocol change,
+  dependency, native-decoration policy, or platform-support expansion.
+- **Proof:** Uncommitted candidate runtime diff
+  `5004ec5447592ebfd582e67e1a752c9a154a8daa8a32a0d05c7e17284c886632`
+  over `d447255686ec85e0b42781f34989aa5cf754cd55` is content-identical to
+  package source `94c9d6874590be0cc175c1f438362c779fe27fa8`. Locked format,
+  check, 137 ordinary tests, strict all-target Clippy, Eon manifest/package
+  build, and full flake check pass. Installed candidate
+  `/nix/store/38iax08krzlc5gfl67skqiwlhbrk0jmf-eon-0.1.0` passed isolated
+  Sway 1.12 scale-1 pointer, keyboard, AT-SPI, exact-action, exclusion, and
+  real compositor-drag checks. An exact EONW v5 fixture passed eight-tab
+  overflow and interaction at 960, 320, and 100 pixels; the 100-pixel capture
+  retains the active tab number and all three controls. Both runs preserved all
+  11 ambient product identities and cleaned their private processes;
+  evidence is retained in
+  `~/.local/state/eon/proofs/ven-native-eon-bar-header-iqj-2026-09-17/`.
+  This remains Candidate until a user-authorized proof-bearing commit. The
+  native boundary is x86_64 Linux Wayland; Apple Silicon macOS remains under
+  its separate proof chain.
+
 ## Rules
 
 - Each contract uses one `## VEN-CN — Name` heading and the required fields

@@ -13,7 +13,11 @@ pane accordion. Tab headers show their current one-based position, two spaces,
 and the leaf, `~`, or `/` derived from Eon's authoritative launch directory.
 Pill-shaped tabs fit their labels, with middle ellipsis for long names
 and full launch-path previews on hover. Selected tabs use a brighter fill and
-label without an underline; keyboard tab focus adds a rounded outline.
+label without an underline; keyboard tab focus adds a rounded outline. The same
+row keeps fixed New tab, Keyboard shortcuts, and active-tab Close controls plus
+a bounded empty region for dragging an undecorated window. Tooltips name the
+accepted shortcuts, and the drag region yields before tabs or controls on narrow
+surfaces.
 Pane headers use quiet backgrounds and a lighter selected fill and label. One
 rounded frame connects the pane stack, with full-width separators and a small
 bottom gap sharing the terminal background. Selection and hover fills follow the
@@ -46,7 +50,7 @@ Venus consumes EONW v5 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 optional selection, pending-tab state, identities, tab launch directories,
 popup catalog, geometry settings, commands, lifecycle, actions, and Session mappings.
 This consumer is active in Eon's current v5 runtime, whose component graph pins
-Venus source `d212ff911c18cf0c1cd0f6b7e3f48a2e01d78d86`. Venus consumes
+Venus source `73195f5812cdc8f32841eab644c1bf4b3af9f756`. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -269,6 +273,11 @@ endpoint replacement or authoritative offline state cancels obsolete retry
 state.
 Click a tab or pane header to select it. Alt+1 through Alt+9 select tab positions
 1 through 9, and Alt+0 selects position 10; missing positions do nothing.
+The header's `+`, `?`, and `×` controls request a tab, open Shortcuts, and close
+the exact active tab. Hover exposes their shortcut-bearing names. Pressing only
+the empty region between tabs and controls asks the compositor to move an
+undecorated window; tabs, controls, tab-scroll gaps, panes, and terminal content
+do not drag it.
 Alt+H/L walks every tab, Alt+K/J walks panes,
 Ctrl+Alt+H/L moves the active tab, Ctrl+Alt+K/J moves the selected pane,
 Alt+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
@@ -279,7 +288,9 @@ press events do not create duplicate structural actions. Eon decides whether
 each action is available and owns dismissal, cwd changes and command lifetime.
 Switching tabs retains each tab's popup selection. F6 cycles terminal and tabs,
 plus panes when visible; Left/Right on tabs and Up/Down on panes traverse them.
-Escape returns chrome focus to the terminal. While the terminal has focus,
+From tab focus, Tab and Shift+Tab traverse the three fixed header controls;
+Enter or Space activates the focused control. Escape returns chrome focus to
+the terminal. While the terminal has focus,
 Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit input.
 Alt+/ opens a native Shortcuts dialog for the Eon surface. It uses the same
 fixed binding descriptors as dispatch and appends the enabled Project/tool rows
@@ -397,13 +408,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 409 |
+| README | 420 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,984 |
+| Contracts and references | 2,075 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
-| Changelog | 267 |
-| Rust source, including unit tests | 18,574 |
+| Changelog | 273 |
+| Rust source, including unit tests | 19,124 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 33 |
-| **Total** | **22,982** |
+| **Total** | **23,640** |

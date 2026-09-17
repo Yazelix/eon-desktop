@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Turn the existing workspace tab strip into the one-row native Eon Bar. Keep
+  fixed New tab, Keyboard shortcuts, and active-tab Close controls beside a
+  bounded empty Wayland drag region, with shortcut tooltips, keyboard traversal,
+  press/focus feedback, and AccessKit buttons. Tabs keep their current labels,
+  scrolling, reveal, hover path, stable targets, and header height.
+
 - Choose one launch-stable cursor-tail color from eight built-in presets at
   random by default. Accept named presets or a custom `#RRGGBB`, retain the
   static escape hatch and complete legacy scalar profile, and give every tail a

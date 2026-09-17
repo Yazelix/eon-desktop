@@ -207,10 +207,45 @@ pub(crate) fn tab_max_width(metrics: CellMetrics, viewport_width: f32) -> f32 {
     (metrics.font_size * 17.5).min((viewport_width - metrics.padding * 2.0 / 3.0).max(1.0))
 }
 
+/// One fixed action in the native Eon workspace header.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceHeaderControl {
+    NewTab,
+    Shortcuts,
+    CloseTab,
+}
+
+impl WorkspaceHeaderControl {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::NewTab => "New tab — Alt+Shift+T",
+            Self::Shortcuts => "Keyboard shortcuts — Alt+/",
+            Self::CloseTab => "Close tab — Alt+Shift+W",
+        }
+    }
+
+    pub(crate) fn glyph(self) -> &'static str {
+        match self {
+            Self::NewTab => "+",
+            Self::Shortcuts => "?",
+            Self::CloseTab => "×",
+        }
+    }
+}
+
+/// Geometry for one fixed Eon workspace-header action.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct WorkspaceControl {
+    pub(crate) kind: WorkspaceHeaderControl,
+    pub(crate) rect: SceneRect,
+}
+
 /// Native workspace target at one physical point.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkspaceHit<'a> {
     Tab(&'a str),
+    Control(WorkspaceHeaderControl),
+    Drag,
     Pane(&'a str),
     Terminal,
 }
@@ -221,6 +256,7 @@ pub enum WorkspaceFocus {
     #[default]
     Terminal,
     Tabs,
+    Header(WorkspaceHeaderControl),
     Panes,
 }
 
@@ -341,6 +377,9 @@ impl ShortcutViewerScene {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceScene {
     pub tabs: Vec<WorkspaceTab>,
+    pub(crate) header: SceneRect,
+    pub(crate) drag_region: SceneRect,
+    pub(crate) controls: [WorkspaceControl; 3],
     pub panes: Vec<WorkspacePane>,
     pub terminal: SceneRect,
     pub tab_viewport: SceneRect,
@@ -360,6 +399,59 @@ fn header_heights(metrics: CellMetrics) -> (f32, f32) {
         (metrics.height * 1.75).round().max(1.0),
         (metrics.height * 1.5).round().max(1.0),
     )
+}
+
+fn tab_gap(metrics: CellMetrics, tab_height: f32) -> f32 {
+    (metrics.padding / 3.0).min(tab_height / 4.0)
+}
+
+fn workspace_header_geometry(
+    size: PhysicalSize<u32>,
+    metrics: CellMetrics,
+) -> (SceneRect, SceneRect, SceneRect, [WorkspaceControl; 3]) {
+    let width = size.width as f32;
+    let tab_height = header_heights(metrics).0.min(size.height as f32);
+    let identity_width =
+        metrics.width + metrics.padding * 2.0 + tab_gap(metrics, tab_height) * 2.0 + 1.0;
+    let minimum_tabs = (width * 0.4)
+        .min(metrics.font_size * 4.0)
+        .max(identity_width.min((width - metrics.width * 3.0).max(0.0)));
+    let control_width = tab_height.min(((width - minimum_tabs) / 3.0).max(0.0));
+    let controls_width = control_width * 3.0;
+    let drag_width =
+        (metrics.font_size * 4.0).min((width - controls_width - minimum_tabs).max(0.0));
+    let tab_width = (width - controls_width - drag_width).max(0.0);
+    let header = SceneRect {
+        width,
+        height: tab_height,
+        ..SceneRect::default()
+    };
+    let tab_viewport = SceneRect {
+        width: tab_width,
+        height: tab_height,
+        ..SceneRect::default()
+    };
+    let drag_region = SceneRect {
+        left: tab_viewport.right(),
+        width: drag_width,
+        height: tab_height,
+        ..SceneRect::default()
+    };
+    let control_kinds = [
+        WorkspaceHeaderControl::NewTab,
+        WorkspaceHeaderControl::Shortcuts,
+        WorkspaceHeaderControl::CloseTab,
+    ];
+    let controls = std::array::from_fn(|index| WorkspaceControl {
+        kind: control_kinds[index],
+        rect: SceneRect {
+            left: drag_region.right() + index as f32 * control_width,
+            width: control_width,
+            height: tab_height,
+            ..SceneRect::default()
+        },
+    });
+    (header, tab_viewport, drag_region, controls)
 }
 
 fn stack_inset(metrics: CellMetrics) -> f32 {
@@ -383,6 +475,15 @@ pub(crate) fn pane_chrome_rect(rect: SceneRect, metrics: CellMetrics) -> SceneRe
 }
 
 impl WorkspaceScene {
+    /// Maximum shaped label width inside this surface's tab viewport.
+    #[must_use]
+    pub(crate) fn tab_text_width(size: PhysicalSize<u32>, metrics: CellMetrics) -> f32 {
+        let (_, tab_viewport, _, _) = workspace_header_geometry(size, metrics);
+        (tab_max_width(metrics, tab_viewport.width) - metrics.padding * 2.0)
+            .max(0.0)
+            .floor()
+    }
+
     /// Extra pixels around an initially requested terminal grid.
     #[must_use]
     pub fn initial_overhead(snapshot: &Snapshot, metrics: CellMetrics) -> (f32, f32) {
@@ -446,14 +547,10 @@ impl WorkspaceScene {
         let height = size.height as f32;
         let (tab_height, pane_height) = header_heights(metrics);
         let tab_height = tab_height.min(height);
-        let gap = (metrics.padding / 3.0).min(tab_height / 4.0);
-        let max_tab_width = tab_max_width(metrics, width);
-        let tab_viewport = SceneRect {
-            left: 0.0,
-            top: 0.0,
-            width,
-            height: tab_height,
-        };
+        let gap = tab_gap(metrics, tab_height);
+        let (header, tab_viewport, drag_region, controls) =
+            workspace_header_geometry(size, metrics);
+        let max_tab_width = tab_max_width(metrics, tab_viewport.width);
         let pane_viewport = SceneRect {
             left: 0.0,
             top: tab_height,
@@ -497,10 +594,10 @@ impl WorkspaceScene {
                 }
             })
             .collect();
-        let tab_scroll_limit = (tab_end - width).max(0.0);
+        let tab_scroll_limit = (tab_end - tab_viewport.width).max(0.0);
         let active = tabs[active_tab].rect;
-        let active_tab_scroll =
-            (active.left - (width - active.width).max(0.0) / 2.0).clamp(0.0, tab_scroll_limit);
+        let active_tab_scroll = (active.left - (tab_viewport.width - active.width).max(0.0) / 2.0)
+            .clamp(0.0, tab_scroll_limit);
         let tab_scroll = if tab_scroll.is_finite() {
             tab_scroll.clamp(0.0, tab_scroll_limit)
         } else {
@@ -535,6 +632,9 @@ impl WorkspaceScene {
             };
             return Self {
                 tabs,
+                header,
+                drag_region,
+                controls,
                 panes: Vec::new(),
                 terminal: SceneRect {
                     left: horizontal_inset,
@@ -635,6 +735,9 @@ impl WorkspaceScene {
 
         Self {
             tabs,
+            header,
+            drag_region,
+            controls,
             panes,
             terminal,
             tab_viewport,
@@ -661,6 +764,14 @@ impl WorkspaceScene {
             {
                 return Some(WorkspaceHit::Tab(&tab.id));
             }
+        }
+        for control in self.controls {
+            if control.rect.contains(x, y) {
+                return Some(WorkspaceHit::Control(control.kind));
+            }
+        }
+        if self.drag_region.contains(x, y) {
+            return Some(WorkspaceHit::Drag);
         }
         for pane in &self.panes {
             if pane
@@ -1295,6 +1406,98 @@ mod tests {
 
         assert_eq!(popup.chrome, stack.chrome);
         assert_ne!(popup.terminal, popup.chrome);
+    }
+
+    #[test]
+    fn eon_bar_keeps_tabs_controls_and_drag_hits_disjoint_under_pressure() {
+        use eon_workspace_protocol::v5::{Pane, PopupGeometry, Tab};
+
+        let snapshot = Snapshot {
+            active_tab: "t2".into(),
+            geometry: PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: Vec::new(),
+            tabs: (1..=3)
+                .map(|index| Tab {
+                    id: format!("t{index}"),
+                    directory: format!("/tmp/tab-{index}").into_bytes(),
+                    pending: false,
+                    selected_pane: Some(format!("p{index}")),
+                    selected_popup: None,
+                    panes: vec![Pane {
+                        id: format!("p{index}"),
+                        session: format!("s{index}"),
+                        endpoint: format!("/tmp/p{index}.sock").into_bytes(),
+                        live: true,
+                    }],
+                    popups: Vec::new(),
+                })
+                .collect(),
+        };
+        let metrics = CellMetrics::for_scale(1.0);
+
+        for width in [960, 100, 1] {
+            let scene = WorkspaceScene::from_snapshot(
+                &snapshot,
+                PhysicalSize::new(width, 600),
+                metrics,
+                0.0,
+                0.0,
+                |_, text| (text.into(), text.len() as f32 * 10.0),
+            );
+
+            assert!(scene.tab_viewport.width > 0.0);
+            assert_eq!(scene.header.height, scene.tab_viewport.height);
+            if width == 100 {
+                assert!(scene.tabs[1].rect.width - metrics.padding * 2.0 >= metrics.width);
+            }
+            assert!(scene.tab_viewport.right() <= scene.drag_region.left);
+            assert!(scene.drag_region.right() <= scene.controls[0].rect.left);
+            for pair in scene.controls.windows(2) {
+                assert!(pair[0].rect.right() <= pair[1].rect.left);
+            }
+            assert!(scene.controls[2].rect.right() <= width as f32);
+            assert_eq!(
+                scene.controls.map(|control| scene.hit_test(
+                    control.rect.left + control.rect.width / 2.0,
+                    control.rect.height / 2.0
+                )),
+                [
+                    Some(WorkspaceHit::Control(WorkspaceHeaderControl::NewTab)),
+                    Some(WorkspaceHit::Control(WorkspaceHeaderControl::Shortcuts)),
+                    Some(WorkspaceHit::Control(WorkspaceHeaderControl::CloseTab)),
+                ]
+            );
+        }
+
+        let wide = WorkspaceScene::from_snapshot(
+            &snapshot,
+            PhysicalSize::new(960, 600),
+            metrics,
+            0.0,
+            0.0,
+            |_, text| (text.into(), text.len() as f32 * 10.0),
+        );
+        assert!(wide.drag_region.width > 0.0);
+        assert_eq!(
+            wide.hit_test(
+                wide.drag_region.left + wide.drag_region.width / 2.0,
+                wide.drag_region.height / 2.0
+            ),
+            Some(WorkspaceHit::Drag)
+        );
+
+        let narrow = WorkspaceScene::from_snapshot(
+            &snapshot,
+            PhysicalSize::new(100, 600),
+            metrics,
+            0.0,
+            0.0,
+            |_, text| (text.into(), text.len() as f32 * 10.0),
+        );
+        assert_eq!(narrow.drag_region.width, 0.0);
     }
 
     #[test]

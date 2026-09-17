@@ -1,6 +1,6 @@
 use crate::{
     CellMetrics, MAX_LINK_BYTES, Scene, SceneRect, ShortcutViewerScene, WorkspaceFocus,
-    WorkspaceScene,
+    WorkspaceHeaderControl, WorkspaceScene,
     scene::{AccessiblePosition, AccessibleRow, AccessibleSelection, AccessibleText},
 };
 use accesskit::{
@@ -20,6 +20,9 @@ const STATUS: NodeId = NodeId(2);
 const TAB_LIST: NodeId = NodeId(3);
 const PANE_PANEL: NodeId = NodeId(4);
 const SHORTCUT_DIALOG: NodeId = NodeId(5);
+const NEW_TAB: NodeId = NodeId(6);
+const SHORTCUTS: NodeId = NodeId(7);
+const CLOSE_TAB: NodeId = NodeId(8);
 // Scene rows are u16, so this range cannot collide with fixed or text-run nodes.
 const WORKSPACE_NODE_START: u64 = 1 << 32;
 const LINK_NODE_START: u64 = 1 << 48;
@@ -200,7 +203,7 @@ impl Snapshot {
         }
         let status_alert = terminal && !self.status.is_empty();
         root.set_children(if self.workspace.is_some() {
-            let mut children = vec![TAB_LIST, PANE_PANEL];
+            let mut children = vec![TAB_LIST, NEW_TAB, SHORTCUTS, CLOSE_TAB, PANE_PANEL];
             if status_alert {
                 children.push(STATUS);
             }
@@ -289,6 +292,19 @@ impl Snapshot {
                 node.add_action(Action::Click);
                 node.add_action(Action::Focus);
                 nodes.push((self.tab_ids[tab.id.as_str()], node));
+            }
+            for control in workspace.controls {
+                let mut node = Node::new(Role::Button);
+                node.set_label(control.kind.label());
+                if control.kind == WorkspaceHeaderControl::CloseTab
+                    && let Some(tab) = workspace.tabs.iter().find(|tab| tab.selected)
+                {
+                    node.set_description(format!("Active tab {}", tab.id));
+                }
+                node.set_bounds(rect(control.rect));
+                node.add_action(Action::Click);
+                node.add_action(Action::Focus);
+                nodes.push((control_node_id(control.kind), node));
             }
 
             let mut panel = Node::new(Role::TabPanel);
@@ -389,6 +405,7 @@ impl Snapshot {
                         .and_then(|pane| self.pane_ids.get(&pane.id).copied())
                         .unwrap_or(content),
                     WorkspaceFocus::Tabs => selected_tab,
+                    WorkspaceFocus::Header(control) => control_node_id(control),
                 }
             }),
         }
@@ -416,6 +433,12 @@ impl Snapshot {
             return None;
         }
         let workspace = self.workspace.as_ref()?;
+        if let Some(control) = header_control_for_node(target) {
+            return Some(AccessibilityTarget::HeaderControl {
+                control,
+                activate: action == Action::Click,
+            });
+        }
         if target == CONTENT {
             return workspace
                 .visible_terminal()
@@ -545,7 +568,32 @@ pub enum AccessibilityTarget {
     Terminal,
     Tab(String),
     Pane(String),
-    Link { row: u16, column: u16, copy: bool },
+    HeaderControl {
+        control: WorkspaceHeaderControl,
+        activate: bool,
+    },
+    Link {
+        row: u16,
+        column: u16,
+        copy: bool,
+    },
+}
+
+fn control_node_id(control: WorkspaceHeaderControl) -> NodeId {
+    match control {
+        WorkspaceHeaderControl::NewTab => NEW_TAB,
+        WorkspaceHeaderControl::Shortcuts => SHORTCUTS,
+        WorkspaceHeaderControl::CloseTab => CLOSE_TAB,
+    }
+}
+
+fn header_control_for_node(node: NodeId) -> Option<WorkspaceHeaderControl> {
+    match node {
+        NEW_TAB => Some(WorkspaceHeaderControl::NewTab),
+        SHORTCUTS => Some(WorkspaceHeaderControl::Shortcuts),
+        CLOSE_TAB => Some(WorkspaceHeaderControl::CloseTab),
+        _ => None,
+    }
 }
 
 fn bounds(size: PhysicalSize<u32>) -> Rect {
@@ -1085,6 +1133,76 @@ mod tests {
     }
 
     #[test]
+    fn eon_bar_buttons_share_scene_bounds_and_separate_focus_from_activation() {
+        let workspace = workspace_scene(
+            "t2",
+            vec![
+                workspace_tab("t1", &["pane-a"], "pane-a"),
+                workspace_tab("t2", &["pane-b"], "pane-b"),
+            ],
+        );
+        let mut snapshot = Snapshot::new(PhysicalSize::new(800, 600));
+        snapshot.set_workspace(Some(&workspace));
+
+        for (id, control, label) in [
+            (
+                NEW_TAB,
+                WorkspaceHeaderControl::NewTab,
+                "New tab — Alt+Shift+T",
+            ),
+            (
+                SHORTCUTS,
+                WorkspaceHeaderControl::Shortcuts,
+                "Keyboard shortcuts — Alt+/",
+            ),
+            (
+                CLOSE_TAB,
+                WorkspaceHeaderControl::CloseTab,
+                "Close tab — Alt+Shift+W",
+            ),
+        ] {
+            let update = snapshot.tree();
+            let control_node = node(&update, id);
+            assert_eq!(control_node.role(), Role::Button);
+            assert_eq!(control_node.label(), Some(label));
+            assert_eq!(
+                control_node.bounds(),
+                Some(rect(
+                    workspace
+                        .controls
+                        .into_iter()
+                        .find(|candidate| candidate.kind == control)
+                        .unwrap()
+                        .rect,
+                ))
+            );
+            assert!(control_node.supports_action(Action::Focus));
+            assert!(control_node.supports_action(Action::Click));
+            assert_eq!(
+                snapshot.action_target(id, Action::Focus),
+                Some(AccessibilityTarget::HeaderControl {
+                    control,
+                    activate: false,
+                })
+            );
+            assert_eq!(
+                snapshot.action_target(id, Action::Click),
+                Some(AccessibilityTarget::HeaderControl {
+                    control,
+                    activate: true,
+                })
+            );
+            snapshot.workspace_focus = WorkspaceFocus::Header(control);
+            assert_eq!(snapshot.tree().focus, id);
+        }
+
+        assert_eq!(
+            node(&snapshot.tree(), CLOSE_TAB).description(),
+            Some("Active tab t2")
+        );
+    }
+
+    #[test]
     fn workspace_accessibility_order_matches_tabs_then_one_expanded_pane() {
         let metadata = PaneMetadata::Available {
             working_directory: "file:///tmp/eon".into(),
@@ -1164,7 +1282,10 @@ mod tests {
         let pane_1 = snapshot.pane_ids["p1"];
         let pane_2 = snapshot.pane_ids["p2"];
         let update = snapshot.tree();
-        assert_eq!(node(&update, WINDOW).children(), &[TAB_LIST, PANE_PANEL]);
+        assert_eq!(
+            node(&update, WINDOW).children(),
+            &[TAB_LIST, NEW_TAB, SHORTCUTS, CLOSE_TAB, PANE_PANEL]
+        );
         assert_eq!(node(&update, TAB_LIST).children(), &[tab_1, tab_2]);
         assert_eq!(
             node(&update, PANE_PANEL).children(),

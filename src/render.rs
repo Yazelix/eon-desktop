@@ -1,6 +1,7 @@
 use crate::{
     Color as SceneColor, DrawCursor, DrawRow, DrawStyle, GlyphRun, Scene, ScenePreview, SceneRect,
-    ShortcutViewerScene, WorkspaceFocus, WorkspaceScene, scene::pane_chrome_rect,
+    ShortcutViewerScene, WorkspaceFocus, WorkspaceHeaderControl, WorkspaceScene,
+    scene::pane_chrome_rect,
 };
 use glyphon::{
     Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
@@ -382,6 +383,7 @@ struct ContentKey {
     status: String,
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
+    pressed_header: Option<WorkspaceHeaderControl>,
     scrollback_label: Option<String>,
     shortcut_viewer_scroll: Option<f32>,
 }
@@ -673,6 +675,7 @@ pub struct Renderer {
     content_key: Option<ContentKey>,
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
+    pressed_header: Option<WorkspaceHeaderControl>,
     scrollback_label: Option<String>,
     cursor_tail: Option<(SceneColor, SceneColor, f32)>,
     cursor_animation: CursorAnimation,
@@ -694,6 +697,10 @@ impl Renderer {
         self.hovered_header = header;
     }
 
+    pub fn set_pressed_header(&mut self, control: Option<WorkspaceHeaderControl>) {
+        self.pressed_header = control;
+    }
+
     fn header_hovered(&self, focus: WorkspaceFocus, id: &str) -> bool {
         self.hovered_header
             .as_ref()
@@ -701,10 +708,7 @@ impl Renderer {
     }
     /// Fit the scene's canonical label using the same typography as its header.
     pub fn fit_tab_text(&mut self, label: &str) -> (String, f32) {
-        let width = (crate::scene::tab_max_width(self.metrics, self.config.width as f32)
-            - self.metrics.padding * 2.0)
-            .max(0.0)
-            .floor();
+        let width = WorkspaceScene::tab_text_width(self.size(), self.metrics);
         fit_header_text(&mut self.fonts.font_system, self.metrics, label, width)
     }
 
@@ -903,6 +907,7 @@ impl Renderer {
             content_key: None,
             hyperlink: None,
             hovered_header: None,
+            pressed_header: None,
             scrollback_label: None,
             cursor_tail: cursor_tail
                 .map(|(color, duration)| (color, cursor_outline(color), duration)),
@@ -1149,6 +1154,7 @@ impl Renderer {
             status: status.to_owned(),
             hyperlink: self.hyperlink,
             hovered_header: self.hovered_header.clone(),
+            pressed_header: self.pressed_header,
             scrollback_label: self.scrollback_label.clone(),
             shortcut_viewer_scroll: shortcut_viewer.map(|viewer| viewer.scroll),
         };
@@ -1307,7 +1313,7 @@ impl Renderer {
             if !status.is_empty() {
                 self.build_notice(status, &mut rectangles, Some(workspace));
             }
-            self.build_tab_tooltip(workspace, &mut rectangles);
+            self.build_header_tooltip(workspace, &mut rectangles);
             if workspace.popup_label().is_some()
                 && status.is_empty()
                 && self.text_overlay.is_none()
@@ -1455,16 +1461,28 @@ impl Renderer {
         self.upload_dynamic_vertices(&rectangles.bytes);
     }
 
-    fn build_tab_tooltip(&mut self, workspace: &WorkspaceScene, rectangles: &mut RectangleBatch) {
-        let Some(tab) = workspace
+    fn build_header_tooltip(
+        &mut self,
+        workspace: &WorkspaceScene,
+        rectangles: &mut RectangleBatch,
+    ) {
+        let hovered_tab = workspace
             .tabs
             .iter()
-            .find(|tab| self.header_hovered(WorkspaceFocus::Tabs, &tab.id))
-        else {
+            .find(|tab| self.header_hovered(WorkspaceFocus::Tabs, &tab.id));
+        let (label, anchor) = if let Some(tab) = hovered_tab {
+            (tab.accessible_label(), tab.rect)
+        } else if let Some(control) = workspace
+            .controls
+            .iter()
+            .find(|control| self.header_hovered(WorkspaceFocus::Header(control.kind), ""))
+        {
+            (control.kind.label(), control.rect)
+        } else {
             return;
         };
         let padding = self.metrics.padding;
-        let top = workspace.tab_viewport.bottom() + padding / 3.0;
+        let top = workspace.header.bottom() + padding / 3.0;
         let width = (self.config.width as f32 - padding * 2.0).min(self.metrics.font_size * 40.0);
         let height = self.config.height as f32 - top - padding;
         if width <= padding * 2.0 || height <= padding * 2.0 {
@@ -1472,7 +1490,7 @@ impl Renderer {
         }
         let before = self.text.len();
         self.push_text(
-            tab.accessible_label(),
+            label,
             0.0,
             top + padding,
             width - padding * 2.0,
@@ -1495,7 +1513,7 @@ impl Renderer {
         }
         let width = (text_width.ceil() + padding * 2.0).min(width);
         let height = (text_height.ceil() + padding * 2.0).min(height);
-        let left = tab.rect.left.clamp(
+        let left = anchor.left.clamp(
             padding,
             (self.config.width as f32 - width - padding).max(padding),
         );
@@ -1726,10 +1744,10 @@ impl Renderer {
             b: 32,
         };
         rectangles.push(
-            workspace.tab_viewport.left,
-            workspace.tab_viewport.top,
-            workspace.tab_viewport.width,
-            workspace.tab_viewport.height,
+            workspace.header.left,
+            workspace.header.top,
+            workspace.header.width,
+            workspace.header.height,
             DEFAULT_BACKGROUND,
             1.0,
         );
@@ -1752,24 +1770,15 @@ impl Renderer {
             };
             rectangles.push_rounded(tab.rect, radius, fill);
             if tab.selected && focus == WorkspaceFocus::Tabs {
-                rectangles.push_rounded(tab.rect, radius, accent);
-                rectangles.push_rounded(
-                    SceneRect {
-                        left: tab.rect.left + 1.0,
-                        top: tab.rect.top + 1.0,
-                        width: tab.rect.width - 2.0,
-                        height: tab.rect.height - 2.0,
-                    },
-                    radius - 1.0,
-                    fill,
-                );
+                rectangles.push_rounded_outline(tab.rect, radius, accent);
             }
+            let label_width = (tab.rect.width - self.metrics.padding * 2.0).max(1.0);
             self.push_text_clipped(
                 tab.label(),
                 tab.rect.left + self.metrics.padding,
                 tab.rect.top + (tab.rect.height - self.metrics.height) / 2.0,
-                tab.rect.width - self.metrics.padding * 2.0,
-                tab.rect.width - self.metrics.padding * 2.0,
+                label_width,
+                label_width,
                 self.metrics.height,
                 if tab.selected {
                     SceneColor {
@@ -1789,6 +1798,59 @@ impl Renderer {
             );
         }
         rectangles.clip = None;
+        for control in workspace.controls {
+            let inset = (self.metrics.padding / 3.0)
+                .min(control.rect.width / 4.0)
+                .min(control.rect.height / 4.0);
+            let visual = SceneRect {
+                left: control.rect.left + inset,
+                top: control.rect.top + inset,
+                width: (control.rect.width - inset * 2.0).max(0.0),
+                height: (control.rect.height - inset * 2.0).max(0.0),
+            };
+            let hovered = self.header_hovered(WorkspaceFocus::Header(control.kind), "");
+            let pressed = self.pressed_header == Some(control.kind);
+            let focused = focus == WorkspaceFocus::Header(control.kind);
+            let fill = if pressed {
+                selected
+            } else if hovered {
+                SceneColor {
+                    r: 23,
+                    g: 34,
+                    b: 46,
+                }
+            } else {
+                DEFAULT_BACKGROUND
+            };
+            rectangles.push_rounded(visual, visual.height / 2.0, fill);
+            if focused {
+                rectangles.push_rounded_outline(visual, visual.height / 2.0, accent);
+            }
+            let glyph_width = self.metrics.width.min(control.rect.width);
+            self.push_text_clipped(
+                control.kind.glyph(),
+                control.rect.left + (control.rect.width - glyph_width).max(0.0) / 2.0,
+                control.rect.top + (control.rect.height - self.metrics.height).max(0.0) / 2.0,
+                glyph_width,
+                glyph_width,
+                self.metrics.height.min(control.rect.height),
+                if pressed || focused {
+                    SceneColor {
+                        r: 239,
+                        g: 244,
+                        b: 248,
+                    }
+                } else {
+                    SceneColor {
+                        r: 162,
+                        g: 174,
+                        b: 190,
+                    }
+                },
+                DrawStyleKind::Status(Wrap::None),
+                control.rect,
+            );
+        }
         for pane in &workspace.panes {
             let Some(rect) = pane.rect.intersection(workspace.pane_viewport) else {
                 continue;
@@ -3578,7 +3640,7 @@ mod tests {
                     "the directory underscore is clipped outside the header"
                 );
                 renderer.set_hovered_header(Some((WorkspaceFocus::Tabs, "t2".into())));
-                renderer.build_tab_tooltip(&workspace, &mut RectangleBatch::new(900, 600));
+                renderer.build_header_tooltip(&workspace, &mut RectangleBatch::new(900, 600));
                 let (first, overlay) = renderer.text_overlay.unwrap();
                 let areas: Vec<_> =
                     text_areas(&renderer.text[..first], renderer.text_overlay).collect();
@@ -3826,6 +3888,7 @@ mod tests {
             status: String::new(),
             hyperlink: None,
             hovered_header: None,
+            pressed_header: None,
             scrollback_label: None,
             shortcut_viewer_scroll,
         };

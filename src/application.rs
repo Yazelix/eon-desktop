@@ -38,8 +38,8 @@ use yazelix_venus::{
     FontSettings, FontSetup, Hyperlink, InputState, LocalNoticeSource, MAX_LINK_BYTES,
     MetadataEvent, MetadataTransport, ModelError, PaneMetadata, PresentOutcome, Renderer, Scene,
     ScenePreview, SceneRect, SessionModel, ShortcutGroup, ShortcutRow, ShortcutViewerScene,
-    Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus, WorkspaceHit, WorkspaceModel,
-    WorkspaceScene, WorkspaceTransport, active_popup,
+    Transport, TransportEvent, WorkspaceEvent, WorkspaceFocus, WorkspaceHeaderControl,
+    WorkspaceHit, WorkspaceModel, WorkspaceScene, WorkspaceTransport, active_popup,
 };
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -1111,6 +1111,12 @@ struct WindowState {
     window: Arc<Window>,
 }
 
+#[derive(Clone, Copy)]
+enum HeaderPress {
+    Control(WorkspaceHeaderControl),
+    Drag,
+}
+
 struct MetadataObserver {
     transport: MetadataTransport,
     metadata: PaneMetadata,
@@ -1178,6 +1184,7 @@ struct Application {
     window_focused: bool,
     window_occluded: bool,
     workspace_focus: WorkspaceFocus,
+    header_press: Option<HeaderPress>,
     shortcut_viewer: ShortcutViewerState,
     tab_texts: HashMap<String, (String, f32)>,
     tab_scroll: f32,
@@ -1249,6 +1256,7 @@ impl Application {
             window_focused: false,
             window_occluded: false,
             workspace_focus: WorkspaceFocus::Terminal,
+            header_press: None,
             shortcut_viewer: ShortcutViewerState::default(),
             tab_texts: HashMap::new(),
             tab_scroll: 0.0,
@@ -1813,6 +1821,24 @@ impl Application {
             && self.queue_workspace(WorkspaceAction::Workspace(action))
     }
 
+    fn activate_workspace_header(&mut self, control: WorkspaceHeaderControl) {
+        let Some(active_tab) = self
+            .workspace_model
+            .snapshot()
+            .map(|snapshot| snapshot.active_tab.clone())
+        else {
+            return;
+        };
+        match workspace_header_action(control, &active_tab) {
+            WorkspaceHeaderAction::Workspace(action) => {
+                self.send_workspace(action);
+            }
+            WorkspaceHeaderAction::ToggleShortcuts => {
+                self.set_shortcut_viewer(!self.shortcut_viewer.open);
+            }
+        }
+    }
+
     fn queue_workspace(&mut self, action: WorkspaceAction) -> bool {
         let Some(transport) = &self.workspace_transport else {
             return false;
@@ -1902,6 +1928,24 @@ impl Application {
             return false;
         }
         if event.state == ElementState::Pressed {
+            if !event.repeat
+                && code == KeyCode::Tab
+                && (modifiers == session::Modifiers::empty()
+                    || modifiers == session::Modifiers::SHIFT)
+                && let Some(next) =
+                    cycle_header_focus(focus, modifiers == session::Modifiers::SHIFT)
+            {
+                self.set_workspace_focus(next);
+                return true;
+            }
+            if !event.repeat
+                && matches!(code, KeyCode::Enter | KeyCode::Space)
+                && modifiers == session::Modifiers::empty()
+                && let WorkspaceFocus::Header(control) = focus
+            {
+                self.activate_workspace_header(control);
+                return true;
+            }
             let direction = match (focus, fixed.map(|shortcut| shortcut.action)) {
                 (
                     WorkspaceFocus::Tabs,
@@ -2441,6 +2485,7 @@ impl Application {
     }
 
     fn cancel_pointer_sequence(&mut self) {
+        self.header_press = None;
         let cancel_server = pointer_sequence_needs_cancel(
             &self.selection_gate,
             self.input.is_selecting(),
@@ -2681,6 +2726,9 @@ impl Application {
                 match scene.hit_test(self.cursor.x as f32, self.cursor.y as f32) {
                     Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
                     Some(WorkspaceHit::Pane(id)) => Some((WorkspaceFocus::Panes, id.to_owned())),
+                    Some(WorkspaceHit::Control(control)) => {
+                        Some((WorkspaceFocus::Header(control), String::new()))
+                    }
                     _ => None,
                 }
             })
@@ -2696,6 +2744,10 @@ impl Application {
             .renderer
             .set_scrollback_label(scrollback_label.clone());
         state.renderer.set_hovered_header(hovered_header);
+        state.renderer.set_pressed_header(match self.header_press {
+            Some(HeaderPress::Control(control)) => Some(control),
+            _ => None,
+        });
         match state.renderer.render(
             self.model.scene(),
             self.model.scroll_preview(),
@@ -2965,7 +3017,11 @@ impl ApplicationHandler<UserEvent> for Application {
                 let header_at = |position: PhysicalPosition<f64>| {
                     workspace.as_ref().and_then(|scene| {
                         match scene.hit_test(position.x as f32, position.y as f32) {
-                            hit @ Some(WorkspaceHit::Tab(_) | WorkspaceHit::Pane(_)) => hit,
+                            hit @ Some(
+                                WorkspaceHit::Tab(_)
+                                | WorkspaceHit::Pane(_)
+                                | WorkspaceHit::Control(_),
+                            ) => hit,
                             _ => None,
                         }
                     })
@@ -2977,7 +3033,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 self.cursor = position;
                 self.links.pointer_inside = true;
-                if self.links.pressed.is_some() {
+                if self.links.pressed.is_some() || self.header_press.is_some() {
                     return;
                 }
                 let motion = move_terminal_pointer(&mut self.input, position, workspace.as_ref());
@@ -3023,6 +3079,10 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 let renderer_size = state.renderer.size();
                 let metrics = state.renderer.metrics();
+                let window = Arc::clone(&state.window);
+                if button == MouseButton::Left && button_state == ElementState::Pressed {
+                    self.header_press = None;
+                }
                 if self.handle_link_button(button_state, button) {
                     return;
                 }
@@ -3034,6 +3094,25 @@ impl ApplicationHandler<UserEvent> for Application {
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
+                if button == MouseButton::Left
+                    && button_state == ElementState::Released
+                    && let Some(press) = self.header_press.take()
+                {
+                    let activate = match press {
+                        HeaderPress::Control(control)
+                            if presentation_current
+                                && hit == Some(WorkspaceHit::Control(control)) =>
+                        {
+                            Some(control)
+                        }
+                        HeaderPress::Control(_) | HeaderPress::Drag => None,
+                    };
+                    self.refresh_client_view();
+                    if let Some(control) = activate {
+                        self.activate_workspace_header(control);
+                    }
+                    return;
+                }
                 if presentation_current
                     && button_state == ElementState::Pressed
                     && button == MouseButton::Left
@@ -3046,6 +3125,19 @@ impl ApplicationHandler<UserEvent> for Application {
                         Some(WorkspaceHit::Terminal) => {
                             self.set_workspace_focus(WorkspaceFocus::Terminal);
                             None
+                        }
+                        Some(WorkspaceHit::Control(control)) => {
+                            self.set_workspace_focus(WorkspaceFocus::Header(control));
+                            self.header_press = Some(HeaderPress::Control(control));
+                            self.refresh_client_view();
+                            return;
+                        }
+                        Some(WorkspaceHit::Drag) => {
+                            self.header_press = Some(HeaderPress::Drag);
+                            if let Err(error) = window.drag_window() {
+                                report(format!("cannot drag window: {error}"));
+                            }
+                            return;
                         }
                         None => None,
                     };
@@ -3103,6 +3195,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     return;
                 }
                 self.links.pressed = None;
+                self.header_press = None;
                 let metrics = state.renderer.metrics();
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
@@ -3226,6 +3319,12 @@ impl ApplicationHandler<UserEvent> for Application {
                         match target {
                             Some(AccessibilityTarget::Link { row, column, copy }) => {
                                 self.activate_accessible_link(row, column, copy);
+                            }
+                            Some(AccessibilityTarget::HeaderControl { control, activate }) => {
+                                self.set_workspace_focus(WorkspaceFocus::Header(control));
+                                if activate {
+                                    self.activate_workspace_header(control);
+                                }
                             }
                             Some(target) => {
                                 if let Some(focus) =
@@ -3560,7 +3659,9 @@ fn accessibility_workspace_focus(
         AccessibilityTarget::Terminal => return Some(WorkspaceFocus::Terminal),
         AccessibilityTarget::Tab(id) => (WorkspaceFocus::Tabs, id),
         AccessibilityTarget::Pane(id) => (WorkspaceFocus::Panes, id),
-        AccessibilityTarget::Link { .. } => return None,
+        AccessibilityTarget::HeaderControl { .. } | AccessibilityTarget::Link { .. } => {
+            return None;
+        }
     };
     queue(CommonAction::FocusId(id)).then_some(focus)
 }
@@ -3607,6 +3708,43 @@ fn workspace_shortcut(
         }),
         _ => None,
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum WorkspaceHeaderAction {
+    Workspace(CommonAction),
+    ToggleShortcuts,
+}
+
+fn workspace_header_action(
+    control: WorkspaceHeaderControl,
+    active_tab: &str,
+) -> WorkspaceHeaderAction {
+    match control {
+        WorkspaceHeaderControl::NewTab => WorkspaceHeaderAction::Workspace(CommonAction::CreateTab),
+        WorkspaceHeaderControl::Shortcuts => WorkspaceHeaderAction::ToggleShortcuts,
+        WorkspaceHeaderControl::CloseTab => {
+            WorkspaceHeaderAction::Workspace(CommonAction::CloseTab {
+                tab: active_tab.into(),
+            })
+        }
+    }
+}
+
+fn cycle_header_focus(focus: WorkspaceFocus, backwards: bool) -> Option<WorkspaceFocus> {
+    use WorkspaceHeaderControl::{CloseTab, NewTab, Shortcuts};
+
+    Some(match (focus, backwards) {
+        (WorkspaceFocus::Tabs, false) => WorkspaceFocus::Header(NewTab),
+        (WorkspaceFocus::Header(NewTab), false) => WorkspaceFocus::Header(Shortcuts),
+        (WorkspaceFocus::Header(Shortcuts), false) => WorkspaceFocus::Header(CloseTab),
+        (WorkspaceFocus::Header(CloseTab), false) => WorkspaceFocus::Tabs,
+        (WorkspaceFocus::Tabs, true) => WorkspaceFocus::Header(CloseTab),
+        (WorkspaceFocus::Header(CloseTab), true) => WorkspaceFocus::Header(Shortcuts),
+        (WorkspaceFocus::Header(Shortcuts), true) => WorkspaceFocus::Header(NewTab),
+        (WorkspaceFocus::Header(NewTab), true) => WorkspaceFocus::Tabs,
+        _ => return None,
+    })
 }
 
 fn tab_shortcut_index(
@@ -5781,6 +5919,31 @@ mod tests {
             workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT), "t2"),
             None
         );
+    }
+
+    #[test]
+    fn eon_bar_controls_reuse_existing_actions_and_local_viewer() {
+        assert_eq!(
+            workspace_header_action(WorkspaceHeaderControl::NewTab, "t7"),
+            WorkspaceHeaderAction::Workspace(CommonAction::CreateTab)
+        );
+        assert_eq!(
+            workspace_header_action(WorkspaceHeaderControl::Shortcuts, "t7"),
+            WorkspaceHeaderAction::ToggleShortcuts
+        );
+        assert_eq!(
+            workspace_header_action(WorkspaceHeaderControl::CloseTab, "t7"),
+            WorkspaceHeaderAction::Workspace(CommonAction::CloseTab { tab: "t7".into() })
+        );
+        assert_eq!(
+            cycle_header_focus(WorkspaceFocus::Tabs, false),
+            Some(WorkspaceFocus::Header(WorkspaceHeaderControl::NewTab))
+        );
+        assert_eq!(
+            cycle_header_focus(WorkspaceFocus::Header(WorkspaceHeaderControl::NewTab), true),
+            Some(WorkspaceFocus::Tabs)
+        );
+        assert_eq!(cycle_header_focus(WorkspaceFocus::Panes, false), None);
     }
 
     #[test]
