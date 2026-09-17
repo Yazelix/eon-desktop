@@ -243,11 +243,11 @@ qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
-- **Status:** Partially proved
+- **Status:** Proved
 - **Consumer:** One Venus native surface consuming canonical Orbit frames and an
   optional cursor-tail color choice.
 - **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
-  cursor-profile value.
+  cursor-tail startup value.
 - **Result:**
   - Venus validates and materializes one coherent Orbit-authored structured
     frame into native draw inputs without terminal authority.
@@ -272,7 +272,15 @@ qualified by the identities and boundaries below.
   and `orbit-protocol` 0.1.0 at accepted proof/package revision
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
+- **Proof:** `73195f5812cdc8f32841eab644c1bf4b3af9f756`
+  - **Cursor color slice:** Focused parsing, exact preset, deterministic random,
+    custom RGB, conflict, contrast, inset, clipping, lifecycle, and draw-order
+    checks pass in the complete locked Rust suite. On a private Sway 1.12
+    headless Wayland output, `preset:ice` rendered `#7DDCFF` with outline
+    `#467B8F`; custom black rendered outline `#5A5A5A`; an omitted choice kept
+    random Nebula `#A970FF` with outline `#503579` across two moves; and explicit
+    `none` rendered no colored tail. The separate Orbit cursor body remained
+    authoritative.
   - **Startup slice:** Exact typography, geometry and failure evidence is
     indexed in VEN-C19 above; earlier distinct evidence below is retained.
   - **Environment:** x86_64 Linux Wayland, with retained deterministic and native
@@ -296,9 +304,8 @@ qualified by the identities and boundaries below.
       repeated PSS/USS savings and identical baseline/candidate pixels on
       isolated Sway/software Vulkan. It preserves the earlier presentation
       proofs and does not extend COSMIC, fractional-scale or compositor coverage.
-- **Open proof:** The selectable colors and automatic outline require exact
-  source and native Linux Wayland acceptance. Broader Linux compositor coverage
-  remains outside the proof.
+- **Open proof:** Fractional scale and broader Linux compositor coverage remain
+  outside the proof.
 
 ## VEN-C2 — Native semantic interaction
 
