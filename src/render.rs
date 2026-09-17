@@ -674,7 +674,7 @@ pub struct Renderer {
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
     scrollback_label: Option<String>,
-    cursor_tail: Option<(SceneColor, f32)>,
+    cursor_tail: Option<(SceneColor, SceneColor, f32)>,
     cursor_animation: CursorAnimation,
     last_cursor_frame: Option<Instant>,
     clear: wgpu::Color,
@@ -904,7 +904,8 @@ impl Renderer {
             hyperlink: None,
             hovered_header: None,
             scrollback_label: None,
-            cursor_tail,
+            cursor_tail: cursor_tail
+                .map(|(color, duration)| (color, cursor_outline(color), duration)),
             cursor_animation: CursorAnimation::default(),
             last_cursor_frame: None,
             clear: clear_color(DEFAULT_BACKGROUND, background_opacity, srgb_target),
@@ -1397,7 +1398,7 @@ impl Renderer {
         workspace: Option<&WorkspaceScene>,
         blink_visible: bool,
     ) {
-        let Some((trail_color, duration_scale)) = self.cursor_tail else {
+        let Some((trail_color, outline_color, duration_scale)) = self.cursor_tail else {
             self.reset_cursor_animation();
             return;
         };
@@ -1444,6 +1445,7 @@ impl Renderer {
                 viewport,
                 route,
                 trail_color,
+                outline_color,
                 duration_scale,
                 delta,
             );
@@ -3157,6 +3159,64 @@ fn push_cursor(
     rectangles.push(x, y, width, height, cursor.color, alpha);
 }
 
+fn relative_luminance(color: SceneColor) -> f64 {
+    let linear = |channel: u8| {
+        let channel = f64::from(channel) / 255.0;
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+}
+
+fn contrast_ratio(left: SceneColor, right: SceneColor) -> f64 {
+    let left = relative_luminance(left);
+    let right = relative_luminance(right);
+    (left.max(right) + 0.05) / (left.min(right) + 0.05)
+}
+
+fn cursor_outline(fill: SceneColor) -> SceneColor {
+    let black = SceneColor { r: 0, g: 0, b: 0 };
+    let white = SceneColor {
+        r: 255,
+        g: 255,
+        b: 255,
+    };
+    let target = if contrast_ratio(fill, black) >= contrast_ratio(fill, white) {
+        black
+    } else {
+        white
+    };
+    (1..=255)
+        .map(|amount| {
+            let blend = |source: u8, target: u8| {
+                ((u16::from(source) * (255 - amount) + u16::from(target) * amount + 127) / 255)
+                    as u8
+            };
+            SceneColor {
+                r: blend(fill.r, target.r),
+                g: blend(fill.g, target.g),
+                b: blend(fill.b, target.b),
+            }
+        })
+        .find(|outline| contrast_ratio(fill, *outline) >= 3.0)
+        .unwrap_or(target)
+}
+
+fn inset_cursor_quad(mut points: [CursorPoint; 4], amount: f32) -> [CursorPoint; 4] {
+    let center = CursorPoint {
+        x: points.iter().map(|point| point.x).sum::<f32>() / 4.0,
+        y: points.iter().map(|point| point.y).sum::<f32>() / 4.0,
+    };
+    for point in &mut points {
+        point.x += (center.x - point.x).clamp(-amount, amount);
+        point.y += (center.y - point.y).clamp(-amount, amount);
+    }
+    points
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_tail_cursor(
     rectangles: &mut RectangleBatch,
@@ -3167,6 +3227,7 @@ fn build_tail_cursor(
     viewport: SceneRect,
     route: Option<&str>,
     trail_color: SceneColor,
+    outline_color: SceneColor,
     duration_scale: f32,
     delta: f32,
 ) -> bool {
@@ -3190,7 +3251,9 @@ fn build_tail_cursor(
         duration_scale,
     );
     if active {
-        rectangles.push_quad(animation.corners(), trail_color, 1.0);
+        let corners = animation.corners();
+        rectangles.push_quad(corners, outline_color, 1.0);
+        rectangles.push_quad(inset_cursor_quad(corners, metrics.scale), trail_color, 1.0);
     }
     push_cursor(rectangles, cursor, bounds, metrics);
     active
@@ -4209,7 +4272,61 @@ mod tests {
     }
 
     #[test]
-    fn tail_cursor_uses_one_color_and_resets_when_hidden_or_blinking_off() {
+    fn cursor_outline_is_contrasting_and_one_logical_pixel() {
+        for fill in [
+            SceneColor { r: 0, g: 0, b: 0 },
+            SceneColor {
+                r: 0x7f,
+                g: 0x7f,
+                b: 0x7f,
+            },
+            SceneColor {
+                r: 0xff,
+                g: 0xff,
+                b: 0xff,
+            },
+        ]
+        .into_iter()
+        .chain(
+            [
+                0xff3b30, 0xffd23f, 0xb7f34a, 0x35c978, 0x7ddcff, 0x5271ff, 0xa970ff, 0xff5da2,
+            ]
+            .map(|value| SceneColor {
+                r: (value >> 16) as u8,
+                g: (value >> 8) as u8,
+                b: value as u8,
+            }),
+        ) {
+            let outline = cursor_outline(fill);
+            assert!(contrast_ratio(fill, outline) >= 3.0, "{fill:?} {outline:?}");
+            if relative_luminance(fill) > 0.5 {
+                assert!(relative_luminance(outline) < relative_luminance(fill));
+            } else if relative_luminance(fill) < 0.05 {
+                assert!(relative_luminance(outline) > relative_luminance(fill));
+            }
+        }
+
+        assert_eq!(
+            inset_cursor_quad(
+                [
+                    CursorPoint { x: 10.0, y: 20.0 },
+                    CursorPoint { x: 30.0, y: 20.0 },
+                    CursorPoint { x: 30.0, y: 50.0 },
+                    CursorPoint { x: 10.0, y: 50.0 },
+                ],
+                2.0,
+            ),
+            [
+                CursorPoint { x: 12.0, y: 22.0 },
+                CursorPoint { x: 28.0, y: 22.0 },
+                CursorPoint { x: 28.0, y: 48.0 },
+                CursorPoint { x: 12.0, y: 48.0 },
+            ]
+        );
+    }
+
+    #[test]
+    fn tail_cursor_outlines_one_color_and_resets_when_hidden_or_blinking_off() {
         let style = plain_style();
         let mut scene = Scene {
             revision: 1,
@@ -4262,6 +4379,7 @@ mod tests {
             g: 0xab,
             b: 0xcf,
         };
+        let outline = cursor_outline(trail);
         let mut animation = CursorAnimation::default();
         let mut first = RectangleBatch::new(100, 100);
         assert!(!build_tail_cursor(
@@ -4273,6 +4391,7 @@ mod tests {
             viewport,
             None,
             trail,
+            outline,
             1.0,
             0.0,
         ));
@@ -4293,27 +4412,29 @@ mod tests {
             viewport,
             None,
             trail,
+            outline,
             1.0,
             0.0,
         ));
         assert_eq!(
             moving.bytes.len(),
-            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize * 2
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize * 3
         );
-        for vertex in moving.bytes[..VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize]
-            .chunks_exact(VERTEX_SIZE as usize)
-        {
-            assert_eq!(
-                f32::from_ne_bytes(vertex[8..12].try_into().unwrap()),
-                0x12 as f32 / 255.0
-            );
-            assert_eq!(
-                f32::from_ne_bytes(vertex[12..16].try_into().unwrap()),
-                0xab as f32 / 255.0
-            );
-            assert_eq!(
-                f32::from_ne_bytes(vertex[16..20].try_into().unwrap()),
-                0xcf as f32 / 255.0
+        let quad = VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize;
+        let vertex_color = |vertex: &[u8]| {
+            [8, 12, 16]
+                .map(|offset| f32::from_ne_bytes(vertex[offset..offset + 4].try_into().unwrap()))
+        };
+        for (bytes, color) in [
+            (&moving.bytes[..quad], outline),
+            (&moving.bytes[quad..quad * 2], trail),
+            (&moving.bytes[quad * 2..], SceneColor { r: 1, g: 2, b: 3 }),
+        ] {
+            let expected = [color.r, color.g, color.b].map(|value| f32::from(value) / 255.0);
+            assert!(
+                bytes
+                    .chunks_exact(VERTEX_SIZE as usize)
+                    .all(|vertex| vertex_color(vertex) == expected)
             );
         }
         let mut tick = RectangleBatch::new(100, 100);
@@ -4326,6 +4447,7 @@ mod tests {
             viewport,
             None,
             trail,
+            outline,
             1.0,
             0.016,
         ));
@@ -4341,6 +4463,7 @@ mod tests {
             viewport,
             None,
             trail,
+            outline,
             1.0,
             0.01,
         ));

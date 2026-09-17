@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Choose one launch-stable cursor-tail color from eight built-in presets at
+  random by default. Accept named presets or a custom `#RRGGBB`, retain the
+  static escape hatch and complete legacy scalar profile, and give every tail a
+  one-logical-pixel automatically contrasting outline without changing Orbit's
+  cursor body.
+
 - Establish the unsupported Apple Silicon macOS foundation with target-scoped
   AppKit/AccessKit and Metal dependencies, one shared renderer and model, and a
   hidden-before-initialization window lifecycle. On macOS, default standalone

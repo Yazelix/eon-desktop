@@ -243,19 +243,22 @@ qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
-- **Status:** Proved
+- **Status:** Partially proved
 - **Consumer:** One Venus native surface consuming canonical Orbit frames and an
-  optional Eon cursor profile.
+  optional cursor-tail color choice.
 - **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
   cursor-profile value.
 - **Result:**
   - Venus validates and materializes one coherent Orbit-authored structured
     frame into native draw inputs without terminal authority.
-  - An omitted cursor profile uses the Venus `#89b4fa`, duration-`1.0` tail;
-    `none` is static; a complete `tail` supplies one validated color and duration.
-  - A bounded four-corner trail approaches Orbit's exact cursor destination while
-    preserving authoritative shape, visibility, blink, wide-cell geometry, and
-    color.
+  - An omitted color choice selects one of eight Venus presets once per launch
+    and uses it for that process at duration `1.0`. One selector accepts
+    `random`, `preset:<name>`, or `custom:#RRGGBB`; `none` is static, and the
+    complete lower-level `tail` profile supplies one validated color and duration.
+  - A bounded four-corner trail approaches Orbit's exact cursor destination.
+    Its solid fill receives a one-logical-pixel tint or shade with at least 3:1
+    fill-to-outline contrast while preserving authoritative cursor shape,
+    visibility, blink, wide-cell geometry, and color.
   - The immutable Scene alone owns accessible text and selection. Each visible,
     nonblank canonical head cell is one selectable UTF-8 unit; text above the
     AccessKit 255-byte unit limit becomes one U+FFFD accessibility unit without
@@ -265,10 +268,9 @@ qualified by the identities and boundaries below.
   or accessibility state.
 - **Owner:** Venus Scene, renderer, and cursor-animation state; Orbit retains
   terminal and cursor authority.
-- **Consumes:** Orbit `ORB-C4` and `ORB-C6` at accepted proof
-  `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`; ORBF v1 in canonical ORBS v4
-  at `7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`; Eon cursor-profile v1 values
-  owned by Yazelix Cursors `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf`.
+- **Consumes:** Orbit `ORB-C4` and `ORB-C6` through canonical ORBF v2 / ORBS v11
+  and `orbit-protocol` 0.1.0 at accepted proof/package revision
+  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
 - **Proof:** `ec80e36625dec73544c0cb64becf4b135c932a63`
   - **Startup slice:** Exact typography, geometry and failure evidence is
@@ -294,8 +296,9 @@ qualified by the identities and boundaries below.
       repeated PSS/USS savings and identical baseline/candidate pixels on
       isolated Sway/software Vulkan. It preserves the earlier presentation
       proofs and does not extend COSMIC, fractional-scale or compositor coverage.
-- **Open proof:** Composed Eon cursor-profile serialization and broader Linux
-  compositor coverage remain separately tracked.
+- **Open proof:** The selectable colors and automatic outline require exact
+  source and native Linux Wayland acceptance. Broader Linux compositor coverage
+  remains outside the proof.
 
 ## VEN-C2 — Native semantic interaction
 

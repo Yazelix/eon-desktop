@@ -490,10 +490,9 @@ policy, so native acceptance is platform-specific.
 
 ## Required for native cursor-tail materialization
 
-`ven-rio-cursor-animation-u57` consumes unchanged canonical ORBS v2 cursor
-values at Orbit proof `9d6d2bb37f20ab4ad9e186c7bc715eabef43e757`
-through the current exact `orbit-protocol` source
-`7f067b30e97d0b4787a7c6c0bbe3dd8a80a61c2c`. Orbit remains authoritative for
+The current cursor path consumes canonical ORBF v2 / ORBS v11 cursor values and
+`orbit-protocol` 0.1.0 at accepted Orbit proof/package revision
+`ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. Orbit remains authoritative for
 destination, shape, visibility, blink state, wide-tail state, and cursor color.
 
 [Rio](https://github.com/raphamorim/rio/tree/e019a9325b59a025cffa03a21d0788168514d502)
@@ -501,25 +500,24 @@ at `e019a9325b59a025cffa03a21d0788168514d502` is MIT-licensed required evidence
 for its complete trail cursor, spring helper, renderer glue, route reset, and
 redraw scheduling. Venus adopts the independently useful four-corner critically
 damped spring, 40 ms short-horizontal and 150 ms longer timing classes, 100 ms
-delta cap, first-frame and route snap, direction-ranked lag, one two-triangle
-quad, and redraw only while unsettled. It reuses no Rio source and rejects Rio's
+delta cap, first-frame and route snap, direction-ranked lag, two-triangle quad
+geometry, and redraw only while unsettled. It reuses no Rio source and rejects
+Rio's
 terminal state, Sugarloaf, renderer framework, configuration, panels, and
 polling.
 
-[Yazelix Cursors](https://github.com/Yazelix/cursors/tree/f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf)
-at `f97d0e7d3badf37ce3c01c1eba99b6b2bd17a7bf` is Apache-2.0 required boundary
-evidence. Its `eon-venus-native-v1` target resolves exactly `none` or `tail`
-with the first resolved palette color and a duration multiplier. Venus consumes
-only strict Eon-serialized scalar launch values; it neither depends on Yazelix
-Cursors nor reads its registry. Eon launcher
-`013ffb34acfd01b90dc4999f10526a4f2d8ec068` confirms that bounded options precede
-one or two positional sockets. Eon serialization remains separately owned and
-does not expand this Venus implementation.
+[WCAG 2.2 relative luminance](https://www.w3.org/TR/WCAG22/#dfn-relative-luminance)
+defines the sRGB transfer and weighted luminance calculation. The W3C
+[non-text contrast explanation](https://www.w3.org/WAI/WCAG22/understanding/non-text-contrast.html)
+treats 3:1 as an unrounded threshold. Venus uses those calculations only to
+derive the nearest integer tint or shade along the higher-contrast black/white
+direction for a tail outline; this is not a web-conformance claim.
 
-The existing wgpu rectangle pipeline and dynamic buffer upload are sufficient.
-The conditional wgpu post-processing comparison is rejected: no shader ABI,
-new dependency, renderer replacement, general effects engine, or persistent
-Venus setting is introduced.
+The existing launch parser, standard-library cosmetic entropy, wgpu rectangle
+pipeline, dynamic buffer upload, and scale-aware metrics are sufficient. The
+conditional wgpu post-processing comparison is rejected: no shader ABI, new
+dependency, renderer replacement, palette registry, general effects engine, or
+persistent Venus setting is introduced.
 
 ## Required for compositor-owned background blur
 

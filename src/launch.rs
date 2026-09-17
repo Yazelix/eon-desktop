@@ -1,20 +1,24 @@
 use crate::Result;
 #[cfg(target_os = "macos")]
 use std::process::Command;
-use std::{env, ffi::OsString, path::PathBuf};
+use std::{
+    collections::hash_map::RandomState, env, ffi::OsString, hash::BuildHasher, path::PathBuf,
+};
 #[cfg(target_os = "linux")]
 use std::{fs, os::unix::fs::MetadataExt};
 use yazelix_venus::{Color, FontSettings};
 
-const DEFAULT_CURSOR_TAIL: (Color, f32) = (
-    Color {
-        r: 0x89,
-        g: 0xb4,
-        b: 0xfa,
-    },
-    1.0,
-);
-const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--pane-frames true|false] [--background-opacity VALUE] [--background-blur] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
+const CURSOR_COLOR_PRESETS: [(&str, Color); 8] = [
+    ("magma", rgb(0xff3b30)),
+    ("solar", rgb(0xffd23f)),
+    ("lime", rgb(0xb7f34a)),
+    ("forest", rgb(0x35c978)),
+    ("ice", rgb(0x7ddcff)),
+    ("ocean", rgb(0x5271ff)),
+    ("nebula", rgb(0xa970ff)),
+    ("bubblegum", rgb(0xff5da2)),
+];
+const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--pane-frames true|false] [--background-opacity VALUE] [--background-blur] [--cursor-trail-color random|preset:NAME|custom:#RRGGBB] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
 
 #[derive(Debug)]
 pub(super) struct LaunchArguments {
@@ -46,6 +50,7 @@ pub(super) fn launch_arguments(
     let mut background_opacity = None;
     let mut background_blur = false;
     let mut cursor_effect = None;
+    let mut cursor_color_choice = None;
     let mut cursor_trail_color = None;
     let mut cursor_trail_duration = None;
     let mut family = None;
@@ -115,6 +120,17 @@ pub(super) fn launch_arguments(
                 Some(value) if value == "tail" => Some(true),
                 _ => return Err(USAGE.into()),
             };
+        } else if argument == "--cursor-trail-color" {
+            if cursor_color_choice.is_some() {
+                return Err(USAGE.into());
+            }
+            cursor_color_choice = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .and_then(|value| parse_cursor_color_choice(&value));
+            if cursor_color_choice.is_none() {
+                return Err(USAGE.into());
+            }
         } else if argument == "--cursor-trail-color-v1" {
             if cursor_trail_color.is_some() {
                 return Err(USAGE.into());
@@ -158,10 +174,16 @@ pub(super) fn launch_arguments(
         }
     }
 
-    let cursor_tail = match (cursor_effect, cursor_trail_color, cursor_trail_duration) {
-        (None, None, None) => Some(DEFAULT_CURSOR_TAIL),
-        (Some(false), None, None) => None,
-        (Some(true), Some(color), Some(duration)) => Some((color, duration)),
+    let cursor_tail = match (
+        cursor_color_choice,
+        cursor_effect,
+        cursor_trail_color,
+        cursor_trail_duration,
+    ) {
+        (None, None, None, None) => Some((random_cursor_color(), 1.0)),
+        (Some(color), None, None, None) => Some((color, 1.0)),
+        (None, Some(false), None, None) => None,
+        (None, Some(true), Some(color), Some(duration)) => Some((color, duration)),
         _ => return Err(USAGE.into()),
     };
 
@@ -231,12 +253,38 @@ fn parse_cursor_color(value: &str) -> Option<Color> {
     if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
     }
-    let rgb = u32::from_str_radix(hex, 16).ok()?;
-    Some(Color {
-        r: (rgb >> 16) as u8,
-        g: (rgb >> 8) as u8,
-        b: rgb as u8,
-    })
+    Some(rgb(u32::from_str_radix(hex, 16).ok()?))
+}
+
+const fn rgb(value: u32) -> Color {
+    Color {
+        r: (value >> 16) as u8,
+        g: (value >> 8) as u8,
+        b: value as u8,
+    }
+}
+
+fn parse_cursor_color_choice(value: &str) -> Option<Color> {
+    match value {
+        "random" => Some(random_cursor_color()),
+        _ => value
+            .strip_prefix("preset:")
+            .and_then(|name| {
+                CURSOR_COLOR_PRESETS
+                    .iter()
+                    .find(|(preset, _)| *preset == name)
+                    .map(|(_, color)| *color)
+            })
+            .or_else(|| value.strip_prefix("custom:").and_then(parse_cursor_color)),
+    }
+}
+
+fn random_cursor_color() -> Color {
+    cursor_preset_from_entropy(RandomState::new().hash_one("venus cursor"))
+}
+
+fn cursor_preset_from_entropy(entropy: u64) -> Color {
+    CURSOR_COLOR_PRESETS[entropy as usize % CURSOR_COLOR_PRESETS.len()].1
 }
 
 fn default_socket_path() -> Result<PathBuf> {
@@ -354,13 +402,52 @@ mod tests {
         assert!(!default.supervised);
         assert_eq!(default.background_opacity, 1.0);
         assert!(!default.background_blur);
+        let (default_color, default_duration) = default.cursor_tail.unwrap();
+        assert_eq!(default_duration, 1.0);
+        assert!(
+            CURSOR_COLOR_PRESETS
+                .iter()
+                .any(|(_, color)| *color == default_color)
+        );
+
+        let presets = [
+            ("magma", rgb(0xff3b30)),
+            ("solar", rgb(0xffd23f)),
+            ("lime", rgb(0xb7f34a)),
+            ("forest", rgb(0x35c978)),
+            ("ice", rgb(0x7ddcff)),
+            ("ocean", rgb(0x5271ff)),
+            ("nebula", rgb(0xa970ff)),
+            ("bubblegum", rgb(0xff5da2)),
+        ];
+        for (index, (name, color)) in presets.into_iter().enumerate() {
+            assert_eq!(cursor_preset_from_entropy(index as u64), color);
+            assert_eq!(
+                parse(&["--cursor-trail-color", &format!("preset:{name}")])
+                    .unwrap()
+                    .cursor_tail,
+                Some((color, 1.0))
+            );
+        }
+        let random = parse(&["--cursor-trail-color", "random"])
+            .unwrap()
+            .cursor_tail
+            .unwrap();
+        assert_eq!(random.1, 1.0);
+        assert!(
+            CURSOR_COLOR_PRESETS
+                .iter()
+                .any(|(_, color)| *color == random.0)
+        );
         assert_eq!(
-            default.cursor_tail,
+            parse(&["--cursor-trail-color", "custom:#12aBcF"])
+                .unwrap()
+                .cursor_tail,
             Some((
                 Color {
-                    r: 0x89,
-                    g: 0xb4,
-                    b: 0xfa,
+                    r: 0x12,
+                    g: 0xab,
+                    b: 0xcf,
                 },
                 1.0,
             ))
@@ -441,6 +528,33 @@ mod tests {
             &["--cursor-effect-v1"][..],
             &["--cursor-effect-v1", "warp"][..],
             &["--cursor-effect-v1", "tail"][..],
+            &["--cursor-trail-color"][..],
+            &["--cursor-trail-color", "ocean"][..],
+            &["--cursor-trail-color", "preset:volt"][..],
+            &["--cursor-trail-color", "custom:123456"][..],
+            &["--cursor-trail-color", "custom:#12345g"][..],
+            &[
+                "--cursor-trail-color",
+                "random",
+                "--cursor-trail-color",
+                "preset:ice",
+            ][..],
+            &[
+                "--cursor-trail-color",
+                "preset:ice",
+                "--cursor-effect-v1",
+                "none",
+            ][..],
+            &[
+                "--cursor-trail-color",
+                "preset:ice",
+                "--cursor-effect-v1",
+                "tail",
+                "--cursor-trail-color-v1",
+                "#123456",
+                "--cursor-trail-duration-v1",
+                "1",
+            ][..],
             &[
                 "--cursor-effect-v1",
                 "tail",

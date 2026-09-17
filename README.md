@@ -216,10 +216,23 @@ COSMIC owns the blur algorithm and strength. Unsupported or policy-disabled
 Wayland compositors may ignore the best-effort request without failing launch.
 Venus does not configure blur strength.
 
-Direct Venus launches use a tail with color `#89b4fa` and duration multiplier
-`1.0` when the cursor profile is absent. Pass `--cursor-effect-v1 none` for a
-static cursor. A complete explicit tail profile requires one `#RRGGBB` trail
-color and a finite duration multiplier from `0.25` through `4.0`:
+Venus chooses one random built-in cursor-tail color per launch by default and
+keeps it for that process. Choose `random`, a named preset, or a custom color:
+
+```sh
+cargo run --locked -- --cursor-trail-color preset:ice /path/to/orbit.sock
+cargo run --locked -- --cursor-trail-color 'custom:#12ABCF' /path/to/orbit.sock
+```
+
+The presets are `magma` (`#FF3B30`), `solar` (`#FFD23F`), `lime` (`#B7F34A`),
+`forest` (`#35C978`), `ice` (`#7DDCFF`), `ocean` (`#5271FF`), `nebula`
+(`#A970FF`), and `bubblegum` (`#FF5DA2`). Every tail gets an automatic
+one-logical-pixel contrasting outline. The fill and outline animate and clip
+together; Orbit's cursor body keeps its authoritative color and shape.
+
+Pass `--cursor-effect-v1 none` for a static cursor. The lower-level complete
+tail profile remains available for an exact color and a finite duration
+multiplier from `0.25` through `4.0`:
 
 ```sh
 cargo run --locked -- \
@@ -229,12 +242,9 @@ cargo run --locked -- \
   /path/to/orbit.sock
 ```
 
-The tail animates only its bounded geometry; Orbit remains authoritative for
-the cursor destination, shape, visibility, blink state, wide-cell geometry, and
-cursor color. Venus rejects duplicate, incomplete, malformed, non-finite, or
-out-of-range profile values before opening a window. Yazelix Cursors owns value
-resolution and Eon owns serialization and persistence for composed launches;
-that Eon producer is tracked separately and is not part of the current launcher.
+Venus rejects unknown presets, malformed custom colors, duplicate choices,
+mixed high-level and lower-level options, incomplete profiles, non-finite
+durations, and out-of-range durations before opening a window.
 
 In Eon's supervised mode, Venus reads one private bounded presentation stream.
 The `stdin-ready-v1` mode consumes one canonical EONW v5 startup snapshot for
@@ -387,13 +397,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 399 |
+| README | 409 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 1,976 |
+| Contracts and references | 1,977 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
-| Changelog | 261 |
-| Rust source, including unit tests | 18,337 |
+| Changelog | 267 |
+| Rust source, including unit tests | 18,574 |
 | Rust integration tests | 1,034 |
 | Cargo manifest | 33 |
-| **Total** | **22,721** |
+| **Total** | **22,975** |
