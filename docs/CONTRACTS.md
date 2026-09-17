@@ -1277,7 +1277,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C21 — Native Eon Bar workspace header
 
-- **Status:** Candidate
+- **Status:** Proven
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The person points at, focuses, or activates the workspace header;
@@ -1313,10 +1313,10 @@ qualified by the identities and boundaries below.
 - **Boundary:** No second row, widget framework, status/quota data, polling,
   configuration, Nova compatibility, inactive-tab close, protocol change,
   dependency, native-decoration policy, or platform-support expansion.
-- **Proof:** Uncommitted candidate runtime diff
+- **Proof:** Source `2ce3594b9ca0f62a2723d5ce5a005ed3560aea64` has runtime diff
   `5004ec5447592ebfd582e67e1a752c9a154a8daa8a32a0d05c7e17284c886632`
-  over `d447255686ec85e0b42781f34989aa5cf754cd55` is content-identical to
-  package source `94c9d6874590be0cc175c1f438362c779fe27fa8`. Locked format,
+  over `d447255686ec85e0b42781f34989aa5cf754cd55` and is content-identical
+  to package source `94c9d6874590be0cc175c1f438362c779fe27fa8`. Locked format,
   check, 137 ordinary tests, strict all-target Clippy, Eon manifest/package
   build, and full flake check pass. Installed candidate
   `/nix/store/38iax08krzlc5gfl67skqiwlhbrk0jmf-eon-0.1.0` passed isolated
@@ -1327,9 +1327,9 @@ qualified by the identities and boundaries below.
   11 ambient product identities and cleaned their private processes;
   evidence is retained in
   `~/.local/state/eon/proofs/ven-native-eon-bar-header-iqj-2026-09-17/`.
-  This remains Candidate until a user-authorized proof-bearing commit. The
-  native boundary is x86_64 Linux Wayland; Apple Silicon macOS remains under
-  its separate proof chain.
+  The user authorized the proof-bearing source commit on 2026-09-17. The native
+  boundary is x86_64 Linux Wayland; Apple Silicon macOS remains under its
+  separate proof chain.
 
 ## Rules
 
