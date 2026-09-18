@@ -3534,7 +3534,7 @@ mod tests {
         assert_eq!(image.content_type, ContentType::Mask);
         assert_eq!(image.data.len(), 16 * 16);
         assert_eq!(
-            image.data[3], 0,
+            image.data[0], 0,
             "the official transparent corner remains clear"
         );
         assert!(
