@@ -1376,7 +1376,9 @@ qualified by the identities and boundaries below.
 - **Proof:** Source `247dcb2dc853e604d51ac727471e1e65e1535f1d` has runtime diff
   `37c537a2ec501fd37ed2a1f4654e5a20c0638b4e71c7971c9cb4b9a0b6ce2125`
   over `76f0f4cd53b275114323f5458cd5e73f379b9202`. Locked format, check,
-  139 ordinary tests, and strict all-target Clippy pass. Exact package
+  139 ordinary tests, and strict all-target Clippy pass. Test-only source
+  `eb0127bb5cc80553156a0ac185469986d483eb77` corrects the mask-origin
+  assertion and repeats those checks; runtime code is unchanged. Exact package
   `/nix/store/qcpnwl8hhy73x3v93ic5mv3h3cj7cwm4-yazelix-venus-openai-blossom-proof-0.1.0`
   passed isolated Sway 1.12 scale-1 native wide, compact, hidden, stale,
   blocked, unknown, absent, real-Codex, Eon-loss, hover, focus, and AT-SPI
