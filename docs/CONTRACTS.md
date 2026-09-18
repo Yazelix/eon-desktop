@@ -6,8 +6,9 @@ retains accepted user-visible chronology.
 
 `VEN-C16` owns platform scope. The current locked consumer uses ORBF v2 /
 ORBS v11 at Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, with source
-acceptance indexed in `VEN-C7`. Older consumed revisions below identify their
-named proofs; they do not select the current dependency.
+acceptance indexed in `VEN-C7`, and EONW v6 at Eon
+`3103a00a904c347472899549ce611da765a71650`. Older consumed revisions below
+identify their named proofs; they do not select the current dependency.
 
 ## VEN-C19 — Startup typography and terminal geometry
 
@@ -53,7 +54,7 @@ named proofs; they do not select the current dependency.
   accepted source for Eon and EonTerm.
 - **Supervised startup admission:**
   `EON_VENUS_PRESENTATION_CONTROL=stdin-ready-v1` uses private stdin/stdout.
-  Workspace mode first reads one bounded canonical EONW v5 Snapshot from stdin;
+  Workspace mode first reads one bounded canonical EONW v6 Snapshot from stdin;
   standalone mode has no snapshot prefix. After font/renderer initialization
   and real-window initial native-scale admission, Venus writes exactly
   `ready-v1` (eight bytes) and starts attachment. The caller may then start
@@ -1019,7 +1020,7 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus native host and dependency feature selection.
 - **Consumes:** User-approved `EON-C7`; current source uses exact winit 0.30.13 at
   `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, wgpu 30.0.0, and
-  wl-clipboard-rs 0.9.3 with ORBF v2 / ORBS v11 and EONW v5. The macOS path
+  wl-clipboard-rs 0.9.3 with ORBF v2 / ORBS v11 and EONW v6. The macOS path
   consumes Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, whose accepted
   `ORB-C14` source proof is
   `0233f4d34b294a50c5bc7f373859cf4ec04d2414`. Target-scoped AppKit/AccessKit
@@ -1232,7 +1233,7 @@ qualified by the identities and boundaries below.
 - **Result:** Venus presents one ephemeral, read-only native dialog containing
   grouped native workspace, host, and current Eon popup shortcuts. Fixed
   bindings share their descriptor owner with dispatch; popup rows use the exact
-  enabled label and normalized physical shortcut from the current EONW v5
+  enabled label and normalized physical shortcut from the current Eon
   snapshot. Wheel and navigation keys scroll bounded content. Opening,
   refreshing, scrolling, and closing send no terminal bytes or workspace
   action; matching releases remain captured and prior terminal/chrome focus is
@@ -1330,6 +1331,63 @@ qualified by the identities and boundaries below.
   The user authorized the proof-bearing source commit on 2026-09-17. The native
   boundary is x86_64 Linux Wayland; Apple Silicon macOS remains under its
   separate proof chain.
+
+## VEN-C22 — Codex quota fact chip
+
+- **Status:** Candidate with complete worktree proof; exact source commit and
+  downstream full-Eon activation remain open.
+- **Consumer:** One person using a Venus surface controlled by a full Eon
+  workspace.
+- **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
+  removes its optional Codex quota observation.
+- **Result:** Venus projects one noninteractive fact chip into the existing
+  single-row Eon Bar. Fresh facts show `Codex` followed by every available
+  duration and remaining percentage at ordinary width. Under pressure the chip
+  keeps `Codex` and the lowest remaining percentage, then disappears before
+  active-tab identity, fixed controls, or the bounded drag region lose their
+  accepted space. Stale labels include `old`; blocked and unknown observations
+  read `Codex blocked` and `Codex unknown`. Hover and one static AccessKit label
+  expose every window's remaining percentage and reset availability, the exact
+  observation time, and the source freshness or permission state.
+- **Important failures:** An absent observation creates no rectangle, gap, hit,
+  action, focus target, or accessibility node. Missing resets remain explicit;
+  unusual durations use exact minute labels. A stale label that cannot retain
+  `old` disappears. Narrow and tiny widths retain the VEN-C21 tab and control
+  priority. Quota-only refreshes do not recenter workspace navigation, cancel
+  terminal scroll, replace the attachment, or send an Orbit resize. Venus has
+  no quota cache outside the current EONW snapshot and does not refresh or infer
+  provider state.
+- **Owner:** Eon owns Codex process, authentication, account invalidation,
+  refresh, retry, normalization, freshness, permission state, and the optional
+  EONW field. Venus Scene owns chip text and responsive geometry; the existing
+  renderer, hover path, and AccessKit tree own presentation.
+- **Consumes:** EONW v6 and Eon's EON-C22 candidate at exact Eon source
+  `3103a00a904c347472899549ce611da765a71650`; VEN-C21 at exact accepted source
+  `2ce3594b9ca0f62a2723d5ce5a005ed3560aea64`; unchanged Orbit ORBF v2 / ORBS
+  v11 at `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
+- **Boundary:** No provider parsing, process, filesystem or network access,
+  timer, cache, quota mutation, account identity, click action, focus target,
+  alert, threshold color, chart, configuration, widget framework, second row,
+  other provider, Orbit change, or platform expansion. Workspace transport loss
+  expires the optional quota while retaining the last useful workspace.
+- **Proof:** Worktree candidate based on
+  `3961067894ba386ff33316b08c312665de1870a6`, with runtime diff SHA-256
+  `f5dc3547232865ce197ee2ddb4931db7e79a8dd39663194cae1b5ff539bfd513`.
+  Locked fmt/check/test/clippy and diff checks pass: 138 ordinary tests; five
+  native tests remain ignored by the ordinary suite. Nix artifact
+  `/nix/store/v1121fk6jnscnk6j5fdajlfkagq2v0ly-yazelix-venus-quota-proof-0.1.0`
+  passed an isolated x86_64 Linux Sway 1.12 / Mesa 26.1.2 lavapipe run at scale
+  1. Wide, compact, narrow-hidden, stale, blocked, unknown, absent, and a real
+  Codex 0.154 observation rendered truthfully. Hover exposed complete detail;
+  AT-SPI exposed one ordered static Label with no action; clicking preserved
+  terminal focus. Terminating the Eon fixture removed the quota while retaining
+  workspace tabs and controls. All private processes stopped, accessibility was
+  restored, and 17 ambient product identities were preserved. Evidence is
+  retained under
+  `~/.local/state/eon/proofs/ven-render-codex-quota-eon-bar-wfe-2026-09-17/`.
+- **Open proof:** Record the exact source commit, then activate that accepted
+  source through the downstream full-Eon issue. macOS stays outside this
+  contract.
 
 ## Rules
 

@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 accesskit = "=0.24.1"
 accesskit_winit = { version = "=0.33.2", default-features = false, features = ["rwh_06"] }
-eon-workspace-protocol = { git = "https://github.com/Yazelix/eon.git", rev = "0cc8f477298681ae3945903e8fdb5852d487c5ab" }
+eon-workspace-protocol = { git = "https://github.com/Yazelix/eon.git", rev = "3103a00a904c347472899549ce611da765a71650" }
 glyphon = "=0.12.0"
 orbit-protocol = { git = "https://github.com/Yazelix/eon-sessions.git", rev = "ea9fd28ce0908f218cf65d4e6df368f0a4e565f5" }
 pollster = { version = "=1.0.1", default-features = false }

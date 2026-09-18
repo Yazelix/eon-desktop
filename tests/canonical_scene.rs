@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v5::{Pane, Snapshot, Tab};
+use eon_workspace_protocol::v6::{Pane, Snapshot, Tab};
 use orbit_protocol::{
     Capabilities, Cell, CellStyle, CellWidth, Colors, Cursor, CursorShape, CursorViewport,
     Dimensions, Frame, Rgb, Row, Screen, StyleColor, Underline,
@@ -15,7 +15,7 @@ use yazelix_venus::{
 
 #[test]
 fn shared_popup_projection_keeps_hidden_work_and_one_input_surface() {
-    use eon_workspace_protocol::v5 as wire;
+    use eon_workspace_protocol::v6 as wire;
     use yazelix_venus::WorkspaceModel;
     let mut snapshot = wire::Snapshot {
         active_tab: "t1".into(),
@@ -45,6 +45,7 @@ fn shared_popup_projection_keeps_hidden_work_and_one_input_surface() {
                 endpoint: b"/run/agent.sock".to_vec(),
             }],
         }],
+        codex_quota: None,
     };
     let mut model = WorkspaceModel::default();
     let apply = |model: &mut WorkspaceModel, snapshot: &wire::Snapshot| {
@@ -219,11 +220,12 @@ fn eon_workspace_becomes_one_bounded_native_accordion() {
                 }],
             },
         ],
-        geometry: eon_workspace_protocol::v5::PopupGeometry {
+        geometry: eon_workspace_protocol::v6::PopupGeometry {
             side_margin: 8.0,
             vertical_margin: 4.0,
         },
         entries: Vec::new(),
+        codex_quota: None,
     };
     let size = PhysicalSize::new(800, 600);
     let metrics = CellMetrics::for_scale(1.0);

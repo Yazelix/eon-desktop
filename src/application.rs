@@ -1,6 +1,6 @@
 use crate::{Result, launch::LaunchArguments};
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::v5::{
+use eon_workspace_protocol::v6::{
     Action as WorkspaceAction, Direction as WorkspaceDirection, InvokeIntent, Snapshot,
     WorkspaceAction as CommonAction,
 };
@@ -871,13 +871,13 @@ fn native_pointer_shortcut_for(
         .find(|shortcut| shortcut.matches_pointer(platform, button, modifiers))
 }
 
-fn shortcut_groups(entries: &[eon_workspace_protocol::v5::PopupEntry]) -> Vec<ShortcutGroup> {
+fn shortcut_groups(entries: &[eon_workspace_protocol::v6::PopupEntry]) -> Vec<ShortcutGroup> {
     shortcut_groups_for(NATIVE_PLATFORM, entries)
 }
 
 fn shortcut_groups_for(
     platform: NativePlatform,
-    entries: &[eon_workspace_protocol::v5::PopupEntry],
+    entries: &[eon_workspace_protocol::v6::PopupEntry],
 ) -> Vec<ShortcutGroup> {
     let mut groups = ["Navigate", "Tabs and panes", "Host"]
         .into_iter()
@@ -922,7 +922,7 @@ fn shortcut_groups_for(
 }
 
 fn physical_shortcut_label_for(platform: NativePlatform, modifiers: u8, key: &str) -> String {
-    use eon_workspace_protocol::v5 as wire;
+    use eon_workspace_protocol::v6 as wire;
 
     let mut parts = Vec::with_capacity(5);
     let labels = match platform {
@@ -961,7 +961,7 @@ fn physical_shortcut_label_for(platform: NativePlatform, modifiers: u8, key: &st
 }
 
 fn wire_modifiers(modifiers: session::Modifiers) -> u8 {
-    use eon_workspace_protocol::v5 as wire;
+    use eon_workspace_protocol::v6 as wire;
 
     [
         (session::Modifiers::SHIFT, wire::SHIFT),
@@ -1187,6 +1187,7 @@ struct Application {
     header_press: Option<HeaderPress>,
     shortcut_viewer: ShortcutViewerState,
     tab_texts: HashMap<String, (String, f32)>,
+    quota_widths: HashMap<String, f32>,
     tab_scroll: f32,
     pane_scroll: f32,
     terminal_scroll: TerminalScroll,
@@ -1259,6 +1260,7 @@ impl Application {
             header_press: None,
             shortcut_viewer: ShortcutViewerState::default(),
             tab_texts: HashMap::new(),
+            quota_widths: HashMap::new(),
             tab_scroll: 0.0,
             pane_scroll: 0.0,
             terminal_scroll: TerminalScroll::default(),
@@ -1438,7 +1440,12 @@ impl Application {
                         .get(endpoint)
                         .map(|observer| &observer.metadata)
                 },
-                |id, _| self.tab_texts[id].clone(),
+                |id, label| {
+                    id.map_or_else(
+                        || (label.to_owned(), self.quota_widths[label]),
+                        |id| self.tab_texts[id].clone(),
+                    )
+                },
             )
         })
     }
@@ -1587,26 +1594,41 @@ impl Application {
         self.presentation.candidate(revision)
     }
 
-    fn reveal_workspace_selection(&mut self) {
-        let Some(state) = &mut self.window else {
-            return;
-        };
-        let Some(snapshot) = self.workspace_model.snapshot() else {
-            return;
-        };
+    fn rebuild_workspace_measurements(
+        &mut self,
+        tab_scroll: f32,
+        pane_scroll: f32,
+    ) -> Option<WorkspaceScene> {
+        let state = self.window.as_mut()?;
+        let snapshot = self.workspace_model.snapshot()?;
         self.tab_texts.clear();
-        let scene = WorkspaceScene::from_snapshot(
+        self.quota_widths.clear();
+        Some(WorkspaceScene::from_snapshot(
             snapshot,
             state.renderer.size(),
             state.renderer.metrics(),
-            0.0,
-            0.0,
+            tab_scroll,
+            pane_scroll,
             |id, label| {
-                let fitted = state.renderer.fit_tab_text(label);
-                self.tab_texts.insert(id.to_owned(), fitted.clone());
+                let fitted = if id.is_some() {
+                    state.renderer.fit_tab_text(label)
+                } else {
+                    state.renderer.measure_header_text(label)
+                };
+                if let Some(id) = id {
+                    self.tab_texts.insert(id.to_owned(), fitted.clone());
+                } else {
+                    self.quota_widths.insert(label.to_owned(), fitted.1);
+                }
                 fitted
             },
-        );
+        ))
+    }
+
+    fn reveal_workspace_selection(&mut self) {
+        let Some(scene) = self.rebuild_workspace_measurements(0.0, 0.0) else {
+            return;
+        };
         self.tab_scroll = scene.active_tab_scroll();
         self.pane_scroll = scene.selected_pane_scroll();
     }
@@ -1701,12 +1723,19 @@ impl Application {
     }
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
-        let received_snapshot = matches!(
-            &event,
-            WorkspaceEvent::Response(eon_workspace_protocol::v5::Response::Snapshot(_))
-        );
+        let (received_snapshot, snapshot_changed) = match &event {
+            WorkspaceEvent::Response(eon_workspace_protocol::v6::Response::Snapshot(snapshot)) => {
+                (true, self.workspace_model.snapshot() != Some(snapshot))
+            }
+            _ => (false, false),
+        };
         let unavailable = matches!(&event, WorkspaceEvent::Unavailable(_));
-        let (view_changed, snapshot_changed) = match event {
+        let quota_expired = unavailable
+            && self
+                .workspace_model
+                .snapshot()
+                .is_some_and(|snapshot| snapshot.codex_quota.is_some());
+        let (view_changed, workspace_changed) = match event {
             WorkspaceEvent::Response(response) => self.workspace_model.apply(response),
             WorkspaceEvent::Unavailable(detail) => {
                 (self.workspace_model.mark_unavailable(detail), false)
@@ -1718,11 +1747,14 @@ impl Application {
             }
             return;
         }
-        if unavailable && !self.metadata_observers.is_empty() {
+        if unavailable {
+            let metadata_changed = !self.metadata_observers.is_empty();
             self.metadata_observers.clear();
-            self.presentation.invalidate();
+            if quota_expired || metadata_changed {
+                self.presentation.invalidate();
+            }
         }
-        if snapshot_changed {
+        if workspace_changed {
             self.cancel_terminal_scroll();
             self.reveal_workspace_selection();
             self.presentation.invalidate();
@@ -1747,6 +1779,15 @@ impl Application {
                 }
             }
             self.send_resize();
+        } else if snapshot_changed {
+            let Some(scene) =
+                self.rebuild_workspace_measurements(self.tab_scroll, self.pane_scroll)
+            else {
+                return;
+            };
+            self.tab_scroll = scene.tab_scroll();
+            self.pane_scroll = scene.pane_scroll();
+            self.presentation.invalidate();
         }
         if self.workspace_model.snapshot().is_some()
             && self.workspace_model.active_attachment().is_none()
@@ -1846,10 +1887,17 @@ impl Application {
         match transport.send(action) {
             Ok(()) => true,
             Err(error) => {
+                let quota_expired = self
+                    .workspace_model
+                    .snapshot()
+                    .is_some_and(|snapshot| snapshot.codex_quota.is_some());
                 if self
                     .workspace_model
                     .mark_unavailable(format!("Cannot queue Eon workspace action: {error}"))
                 {
+                    if quota_expired {
+                        self.presentation.invalidate();
+                    }
                     self.refresh_client_view();
                 }
                 false
@@ -2717,23 +2765,25 @@ impl Application {
                     && !self.model.scene().is_some_and(Scene::has_selected_content))
         });
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
-        let hovered_header = (shortcut_viewer.is_none()
+        let hovered_hit = (shortcut_viewer.is_none()
             && self.window_focused
             && self.links.pointer_inside
             && !self.input.pointer_busy())
         .then(|| {
-            workspace.as_ref().and_then(|scene| {
-                match scene.hit_test(self.cursor.x as f32, self.cursor.y as f32) {
-                    Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
-                    Some(WorkspaceHit::Pane(id)) => Some((WorkspaceFocus::Panes, id.to_owned())),
-                    Some(WorkspaceHit::Control(control)) => {
-                        Some((WorkspaceFocus::Header(control), String::new()))
-                    }
-                    _ => None,
-                }
-            })
+            workspace
+                .as_ref()
+                .and_then(|scene| scene.hit_test(self.cursor.x as f32, self.cursor.y as f32))
         })
         .flatten();
+        let hovered_header = match hovered_hit {
+            Some(WorkspaceHit::Tab(id)) => Some((WorkspaceFocus::Tabs, id.to_owned())),
+            Some(WorkspaceHit::Pane(id)) => Some((WorkspaceFocus::Panes, id.to_owned())),
+            Some(WorkspaceHit::Control(control)) => {
+                Some((WorkspaceFocus::Header(control), String::new()))
+            }
+            _ => None,
+        };
+        let quota_hovered = matches!(hovered_hit, Some(WorkspaceHit::Quota));
         let mut refresh = false;
         let mut presented = false;
         let Some(state) = &mut self.window else {
@@ -2744,6 +2794,7 @@ impl Application {
             .renderer
             .set_scrollback_label(scrollback_label.clone());
         state.renderer.set_hovered_header(hovered_header);
+        state.renderer.set_quota_hovered(quota_hovered);
         state.renderer.set_pressed_header(match self.header_press {
             Some(HeaderPress::Control(control)) => Some(control),
             _ => None,
@@ -3020,6 +3071,7 @@ impl ApplicationHandler<UserEvent> for Application {
                             hit @ Some(
                                 WorkspaceHit::Tab(_)
                                 | WorkspaceHit::Pane(_)
+                                | WorkspaceHit::Quota
                                 | WorkspaceHit::Control(_),
                             ) => hit,
                             _ => None,
@@ -3139,6 +3191,7 @@ impl ApplicationHandler<UserEvent> for Application {
                             }
                             return;
                         }
+                        Some(WorkspaceHit::Quota) => None,
                         None => None,
                     };
                     if let Some((focus, id)) = target {
@@ -3485,7 +3538,7 @@ fn retry_is_allowed(
 }
 
 fn visible_metadata_endpoints(
-    snapshot: &eon_workspace_protocol::v5::Snapshot,
+    snapshot: &eon_workspace_protocol::v6::Snapshot,
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
@@ -3778,7 +3831,7 @@ fn popup_shortcut(
     terminal_focused: bool,
 ) -> Option<WorkspaceAction> {
     let normalized = wire_modifiers(modifiers);
-    // winit's physical KeyCode names are the canonical names in EONW v5.
+    // winit's physical KeyCode names are the canonical names in EONW v6.
     let key = format!("{code:?}");
     let entry = snapshot
         .entries
@@ -3981,7 +4034,7 @@ fn initial_window_size(
     rows: Option<u16>,
     metrics: CellMetrics,
     scale: f64,
-    snapshot: Option<&eon_workspace_protocol::v5::Snapshot>,
+    snapshot: Option<&eon_workspace_protocol::v6::Snapshot>,
 ) -> Result<PhysicalSize<u32>> {
     let (horizontal, vertical) = snapshot.map_or((0.0, 0.0), |snapshot| {
         WorkspaceScene::initial_overhead(snapshot, metrics)
@@ -4075,7 +4128,7 @@ pub(super) fn run(arguments: LaunchArguments) -> Result {
     let mut application = Application::new(arguments, event_loop.create_proxy());
     if application.startup_admission && application.workspace_socket.is_some() {
         let response = yazelix_venus::read_workspace_response(&mut io::stdin().lock())?;
-        if !matches!(response, eon_workspace_protocol::v5::Response::Snapshot(_)) {
+        if !matches!(response, eon_workspace_protocol::v6::Response::Snapshot(_)) {
             return Err("Venus startup admission requires an Eon workspace snapshot".into());
         }
         application.workspace_model.apply(response);
@@ -4113,14 +4166,14 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
-    use eon_workspace_protocol::v5::{Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab};
+    use eon_workspace_protocol::v6::{Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab};
 
     fn show_test_popup(snapshot: &mut Snapshot) {
         snapshot.entries = vec![PopupEntry {
             id: "project".into(),
             label: "Project".into(),
             shortcut: Shortcut {
-                modifiers: eon_workspace_protocol::v5::ALT,
+                modifiers: eon_workspace_protocol::v6::ALT,
                 key: "KeyZ".into(),
             },
         }];
@@ -4145,9 +4198,9 @@ mod tests {
                 assert!(self.0.window.is_none(), "wait for workspace geometry");
                 self.0
                     .workspace_model
-                    .apply(eon_workspace_protocol::v5::Response::Snapshot(Snapshot {
+                    .apply(eon_workspace_protocol::v6::Response::Snapshot(Snapshot {
                         active_tab: "t1".into(),
-                        geometry: eon_workspace_protocol::v5::PopupGeometry {
+                        geometry: eon_workspace_protocol::v6::PopupGeometry {
                             side_margin: 8.0,
                             vertical_margin: 4.0,
                         },
@@ -4166,6 +4219,7 @@ mod tests {
                                 live: true,
                             }],
                         }],
+                        codex_quota: None,
                     }));
                 self.0.resumed(event_loop);
                 assert!(self.0.window.is_none());
@@ -4323,7 +4377,7 @@ mod tests {
     fn initial_grid_includes_workspace_chrome_at_each_scale() {
         let mut snapshot = Snapshot {
             active_tab: "t1".into(),
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -4344,6 +4398,7 @@ mod tests {
                     })
                     .collect(),
             }],
+            codex_quota: None,
         };
         for popup in [false, true] {
             if popup {
@@ -4381,7 +4436,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn live_output_keeps_application_input_admitted_before_repaint() {
-        use eon_workspace_protocol::v5 as workspace;
+        use eon_workspace_protocol::v6 as workspace;
         use orbit_protocol::{
             Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         };
@@ -4634,6 +4689,22 @@ mod tests {
                 assert_eq!(app.presented_revision(), Some(4));
                 assert_eq!(app.selection_gate, SelectionGate::Ready);
 
+                let unchanged = app.workspace_model.snapshot().unwrap().clone();
+                app.handle_workspace(WorkspaceEvent::Response(workspace::Response::Failure(
+                    workspace::Failure {
+                        code: "notice".into(),
+                        detail: "temporary notice".into(),
+                    },
+                )));
+                app.handle_workspace(WorkspaceEvent::Response(workspace::Response::Snapshot(
+                    unchanged,
+                )));
+                assert_eq!(
+                    app.presented_revision(),
+                    Some(4),
+                    "an unchanged snapshot that clears a notice must keep presented geometry"
+                );
+
                 // A workspace poll can skip intermediate pane selections.
                 // Extra headers must resize the retained attachment too.
                 let previous_size = app.last_resize.unwrap();
@@ -4792,8 +4863,8 @@ mod tests {
                 app.set_workspace_focus(WorkspaceFocus::Terminal);
                 let snapshot = app.workspace_model.snapshot().unwrap().clone();
                 app.links.pressed = link;
-                let _ = app.workspace_model.mark_unavailable("offline");
-                app.refresh_client_view();
+                app.handle_workspace(WorkspaceEvent::Unavailable("offline".into()));
+                assert_eq!(app.presented_revision(), None);
                 assert!(
                     app.links.pressed.is_none(),
                     "an unavailable link surface must retire its captured press"
@@ -4850,7 +4921,7 @@ mod tests {
                 empty.tabs[0].selected_pane = None;
                 empty.tabs[0].selected_popup = None;
                 app.handle_workspace(WorkspaceEvent::Response(
-                    eon_workspace_protocol::v5::Response::Snapshot(empty),
+                    eon_workspace_protocol::v6::Response::Snapshot(empty),
                 ));
                 assert!(app.transport.is_none());
                 assert!(app.model.scene().is_none());
@@ -4875,7 +4946,7 @@ mod tests {
         let workspace_listener = UnixListener::bind(&workspace_socket).unwrap();
         let snapshot = Snapshot {
             active_tab: "t1".into(),
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -4899,6 +4970,7 @@ mod tests {
                     }],
                 })
                 .collect(),
+            codex_quota: None,
         };
         let response = workspace::Response::Snapshot(snapshot.clone());
         let (sender, actions) = mpsc::channel();
@@ -5305,11 +5377,12 @@ mod tests {
                     }],
                 },
             ],
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
             entries: Vec::new(),
+            codex_quota: None,
         };
 
         assert_eq!(
@@ -5954,7 +6027,7 @@ mod tests {
             id: "project".into(),
             label: "Money ops".into(),
             shortcut: Shortcut {
-                modifiers: eon_workspace_protocol::v5::ALT,
+                modifiers: eon_workspace_protocol::v6::ALT,
                 key: "KeyZ".into(),
             },
         }];
@@ -6210,7 +6283,7 @@ mod tests {
         ));
         let mut snapshot = Snapshot {
             active_tab: "t1".into(),
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -6224,6 +6297,7 @@ mod tests {
                 panes: vec![],
                 popups: vec![],
             }],
+            codex_quota: None,
         };
         show_test_popup(&mut snapshot);
         for (focused, intent) in [(true, InvokeIntent::Toggle), (false, InvokeIntent::Focus)] {

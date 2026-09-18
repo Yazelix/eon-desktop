@@ -1,5 +1,5 @@
 use crate::scene::{DrawRow, Scene, ScenePreview};
-use eon_workspace_protocol::v5::{Popup, Response as WorkspaceResponse, Snapshot};
+use eon_workspace_protocol::v6::{Popup, Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{
     ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
@@ -111,15 +111,21 @@ impl WorkspaceModel {
         self.notice.as_deref()
     }
 
-    /// Apply a response and report `(view changed, snapshot changed)`.
+    /// Apply a response and report `(view changed, workspace changed)`.
     pub fn apply(&mut self, response: WorkspaceResponse) -> (bool, bool) {
         match response {
             WorkspaceResponse::Snapshot(snapshot) => {
                 let snapshot_changed = self.snapshot.as_ref() != Some(&snapshot);
+                let workspace_changed = self.snapshot.as_ref().is_none_or(|current| {
+                    current.active_tab != snapshot.active_tab
+                        || current.geometry != snapshot.geometry
+                        || current.entries != snapshot.entries
+                        || current.tabs != snapshot.tabs
+                });
                 let view_changed = snapshot_changed || self.notice.is_some();
                 self.snapshot = Some(snapshot);
                 self.notice = None;
-                (view_changed, snapshot_changed)
+                (view_changed, workspace_changed)
             }
             WorkspaceResponse::Failure(failure) => (
                 self.set_notice(bounded(format!(
@@ -132,7 +138,12 @@ impl WorkspaceModel {
     }
 
     pub fn mark_unavailable(&mut self, detail: impl Into<String>) -> bool {
-        self.set_notice(bounded(detail.into()))
+        let expired_quota = self
+            .snapshot
+            .as_mut()
+            .and_then(|snapshot| snapshot.codex_quota.take())
+            .is_some();
+        self.set_notice(bounded(detail.into())) || expired_quota
     }
 
     #[must_use]
@@ -472,10 +483,10 @@ fn bounded(mut detail: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v5::{Failure, Pane, Tab};
+    use eon_workspace_protocol::v6::{CodexQuota, CodexQuotaState, Failure, Pane, Tab};
 
     #[test]
-    fn rejected_workspace_action_preserves_the_last_complete_snapshot() {
+    fn quota_refresh_and_workspace_failures_preserve_structure() {
         let snapshot = Snapshot {
             active_tab: "t1".into(),
             tabs: vec![
@@ -508,11 +519,16 @@ mod tests {
                     }],
                 },
             ],
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
             entries: Vec::new(),
+            codex_quota: Some(CodexQuota {
+                state: CodexQuotaState::Blocked,
+                observed_at: 1_800_000_000,
+                windows: Vec::new(),
+            }),
         };
         let mut model = WorkspaceModel::default();
 
@@ -524,6 +540,13 @@ mod tests {
             model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
             (false, false)
         );
+        let mut refreshed_quota = snapshot.clone();
+        refreshed_quota.codex_quota.as_mut().unwrap().observed_at += 1;
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(refreshed_quota.clone())),
+            (true, false),
+            "quota-only refreshes are not structural workspace changes"
+        );
         assert_eq!(
             model.apply(WorkspaceResponse::Failure(Failure {
                 code: "edge".into(),
@@ -532,7 +555,7 @@ mod tests {
             (true, false)
         );
 
-        assert_eq!(model.snapshot(), Some(&snapshot));
+        assert_eq!(model.snapshot(), Some(&refreshed_quota));
         assert_eq!(
             model.active_attachment(),
             Some((&b"/run/eon/orbit.sock"[..], true))
@@ -542,16 +565,21 @@ mod tests {
             Some("Eon workspace edge: there is no pane above the selected pane")
         );
         assert_eq!(
-            model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
+            model.apply(WorkspaceResponse::Snapshot(refreshed_quota.clone())),
             (true, false)
         );
         assert_eq!(model.notice(), None);
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
+            (true, false)
+        );
         assert_eq!(
             model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
             (false, false)
         );
 
         assert!(model.mark_unavailable("Cannot connect to Eon"));
+        assert!(model.snapshot().unwrap().codex_quota.is_none());
         assert!(!model.mark_unavailable("Cannot connect to Eon"));
 
         let mut offline = snapshot.clone();

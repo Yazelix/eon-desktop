@@ -23,6 +23,7 @@ const SHORTCUT_DIALOG: NodeId = NodeId(5);
 const NEW_TAB: NodeId = NodeId(6);
 const SHORTCUTS: NodeId = NodeId(7);
 const CLOSE_TAB: NodeId = NodeId(8);
+const QUOTA: NodeId = NodeId(9);
 // Scene rows are u16, so this range cannot collide with fixed or text-run nodes.
 const WORKSPACE_NODE_START: u64 = 1 << 32;
 const LINK_NODE_START: u64 = 1 << 48;
@@ -203,7 +204,15 @@ impl Snapshot {
         }
         let status_alert = terminal && !self.status.is_empty();
         root.set_children(if self.workspace.is_some() {
-            let mut children = vec![TAB_LIST, NEW_TAB, SHORTCUTS, CLOSE_TAB, PANE_PANEL];
+            let mut children = vec![TAB_LIST];
+            if self
+                .workspace
+                .as_ref()
+                .is_some_and(|workspace| workspace.quota.is_some())
+            {
+                children.push(QUOTA);
+            }
+            children.extend([NEW_TAB, SHORTCUTS, CLOSE_TAB, PANE_PANEL]);
             if status_alert {
                 children.push(STATUS);
             }
@@ -292,6 +301,13 @@ impl Snapshot {
                 node.add_action(Action::Click);
                 node.add_action(Action::Focus);
                 nodes.push((self.tab_ids[tab.id.as_str()], node));
+            }
+            if let Some(quota) = &workspace.quota {
+                let mut node = Node::new(Role::Label);
+                node.set_value(quota.label.as_str());
+                node.set_description(quota.description.as_str());
+                node.set_bounds(rect(quota.rect));
+                nodes.push((QUOTA, node));
             }
             for control in workspace.controls {
                 let mut node = Node::new(Role::Button);
@@ -664,8 +680,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use crate::{Color, DrawCell, DrawRow, DrawStyle, PaneMetadata, ShortcutGroup, ShortcutRow};
-    use eon_workspace_protocol::v5::{
-        Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Snapshot as WorkspaceSnapshot, Tab,
+    use eon_workspace_protocol::v6::{
+        CodexQuota, CodexQuotaState, CodexQuotaWindow, Pane, Popup, PopupEntry, PopupGeometry,
+        Shortcut, Snapshot as WorkspaceSnapshot, Tab,
     };
     use orbit_protocol::{CellWidth, Screen, Underline};
 
@@ -694,11 +711,12 @@ mod tests {
             &WorkspaceSnapshot {
                 active_tab: active_tab.into(),
                 tabs,
-                geometry: eon_workspace_protocol::v5::PopupGeometry {
+                geometry: eon_workspace_protocol::v6::PopupGeometry {
                     side_margin: 8.0,
                     vertical_margin: 4.0,
                 },
                 entries: Vec::new(),
+                codex_quota: None,
             },
             PhysicalSize::new(800, 600),
             CellMetrics::for_scale(1.0),
@@ -734,6 +752,178 @@ mod tests {
             .find(|(node_id, _)| *node_id == id)
             .unwrap()
             .1
+    }
+
+    #[test]
+    fn quota_chip_preserves_truth_layout_and_static_accessibility() {
+        let windows = || {
+            vec![
+                CodexQuotaWindow {
+                    duration_minutes: 5 * 60,
+                    remaining_percent: 74,
+                    resets_at: None,
+                },
+                CodexQuotaWindow {
+                    duration_minutes: 7 * 24 * 60,
+                    remaining_percent: 61,
+                    resets_at: Some(1_800_003_600),
+                },
+            ]
+        };
+        let quota = |state, windows| {
+            Some(CodexQuota {
+                state,
+                observed_at: 1_800_000_000,
+                windows,
+            })
+        };
+        let cases = [
+            (
+                "fresh wide",
+                800,
+                quota(CodexQuotaState::Fresh, windows()),
+                Some("Codex 5h 74% · 7d 61%"),
+                "state: fresh",
+            ),
+            (
+                "fresh compact",
+                400,
+                quota(CodexQuotaState::Fresh, windows()),
+                Some("Codex 61%"),
+                "reset time unavailable",
+            ),
+            (
+                "fresh unusual duration",
+                800,
+                quota(
+                    CodexQuotaState::Fresh,
+                    vec![CodexQuotaWindow {
+                        duration_minutes: 90,
+                        remaining_percent: 50,
+                        resets_at: Some(1_800_003_600),
+                    }],
+                ),
+                Some("Codex 90m 50%"),
+                "90m: 50% remaining",
+            ),
+            (
+                "stale compact",
+                400,
+                quota(
+                    CodexQuotaState::Stale,
+                    windows()
+                        .into_iter()
+                        .map(|window| CodexQuotaWindow {
+                            resets_at: window.resets_at.or(Some(1_800_007_200)),
+                            ..window
+                        })
+                        .collect(),
+                ),
+                Some("Codex 61% old"),
+                "state: stale",
+            ),
+            (
+                "stale hidden",
+                300,
+                quota(
+                    CodexQuotaState::Stale,
+                    windows()
+                        .into_iter()
+                        .map(|window| CodexQuotaWindow {
+                            resets_at: window.resets_at.or(Some(1_800_007_200)),
+                            ..window
+                        })
+                        .collect(),
+                ),
+                None,
+                "",
+            ),
+            (
+                "blocked",
+                400,
+                quota(CodexQuotaState::Blocked, Vec::new()),
+                Some("Codex blocked"),
+                "permission: blocked",
+            ),
+            (
+                "unknown",
+                400,
+                quota(CodexQuotaState::Unknown, Vec::new()),
+                Some("Codex unknown"),
+                "permission: unknown",
+            ),
+            ("absent", 800, None, None, ""),
+        ];
+
+        for (name, width, codex_quota, expected_label, detail) in cases {
+            let workspace_snapshot = WorkspaceSnapshot {
+                active_tab: "t1".into(),
+                geometry: PopupGeometry {
+                    side_margin: 8.0,
+                    vertical_margin: 4.0,
+                },
+                entries: Vec::new(),
+                tabs: vec![workspace_tab("t1", &["p1"], "p1")],
+                codex_quota,
+            };
+            let size = PhysicalSize::new(width, 600);
+            let metrics = CellMetrics::for_scale(1.0);
+            let project = |snapshot: &WorkspaceSnapshot| {
+                WorkspaceScene::from_snapshot(snapshot, size, metrics, 0.0, 0.0, |_, text| {
+                    (text.to_owned(), text.chars().count() as f32 * 10.0)
+                })
+            };
+            let workspace = project(&workspace_snapshot);
+            let mut without_quota = workspace_snapshot.clone();
+            without_quota.codex_quota = None;
+            let baseline = project(&without_quota);
+
+            assert_eq!(
+                workspace.quota.as_ref().map(|quota| quota.label.as_str()),
+                expected_label,
+                "{name}"
+            );
+            if let Some(quota) = &workspace.quota {
+                assert!(quota.description.contains(detail), "{name}");
+                assert!(
+                    quota
+                        .description
+                        .contains("Last observed at Unix time 1800000000")
+                );
+                assert_eq!(
+                    workspace.hit_test(
+                        quota.rect.left + quota.rect.width / 2.0,
+                        quota.rect.height / 2.0
+                    ),
+                    Some(crate::WorkspaceHit::Quota),
+                    "{name}"
+                );
+                assert!(
+                    quota.rect.right() <= workspace.controls[0].rect.left,
+                    "{name}"
+                );
+            } else {
+                assert_eq!(workspace.tab_viewport, baseline.tab_viewport, "{name}");
+                assert_eq!(workspace.drag_region, baseline.drag_region, "{name}");
+                assert_eq!(workspace.controls, baseline.controls, "{name}");
+            }
+
+            let mut accessible = Snapshot::new(size);
+            accessible.set_workspace(Some(&workspace));
+            let update = accessible.tree();
+            let quota_node = update.nodes.iter().find(|(id, _)| *id == QUOTA);
+            assert_eq!(quota_node.is_some(), expected_label.is_some(), "{name}");
+            if let Some((_, node)) = quota_node {
+                assert_eq!(node.role(), Role::Label, "{name}");
+                assert_eq!(node.value(), expected_label, "{name}");
+                assert!(
+                    node.description()
+                        .is_some_and(|value| value.contains(detail))
+                );
+                assert!(!node.supports_action(Action::Click), "{name}");
+                assert!(!node.supports_action(Action::Focus), "{name}");
+            }
+        }
     }
 
     fn linked_scene(revision: u64, uri: &str) -> Scene {
@@ -1032,11 +1222,12 @@ mod tests {
                 workspace_tab("t2", &["pane-7"], "pane-7"),
                 workspace_tab("t3", &["pane-8"], "pane-8"),
             ],
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
             entries: Vec::new(),
+            codex_quota: None,
         };
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
@@ -1248,11 +1439,12 @@ mod tests {
                         }],
                     },
                 ],
-                geometry: eon_workspace_protocol::v5::PopupGeometry {
+                geometry: eon_workspace_protocol::v6::PopupGeometry {
                     side_margin: 8.0,
                     vertical_margin: 4.0,
                 },
                 entries: Vec::new(),
+                codex_quota: None,
             },
             PhysicalSize::new(800, 600),
             CellMetrics::for_scale(1.0),
@@ -1319,7 +1511,7 @@ mod tests {
                 id: "project".into(),
                 label: "Project".into(),
                 shortcut: Shortcut {
-                    modifiers: eon_workspace_protocol::v5::ALT,
+                    modifiers: eon_workspace_protocol::v6::ALT,
                     key: "KeyZ".into(),
                 },
             }],
@@ -1337,6 +1529,7 @@ mod tests {
                     endpoint: b"/run/popup.sock".to_vec(),
                 }],
             }],
+            codex_quota: None,
         };
         let workspace = WorkspaceScene::from_snapshot(
             &state,

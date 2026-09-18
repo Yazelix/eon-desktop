@@ -383,6 +383,7 @@ struct ContentKey {
     status: String,
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
+    quota_hovered: bool,
     pressed_header: Option<WorkspaceHeaderControl>,
     scrollback_label: Option<String>,
     shortcut_viewer_scroll: Option<f32>,
@@ -602,6 +603,16 @@ fn shifted(mut rect: SceneRect, vertical: f32) -> SceneRect {
     rect
 }
 
+fn header_item_visual(rect: SceneRect, padding: f32) -> SceneRect {
+    let inset = (padding / 3.0).min(rect.width / 4.0).min(rect.height / 4.0);
+    SceneRect {
+        left: rect.left + inset,
+        top: rect.top + inset,
+        width: (rect.width - inset * 2.0).max(0.0),
+        height: (rect.height - inset * 2.0).max(0.0),
+    }
+}
+
 fn scene_grid(scene: &Scene, viewport: SceneRect, metrics: CellMetrics) -> SceneRect {
     SceneRect {
         left: viewport.left + metrics.padding,
@@ -675,6 +686,7 @@ pub struct Renderer {
     content_key: Option<ContentKey>,
     hyperlink: Option<(u16, u16)>,
     hovered_header: Option<(WorkspaceFocus, String)>,
+    quota_hovered: bool,
     pressed_header: Option<WorkspaceHeaderControl>,
     scrollback_label: Option<String>,
     cursor_tail: Option<(SceneColor, SceneColor, f32)>,
@@ -697,6 +709,10 @@ impl Renderer {
         self.hovered_header = header;
     }
 
+    pub fn set_quota_hovered(&mut self, hovered: bool) {
+        self.quota_hovered = hovered;
+    }
+
     pub fn set_pressed_header(&mut self, control: Option<WorkspaceHeaderControl>) {
         self.pressed_header = control;
     }
@@ -710,6 +726,16 @@ impl Renderer {
     pub fn fit_tab_text(&mut self, label: &str) -> (String, f32) {
         let width = WorkspaceScene::tab_text_width(self.size(), self.metrics);
         fit_header_text(&mut self.fonts.font_system, self.metrics, label, width)
+    }
+
+    /// Measure an exact, non-truncated Eon Bar fact label with header typography.
+    pub fn measure_header_text(&mut self, label: &str) -> (String, f32) {
+        fit_header_text(
+            &mut self.fonts.font_system,
+            self.metrics,
+            label,
+            f32::INFINITY,
+        )
     }
 
     pub fn set_hyperlink(&mut self, hyperlink: Option<(u16, u16)>) {
@@ -907,6 +933,7 @@ impl Renderer {
             content_key: None,
             hyperlink: None,
             hovered_header: None,
+            quota_hovered: false,
             pressed_header: None,
             scrollback_label: None,
             cursor_tail: cursor_tail
@@ -1154,6 +1181,7 @@ impl Renderer {
             status: status.to_owned(),
             hyperlink: self.hyperlink,
             hovered_header: self.hovered_header.clone(),
+            quota_hovered: self.quota_hovered,
             pressed_header: self.pressed_header,
             scrollback_label: self.scrollback_label.clone(),
             shortcut_viewer_scroll: shortcut_viewer.map(|viewer| viewer.scroll),
@@ -1470,7 +1498,11 @@ impl Renderer {
             .tabs
             .iter()
             .find(|tab| self.header_hovered(WorkspaceFocus::Tabs, &tab.id));
-        let (label, anchor) = if let Some(tab) = hovered_tab {
+        let (label, anchor) = if self.quota_hovered
+            && let Some(quota) = &workspace.quota
+        {
+            (quota.description.as_str(), quota.rect)
+        } else if let Some(tab) = hovered_tab {
             (tab.accessible_label(), tab.rect)
         } else if let Some(control) = workspace
             .controls
@@ -1798,16 +1830,36 @@ impl Renderer {
             );
         }
         rectangles.clip = None;
+        if let Some(quota) = &workspace.quota {
+            let visual = header_item_visual(quota.rect, self.metrics.padding);
+            rectangles.push_rounded(
+                visual,
+                visual.height / 2.0,
+                SceneColor {
+                    r: 23,
+                    g: 34,
+                    b: 46,
+                },
+            );
+            let label_width = (quota.rect.width - self.metrics.padding * 2.0).max(0.0);
+            self.push_text_clipped(
+                &quota.label,
+                quota.rect.left + self.metrics.padding,
+                quota.rect.top + (quota.rect.height - self.metrics.height).max(0.0) / 2.0,
+                label_width,
+                label_width,
+                self.metrics.height.min(quota.rect.height),
+                SceneColor {
+                    r: 162,
+                    g: 174,
+                    b: 190,
+                },
+                DrawStyleKind::Status(Wrap::None),
+                quota.rect,
+            );
+        }
         for control in workspace.controls {
-            let inset = (self.metrics.padding / 3.0)
-                .min(control.rect.width / 4.0)
-                .min(control.rect.height / 4.0);
-            let visual = SceneRect {
-                left: control.rect.left + inset,
-                top: control.rect.top + inset,
-                width: (control.rect.width - inset * 2.0).max(0.0),
-                height: (control.rect.height - inset * 2.0).max(0.0),
-            };
+            let visual = header_item_visual(control.rect, self.metrics.padding);
             let hovered = self.header_hovered(WorkspaceFocus::Header(control.kind), "");
             let pressed = self.pressed_header == Some(control.kind);
             let focused = focus == WorkspaceFocus::Header(control.kind);
@@ -3551,7 +3603,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn long_workspace_labels_stay_on_the_visible_line() {
-        use eon_workspace_protocol::v5::{Pane, Snapshot, Tab};
+        use eon_workspace_protocol::v6::{Pane, Snapshot, Tab};
         use winit::{
             application::ApplicationHandler, event::WindowEvent, event_loop::EventLoop,
             platform::wayland::EventLoopBuilderExtWayland, window::WindowId,
@@ -3576,7 +3628,7 @@ mod tests {
                 .unwrap();
                 let snapshot = Snapshot {
                     active_tab: "t2".into(),
-                    geometry: eon_workspace_protocol::v5::PopupGeometry {
+                    geometry: eon_workspace_protocol::v6::PopupGeometry {
                         side_margin: 8.0,
                         vertical_margin: 4.0,
                     },
@@ -3599,6 +3651,7 @@ mod tests {
                             }],
                         })
                         .collect(),
+                    codex_quota: None,
                 };
                 let workspace = WorkspaceScene::from_snapshot(
                     &snapshot,
@@ -3888,6 +3941,7 @@ mod tests {
             status: String::new(),
             hyperlink: None,
             hovered_header: None,
+            quota_hovered: false,
             pressed_header: None,
             scrollback_label: None,
             shortcut_viewer_scroll,

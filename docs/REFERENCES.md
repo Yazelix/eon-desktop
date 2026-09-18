@@ -55,6 +55,24 @@ inactive-tab close, copied mechanism, and macOS claim are rejected. Ordinary,
 overflow, narrow, and tiny layout/hit/action/accessibility checks plus isolated
 native Wayland interaction are the falsifiers.
 
+### Codex quota fact chip
+
+`ven-render-codex-quota-eon-bar-wfe` consumes Eon's bounded EONW v6 facts at
+exact source `3103a00a904c347472899549ce611da765a71650`. Eon remains the sole
+owner of Codex process, authentication, account invalidation, refresh, retry,
+freshness, permission, and normalization policy. Venus derives only duration
+labels and projects the current snapshot through the existing Scene, renderer,
+hover, and AccessKit owners.
+
+Nova Bar `bfbf8a7be28b69f9d822c0843bf2dd5066dd49e3` supplies comparison-only
+evidence for short remaining-percentage labels, explicit stale presentation,
+and secondary content yielding before tabs. Its provider commands, cache,
+polling, styled strings, Zellij integration, configuration, and widget model
+are rejected. The existing GNOME, VS Code, and Ghostty guidance above supports
+the same restrained one-row priority. Exact shaped width selects full text,
+then a truthful compact label, then no chip; no provider worker, timer, action,
+focus target, dependency, module, or copied source is added.
+
 ## Rounded pane frames
 
 `ven-pane-stack-chrome-suu` inspects Nova

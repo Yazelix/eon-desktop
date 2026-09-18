@@ -17,7 +17,10 @@ label without an underline; keyboard tab focus adds a rounded outline. The same
 row keeps fixed New tab, Keyboard shortcuts, and active-tab Close controls plus
 a bounded empty region for dragging an undecorated window. Tooltips name the
 accepted shortcuts, and the drag region yields before tabs or controls on narrow
-surfaces.
+surfaces. When Eon supplies current Codex quota facts, one noninteractive chip
+shows every window at ordinary width, collapses to the lowest remaining
+percentage, then disappears before tabs or controls lose space. Stale, blocked,
+and unknown states remain explicit; hovering exposes the complete observation.
 Pane headers use quiet backgrounds and a lighter selected fill and label. One
 rounded frame connects the pane stack, with full-width separators and a small
 bottom gap sharing the terminal background. Selection and hover fills follow the
@@ -45,12 +48,13 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v5 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`0cc8f477298681ae3945903e8fdb5852d487c5ab`. Eon alone owns workspace order,
+Venus consumes EONW v6 through `eon-workspace-protocol` 0.1.0 at exact Eon source
+`3103a00a904c347472899549ce611da765a71650`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
-popup catalog, geometry settings, commands, lifecycle, actions, and Session mappings.
-This consumer is active in Eon's current v5 runtime, whose component graph pins
-Venus source `73195f5812cdc8f32841eab644c1bf4b3af9f756`. Venus consumes
+popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
+collection and normalization, and Session mappings. Full-Eon activation of this
+v6 Venus candidate remains downstream; the installed product retains its accepted
+v5 composition until that delivery. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -251,7 +255,7 @@ mixed high-level and lower-level options, incomplete profiles, non-finite
 durations, and out-of-range durations before opening a window.
 
 In Eon's supervised mode, Venus reads one private bounded presentation stream.
-The `stdin-ready-v1` mode consumes one canonical EONW v5 startup snapshot for
+The `stdin-ready-v1` mode consumes one canonical EONW v6 startup snapshot for
 workspace launches, then reports `ready-v1` on stdout after admitting fonts and
 the actual window's initial native geometry, before terminal attachment. Eon
 bounds that exchange and starts new commands only after readiness.
@@ -408,13 +412,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 420 |
+| README | 424 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,075 |
+| Contracts and references | 2,151 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
-| Changelog | 273 |
-| Rust source, including unit tests | 19,124 |
-| Rust integration tests | 1,034 |
+| Changelog | 280 |
+| Rust source, including unit tests | 19,614 |
+| Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **23,640** |
+| **Total** | **24,219** |

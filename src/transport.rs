@@ -1,4 +1,4 @@
-use eon_workspace_protocol::v5::{
+use eon_workspace_protocol::v6::{
     self as workspace, Action as WorkspaceAction, Request as WorkspaceRequest,
     Response as WorkspaceResponse,
 };
@@ -60,7 +60,7 @@ pub enum WorkspaceEvent {
     Unavailable(String),
 }
 
-/// Bounded semantic-action handle for EONW v5.
+/// Bounded semantic-action handle for EONW v6.
 pub struct WorkspaceTransport {
     actions: mpsc::SyncSender<WorkspaceAction>,
     events: Arc<WorkspaceEventQueue>,
@@ -705,7 +705,7 @@ fn protocol_loss(error: session::Error) -> TransportEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v5::{
+    use eon_workspace_protocol::v6::{
         InvokeIntent, Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab,
     };
     use orbit_protocol::{
@@ -1358,7 +1358,7 @@ mod tests {
                     live: true,
                 }],
             }],
-            geometry: eon_workspace_protocol::v5::PopupGeometry {
+            geometry: eon_workspace_protocol::v6::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -1370,6 +1370,7 @@ mod tests {
                     key: "KeyL".into(),
                 },
             }],
+            codex_quota: None,
         }
     }
 

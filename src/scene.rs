@@ -1,5 +1,5 @@
 use crate::{model::active_popup, render::CellMetrics};
-use eon_workspace_protocol::v5::Snapshot;
+use eon_workspace_protocol::v6::{CodexQuota, CodexQuotaState, Snapshot};
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
@@ -240,10 +240,19 @@ pub(crate) struct WorkspaceControl {
     pub(crate) rect: SceneRect,
 }
 
+/// One read-only Codex quota fact projected into the Eon Bar.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WorkspaceQuota {
+    pub(crate) rect: SceneRect,
+    pub(crate) label: String,
+    pub(crate) description: String,
+}
+
 /// Native workspace target at one physical point.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkspaceHit<'a> {
     Tab(&'a str),
+    Quota,
     Control(WorkspaceHeaderControl),
     Drag,
     Pane(&'a str),
@@ -379,6 +388,7 @@ pub struct WorkspaceScene {
     pub tabs: Vec<WorkspaceTab>,
     pub(crate) header: SceneRect,
     pub(crate) drag_region: SceneRect,
+    pub(crate) quota: Option<WorkspaceQuota>,
     pub(crate) controls: [WorkspaceControl; 3],
     pub panes: Vec<WorkspacePane>,
     pub terminal: SceneRect,
@@ -408,7 +418,14 @@ fn tab_gap(metrics: CellMetrics, tab_height: f32) -> f32 {
 fn workspace_header_geometry(
     size: PhysicalSize<u32>,
     metrics: CellMetrics,
-) -> (SceneRect, SceneRect, SceneRect, [WorkspaceControl; 3]) {
+    requested_quota_width: Option<f32>,
+) -> (
+    SceneRect,
+    SceneRect,
+    SceneRect,
+    Option<SceneRect>,
+    [WorkspaceControl; 3],
+) {
     let width = size.width as f32;
     let tab_height = header_heights(metrics).0.min(size.height as f32);
     let identity_width =
@@ -420,7 +437,13 @@ fn workspace_header_geometry(
     let controls_width = control_width * 3.0;
     let drag_width =
         (metrics.font_size * 4.0).min((width - controls_width - minimum_tabs).max(0.0));
-    let tab_width = (width - controls_width - drag_width).max(0.0);
+    let quota_width = requested_quota_width
+        .filter(|quota| {
+            quota.is_finite()
+                && *quota <= (width - controls_width - drag_width - minimum_tabs).max(0.0)
+        })
+        .unwrap_or(0.0);
+    let tab_width = (width - controls_width - drag_width - quota_width).max(0.0);
     let header = SceneRect {
         width,
         height: tab_height,
@@ -437,6 +460,12 @@ fn workspace_header_geometry(
         height: tab_height,
         ..SceneRect::default()
     };
+    let quota = (quota_width > 0.0).then_some(SceneRect {
+        left: drag_region.right(),
+        width: quota_width,
+        height: tab_height,
+        ..SceneRect::default()
+    });
     let control_kinds = [
         WorkspaceHeaderControl::NewTab,
         WorkspaceHeaderControl::Shortcuts,
@@ -445,13 +474,86 @@ fn workspace_header_geometry(
     let controls = std::array::from_fn(|index| WorkspaceControl {
         kind: control_kinds[index],
         rect: SceneRect {
-            left: drag_region.right() + index as f32 * control_width,
+            left: drag_region.right() + quota_width + index as f32 * control_width,
             width: control_width,
             height: tab_height,
             ..SceneRect::default()
         },
     });
-    (header, tab_viewport, drag_region, controls)
+    (header, tab_viewport, drag_region, quota, controls)
+}
+
+fn quota_duration(minutes: u32) -> String {
+    if minutes.is_multiple_of(24 * 60) {
+        format!("{}d", minutes / (24 * 60))
+    } else if minutes.is_multiple_of(60) {
+        format!("{}h", minutes / 60)
+    } else {
+        format!("{minutes}m")
+    }
+}
+
+fn quota_text(quota: &CodexQuota) -> (String, String, String) {
+    let suffix = if quota.state == CodexQuotaState::Stale {
+        " old"
+    } else {
+        ""
+    };
+    let wide = match quota.state {
+        CodexQuotaState::Fresh | CodexQuotaState::Stale => format!(
+            "Codex {}{suffix}",
+            quota
+                .windows
+                .iter()
+                .map(|window| format!(
+                    "{} {}%",
+                    quota_duration(window.duration_minutes),
+                    window.remaining_percent
+                ))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        ),
+        CodexQuotaState::Blocked => "Codex blocked".into(),
+        CodexQuotaState::Unknown => "Codex unknown".into(),
+    };
+    let compact = match quota.state {
+        CodexQuotaState::Fresh | CodexQuotaState::Stale => {
+            let remaining = quota
+                .windows
+                .iter()
+                .min_by_key(|window| (window.remaining_percent, window.duration_minutes))
+                .expect("EONW requires quota windows for fresh and stale states")
+                .remaining_percent;
+            format!("Codex {remaining}%{suffix}")
+        }
+        CodexQuotaState::Blocked => "Codex blocked".into(),
+        CodexQuotaState::Unknown => "Codex unknown".into(),
+    };
+    let mut description = String::from(match quota.state {
+        CodexQuotaState::Fresh => "Codex quota state: fresh.",
+        CodexQuotaState::Stale => "Codex quota state: stale.",
+        CodexQuotaState::Blocked => "Codex quota permission: blocked.",
+        CodexQuotaState::Unknown => "Codex quota permission: unknown.",
+    });
+    for window in &quota.windows {
+        let _ = write!(
+            description,
+            " {}: {}% remaining; ",
+            quota_duration(window.duration_minutes),
+            window.remaining_percent
+        );
+        if let Some(reset) = window.resets_at {
+            let _ = write!(description, "resets at Unix time {reset}.");
+        } else {
+            description.push_str("reset time unavailable.");
+        }
+    }
+    let _ = write!(
+        description,
+        " Last observed at Unix time {}.",
+        quota.observed_at
+    );
+    (wide, compact, description)
 }
 
 fn stack_inset(metrics: CellMetrics) -> f32 {
@@ -478,7 +580,7 @@ impl WorkspaceScene {
     /// Maximum shaped label width inside this surface's tab viewport.
     #[must_use]
     pub(crate) fn tab_text_width(size: PhysicalSize<u32>, metrics: CellMetrics) -> f32 {
-        let (_, tab_viewport, _, _) = workspace_header_geometry(size, metrics);
+        let (_, tab_viewport, _, _, _) = workspace_header_geometry(size, metrics, None);
         (tab_max_width(metrics, tab_viewport.width) - metrics.padding * 2.0)
             .max(0.0)
             .floor()
@@ -520,7 +622,7 @@ impl WorkspaceScene {
         metrics: CellMetrics,
         tab_scroll: f32,
         pane_scroll: f32,
-        tab_text: impl FnMut(&str, &str) -> (String, f32),
+        header_text: impl FnMut(Option<&str>, &str) -> (String, f32),
     ) -> Self {
         Self::from_snapshot_with_metadata(
             snapshot,
@@ -529,7 +631,7 @@ impl WorkspaceScene {
             tab_scroll,
             pane_scroll,
             |_| None,
-            tab_text,
+            header_text,
         )
     }
 
@@ -541,15 +643,42 @@ impl WorkspaceScene {
         tab_scroll: f32,
         pane_scroll: f32,
         metadata: impl Fn(&[u8]) -> Option<&'a PaneMetadata>,
-        mut tab_text: impl FnMut(&str, &str) -> (String, f32),
+        mut header_text: impl FnMut(Option<&str>, &str) -> (String, f32),
     ) -> Self {
         let width = size.width as f32;
         let height = size.height as f32;
         let (tab_height, pane_height) = header_heights(metrics);
         let tab_height = tab_height.min(height);
         let gap = tab_gap(metrics, tab_height);
-        let (header, tab_viewport, drag_region, controls) =
-            workspace_header_geometry(size, metrics);
+        let quota_text = snapshot.codex_quota.as_ref().map(quota_text);
+        let quota_padding = metrics.padding * 2.0;
+        let mut quota_choice = quota_text.as_ref().map(|(wide, _, description)| {
+            let (label, width) = header_text(None, wide);
+            (label, width + quota_padding, description.clone())
+        });
+        let mut geometry = workspace_header_geometry(
+            size,
+            metrics,
+            quota_choice.as_ref().map(|(_, width, _)| *width),
+        );
+        if geometry.3.is_none()
+            && let Some((_, compact, description)) = quota_text.as_ref()
+        {
+            let (label, width) = header_text(None, compact);
+            quota_choice = Some((label, width + quota_padding, description.clone()));
+            geometry = workspace_header_geometry(size, metrics, Some(width + quota_padding));
+        }
+        if geometry.3.is_none() {
+            quota_choice = None;
+        }
+        let (header, tab_viewport, drag_region, quota_rect, controls) = geometry;
+        let quota = quota_choice
+            .zip(quota_rect)
+            .map(|((label, _, description), rect)| WorkspaceQuota {
+                rect,
+                label,
+                description,
+            });
         let max_tab_width = tab_max_width(metrics, tab_viewport.width);
         let pane_viewport = SceneRect {
             left: 0.0,
@@ -575,7 +704,7 @@ impl WorkspaceScene {
                     &tab.directory,
                     home.as_deref().map(Path::new),
                 );
-                let (label, text_width) = tab_text(&tab.id, &label);
+                let (label, text_width) = header_text(Some(&tab.id), &label);
                 let tab_width = (text_width.ceil() + metrics.padding * 2.0)
                     .clamp((metrics.font_size * 4.0).min(max_tab_width), max_tab_width);
                 let left = tab_end;
@@ -634,6 +763,7 @@ impl WorkspaceScene {
                 tabs,
                 header,
                 drag_region,
+                quota,
                 controls,
                 panes: Vec::new(),
                 terminal: SceneRect {
@@ -737,6 +867,7 @@ impl WorkspaceScene {
             tabs,
             header,
             drag_region,
+            quota,
             controls,
             panes,
             terminal,
@@ -769,6 +900,13 @@ impl WorkspaceScene {
             if control.rect.contains(x, y) {
                 return Some(WorkspaceHit::Control(control.kind));
             }
+        }
+        if self
+            .quota
+            .as_ref()
+            .is_some_and(|quota| quota.rect.contains(x, y))
+        {
+            return Some(WorkspaceHit::Quota);
         }
         if self.drag_region.contains(x, y) {
             return Some(WorkspaceHit::Drag);
@@ -1352,7 +1490,7 @@ mod tests {
 
     #[test]
     fn popup_outer_chrome_reuses_the_pane_stack_rectangle() {
-        use eon_workspace_protocol::v5::{
+        use eon_workspace_protocol::v6::{
             ALT, Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Tab,
         };
 
@@ -1389,6 +1527,7 @@ mod tests {
                     endpoint: b"/run/popup.sock".to_vec(),
                 }],
             }],
+            codex_quota: None,
         };
         let project = |snapshot: &Snapshot| {
             WorkspaceScene::from_snapshot(
@@ -1410,7 +1549,7 @@ mod tests {
 
     #[test]
     fn eon_bar_keeps_tabs_controls_and_drag_hits_disjoint_under_pressure() {
-        use eon_workspace_protocol::v5::{Pane, PopupGeometry, Tab};
+        use eon_workspace_protocol::v6::{Pane, PopupGeometry, Tab};
 
         let snapshot = Snapshot {
             active_tab: "t2".into(),
@@ -1435,6 +1574,7 @@ mod tests {
                     popups: Vec::new(),
                 })
                 .collect(),
+            codex_quota: None,
         };
         let metrics = CellMetrics::for_scale(1.0);
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Consume exact EONW v6 and render Eon's optional Codex quota observation as one
+  noninteractive Eon Bar chip. Wide labels show every window; compact labels use
+  the lowest remaining percentage, and the chip yields entirely before required
+  tabs or controls. Stale, blocked, and unknown states stay explicit, with full
+  hover and static AccessKit descriptions. Quota-only refreshes preserve the
+  current workspace navigation and terminal scroll.
+
 - Turn the existing workspace tab strip into the one-row native Eon Bar. Keep
   fixed New tab, Keyboard shortcuts, and active-tab Close controls beside a
   bounded empty Wayland drag region, with shortcut tooltips, keyboard traversal,
