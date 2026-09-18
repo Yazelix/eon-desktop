@@ -1371,8 +1371,13 @@ qualified by the identities and boundaries below.
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** Source `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5` is the accepted
-  baseline for the existing chip and has runtime diff
+- **Proof:** Candidate source `2e7174c1d359b792947218c5a11158574f2e48e0`
+  has runtime diff
+  `5207103ebeb29b6e90b49a8fdba316ff65269918d00fe7d1810c3ae12d98a722`.
+  Locked fmt/check/test/clippy and diff checks pass with 138 ordinary tests;
+  five native tests remain ignored by the ordinary suite. Source
+  `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5` is the accepted baseline for the
+  existing chip and has runtime diff
   SHA-256
   `f5dc3547232865ce197ee2ddb4931db7e79a8dd39663194cae1b5ff539bfd513`.
   It is content-identical to package source
