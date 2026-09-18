@@ -1334,7 +1334,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C22 — Codex quota fact chip
 
-- **Status:** Candidate under `eon-codex-logo-eon-bar-p9e`
+- **Status:** Proven
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
@@ -1373,10 +1373,19 @@ qualified by the identities and boundaries below.
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** The colorful Codex application mark remains proven at published
-  source `b8b8835b8890dfb4359c3f9db31012ede6135ef8`. Exact monochrome Blossom,
-  responsive-label, hover, AccessKit, and installed-product proof is pending
-  under `eon-codex-logo-eon-bar-p9e`; macOS proof remains outside VEN-C22.
+- **Proof:** Source `247dcb2dc853e604d51ac727471e1e65e1535f1d` has runtime diff
+  `37c537a2ec501fd37ed2a1f4654e5a20c0638b4e71c7971c9cb4b9a0b6ce2125`
+  over `76f0f4cd53b275114323f5458cd5e73f379b9202`. Locked format, check,
+  139 ordinary tests, and strict all-target Clippy pass. Exact package
+  `/nix/store/qcpnwl8hhy73x3v93ic5mv3h3cj7cwm4-yazelix-venus-openai-blossom-proof-0.1.0`
+  passed isolated Sway 1.12 scale-1 native wide, compact, hidden, stale,
+  blocked, unknown, absent, real-Codex, Eon-loss, hover, focus, and AT-SPI
+  checks. The wide and compact captures retain the exact monochrome Blossom;
+  all 27 ambient product identities survived and every private process was
+  cleaned. Evidence is retained in
+  `~/.local/state/eon/proofs/eon-openai-blossom-eon-bar-2026-09-18/`.
+  Installed full-product composition remains Eon's responsibility; the native
+  boundary is x86_64 Linux Wayland and macOS remains outside VEN-C22.
 
 ## Rules
 
