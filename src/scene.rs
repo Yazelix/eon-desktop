@@ -1,5 +1,5 @@
 use crate::{model::active_popup, render::CellMetrics};
-use eon_workspace_protocol::v6::{CodexQuota, CodexQuotaState, Snapshot};
+use eon_workspace_protocol::v6::{CodexQuota, CodexQuotaState, CodexQuotaWindow, Snapshot};
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
@@ -493,6 +493,45 @@ fn quota_duration(minutes: u32) -> String {
     }
 }
 
+fn quota_window_position(window: &CodexQuotaWindow, observed_at: u64) -> Option<String> {
+    let total_seconds = u64::from(window.duration_minutes) * 60;
+    let remaining_seconds = window
+        .resets_at?
+        .saturating_sub(observed_at)
+        .min(total_seconds);
+    let elapsed_minutes = (total_seconds - remaining_seconds) / 60;
+    if window.duration_minutes >= 24 * 60 {
+        let days = elapsed_minutes / (24 * 60);
+        let hours = elapsed_minutes % (24 * 60) / 60;
+        Some(match (days, hours) {
+            (0, 0) => "0h".into(),
+            (0, hours) => format!("{hours}h"),
+            (days, 0) => format!("{days}d"),
+            (days, hours) => format!("{days}d{hours}h"),
+        })
+    } else if window.duration_minutes >= 60 {
+        let hours = elapsed_minutes / 60;
+        let minutes = elapsed_minutes % 60;
+        Some(match (hours, minutes) {
+            (0, minutes) => format!("{minutes}m"),
+            (hours, 0) => format!("{hours}h"),
+            (hours, minutes) => format!("{hours}h{minutes}m"),
+        })
+    } else {
+        Some(format!("{elapsed_minutes}m"))
+    }
+}
+
+fn quota_window_text(window: &CodexQuotaWindow, observed_at: u64) -> String {
+    let duration = quota_duration(window.duration_minutes);
+    let label = if let Some(position) = quota_window_position(window, observed_at) {
+        format!("{position}/{duration}")
+    } else {
+        duration
+    };
+    format!("{label} {}%", window.remaining_percent)
+}
+
 fn quota_text(quota: &CodexQuota) -> (String, String, String) {
     let suffix = if quota.state == CodexQuotaState::Stale {
         " old"
@@ -505,11 +544,7 @@ fn quota_text(quota: &CodexQuota) -> (String, String, String) {
             quota
                 .windows
                 .iter()
-                .map(|window| format!(
-                    "{} {}%",
-                    quota_duration(window.duration_minutes),
-                    window.remaining_percent
-                ))
+                .map(|window| quota_window_text(window, quota.observed_at))
                 .collect::<Vec<_>>()
                 .join(" · ")
         ),
@@ -518,13 +553,15 @@ fn quota_text(quota: &CodexQuota) -> (String, String, String) {
     };
     let compact = match quota.state {
         CodexQuotaState::Fresh | CodexQuotaState::Stale => {
-            let remaining = quota
+            let window = quota
                 .windows
                 .iter()
                 .min_by_key(|window| (window.remaining_percent, window.duration_minutes))
-                .expect("EONW requires quota windows for fresh and stale states")
-                .remaining_percent;
-            format!("Codex {remaining}%{suffix}")
+                .expect("EONW requires quota windows for fresh and stale states");
+            format!(
+                "Codex {}{suffix}",
+                quota_window_text(window, quota.observed_at)
+            )
         }
         CodexQuotaState::Blocked => "Codex blocked".into(),
         CodexQuotaState::Unknown => "Codex unknown".into(),
@@ -536,23 +573,18 @@ fn quota_text(quota: &CodexQuota) -> (String, String, String) {
         CodexQuotaState::Unknown => "Codex quota permission: unknown.",
     });
     for window in &quota.windows {
+        let duration = quota_duration(window.duration_minutes);
         let _ = write!(
             description,
-            " {}: {}% remaining; ",
-            quota_duration(window.duration_minutes),
+            " {duration} window: {}% remaining; ",
             window.remaining_percent
         );
-        if let Some(reset) = window.resets_at {
-            let _ = write!(description, "resets at Unix time {reset}.");
+        if let Some(position) = quota_window_position(window, quota.observed_at) {
+            let _ = write!(description, "observed {position} into {duration}.");
         } else {
             description.push_str("reset time unavailable.");
         }
     }
-    let _ = write!(
-        description,
-        " Last observed at Unix time {}.",
-        quota.observed_at
-    );
     (wide, compact, description)
 }
 

@@ -761,19 +761,19 @@ mod tests {
                 CodexQuotaWindow {
                     duration_minutes: 5 * 60,
                     remaining_percent: 74,
-                    resets_at: None,
+                    resets_at: Some(1_789_752_461),
                 },
                 CodexQuotaWindow {
                     duration_minutes: 7 * 24 * 60,
-                    remaining_percent: 61,
-                    resets_at: Some(1_800_003_600),
+                    remaining_percent: 42,
+                    resets_at: Some(1_789_814_936),
                 },
             ]
         };
         let quota = |state, windows| {
             Some(CodexQuota {
                 state,
-                observed_at: 1_800_000_000,
+                observed_at: 1_789_745_261,
                 windows,
             })
         };
@@ -782,15 +782,15 @@ mod tests {
                 "fresh wide",
                 800,
                 quota(CodexQuotaState::Fresh, windows()),
-                Some("Codex 5h 74% · 7d 61%"),
-                "state: fresh",
+                Some("Codex 3h/5h 74% · 6d4h/7d 42%"),
+                "5h window: 74% remaining; observed 3h into 5h. 7d window: 42% remaining; observed 6d4h into 7d",
             ),
             (
                 "fresh compact",
-                400,
+                500,
                 quota(CodexQuotaState::Fresh, windows()),
-                Some("Codex 61%"),
-                "reset time unavailable",
+                Some("Codex 6d4h/7d 42%"),
+                "state: fresh",
             ),
             (
                 "fresh unusual duration",
@@ -800,41 +800,37 @@ mod tests {
                     vec![CodexQuotaWindow {
                         duration_minutes: 90,
                         remaining_percent: 50,
-                        resets_at: Some(1_800_003_600),
+                        resets_at: Some(1_789_750_631),
                     }],
                 ),
-                Some("Codex 90m 50%"),
-                "90m: 50% remaining",
+                Some("Codex 0m/90m 50%"),
+                "observed 0m into 90m",
+            ),
+            (
+                "fresh reset unavailable",
+                800,
+                quota(
+                    CodexQuotaState::Fresh,
+                    vec![CodexQuotaWindow {
+                        duration_minutes: 5 * 60,
+                        remaining_percent: 74,
+                        resets_at: None,
+                    }],
+                ),
+                Some("Codex 5h 74%"),
+                "reset time unavailable",
             ),
             (
                 "stale compact",
-                400,
-                quota(
-                    CodexQuotaState::Stale,
-                    windows()
-                        .into_iter()
-                        .map(|window| CodexQuotaWindow {
-                            resets_at: window.resets_at.or(Some(1_800_007_200)),
-                            ..window
-                        })
-                        .collect(),
-                ),
-                Some("Codex 61% old"),
+                500,
+                quota(CodexQuotaState::Stale, windows()),
+                Some("Codex 6d4h/7d 42% old"),
                 "state: stale",
             ),
             (
                 "stale hidden",
                 300,
-                quota(
-                    CodexQuotaState::Stale,
-                    windows()
-                        .into_iter()
-                        .map(|window| CodexQuotaWindow {
-                            resets_at: window.resets_at.or(Some(1_800_007_200)),
-                            ..window
-                        })
-                        .collect(),
-                ),
+                quota(CodexQuotaState::Stale, windows()),
                 None,
                 "",
             ),
@@ -885,11 +881,7 @@ mod tests {
             );
             if let Some(quota) = &workspace.quota {
                 assert!(quota.description.contains(detail), "{name}");
-                assert!(
-                    quota
-                        .description
-                        .contains("Last observed at Unix time 1800000000")
-                );
+                assert!(!quota.description.contains("Unix time"), "{name}");
                 assert_eq!(
                     workspace.hit_test(
                         quota.rect.left + quota.rect.width / 2.0,

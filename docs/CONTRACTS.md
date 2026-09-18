@@ -1334,20 +1334,22 @@ qualified by the identities and boundaries below.
 
 ## VEN-C22 — Codex quota fact chip
 
-- **Status:** Proven
+- **Status:** Candidate
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
   removes its optional Codex quota observation.
 - **Result:** Venus projects one noninteractive fact chip into the existing
   single-row Eon Bar. Fresh facts show `Codex` followed by every available
-  duration and remaining percentage at ordinary width. Under pressure the chip
-  keeps `Codex` and the lowest remaining percentage, then disappears before
+  elapsed/total window position and remaining percentage at ordinary width,
+  such as `Codex 3h/5h 74% · 6d4h/7d 42%`. Under pressure the chip keeps
+  `Codex` and the complete lowest-remaining window, then disappears before
   active-tab identity, fixed controls, or the bounded drag region lose their
   accepted space. Stale labels include `old`; blocked and unknown observations
   read `Codex blocked` and `Codex unknown`. Hover and one static AccessKit label
-  expose every window's remaining percentage and reset availability, the exact
-  observation time, and the source freshness or permission state.
+  expose every window's human-readable position and remaining percentage,
+  reset availability, and source freshness or permission state without raw
+  epoch timestamps.
 - **Important failures:** An absent observation creates no rectangle, gap, hit,
   action, focus target, or accessibility node. Missing resets remain explicit;
   unusual durations use exact minute labels. A stale label that cannot retain
@@ -1369,7 +1371,8 @@ qualified by the identities and boundaries below.
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** Source `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5` has runtime diff
+- **Proof:** Source `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5` is the accepted
+  baseline for the existing chip and has runtime diff
   SHA-256
   `f5dc3547232865ce197ee2ddb4931db7e79a8dd39663194cae1b5ff539bfd513`.
   It is content-identical to package source
@@ -1386,9 +1389,12 @@ qualified by the identities and boundaries below.
   restored, and 17 ambient product identities were preserved. Evidence is
   retained under
   `~/.local/state/eon/proofs/ven-render-codex-quota-eon-bar-wfe-2026-09-17/`.
-  The user authorized and published the proof-bearing source on 2026-09-18.
-- **Open proof:** Activate the accepted source through the downstream full-Eon
-  issue. macOS stays outside this contract.
+  The user authorized and published that baseline on 2026-09-18. It does not
+  prove the elapsed/total presentation correction.
+- **Open proof:** Prove the corrected labels, human description, responsive
+  collapse, and unchanged accessibility/layout boundary, then activate its
+  exact accepted source through downstream full Eon. macOS stays outside this
+  contract.
 
 ## Rules
 

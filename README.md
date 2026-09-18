@@ -18,9 +18,10 @@ row keeps fixed New tab, Keyboard shortcuts, and active-tab Close controls plus
 a bounded empty region for dragging an undecorated window. Tooltips name the
 accepted shortcuts, and the drag region yields before tabs or controls on narrow
 surfaces. When Eon supplies current Codex quota facts, one noninteractive chip
-shows every window at ordinary width, collapses to the lowest remaining
-percentage, then disappears before tabs or controls lose space. Stale, blocked,
-and unknown states remain explicit; hovering exposes the complete observation.
+shows each elapsed/total window position and remaining percentage, collapses to
+the complete lowest-remaining window, then disappears before tabs or controls
+lose space. Stale, blocked, and unknown states remain explicit; hovering
+exposes the same observation in human time.
 Pane headers use quiet backgrounds and a lighter selected fill and label. One
 rounded frame connects the pane stack, with full-width separators and a small
 bottom gap sharing the terminal background. Selection and hover fills follow the
@@ -413,13 +414,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 425 |
+| README | 426 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,152 |
+| Contracts and references | 2,160 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
-| Changelog | 280 |
-| Rust source, including unit tests | 19,614 |
+| Changelog | 281 |
+| Rust source, including unit tests | 19,638 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,221** |
+| **Total** | **24,255** |
