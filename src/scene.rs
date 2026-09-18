@@ -244,7 +244,9 @@ pub(crate) struct WorkspaceControl {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WorkspaceQuota {
     pub(crate) rect: SceneRect,
+    pub(crate) logo: SceneRect,
     pub(crate) label: String,
+    pub(crate) accessible_label: String,
     pub(crate) description: String,
 }
 
@@ -540,7 +542,7 @@ fn quota_text(quota: &CodexQuota) -> (String, String, String) {
     };
     let wide = match quota.state {
         CodexQuotaState::Fresh | CodexQuotaState::Stale => format!(
-            "Codex {}{suffix}",
+            "{}{suffix}",
             quota
                 .windows
                 .iter()
@@ -548,8 +550,8 @@ fn quota_text(quota: &CodexQuota) -> (String, String, String) {
                 .collect::<Vec<_>>()
                 .join(" · ")
         ),
-        CodexQuotaState::Blocked => "Codex blocked".into(),
-        CodexQuotaState::Unknown => "Codex unknown".into(),
+        CodexQuotaState::Blocked => "blocked".into(),
+        CodexQuotaState::Unknown => "unknown".into(),
     };
     let compact = match quota.state {
         CodexQuotaState::Fresh | CodexQuotaState::Stale => {
@@ -558,13 +560,10 @@ fn quota_text(quota: &CodexQuota) -> (String, String, String) {
                 .iter()
                 .min_by_key(|window| (window.remaining_percent, window.duration_minutes))
                 .expect("EONW requires quota windows for fresh and stale states");
-            format!(
-                "Codex {}{suffix}",
-                quota_window_text(window, quota.observed_at)
-            )
+            format!("{}{suffix}", quota_window_text(window, quota.observed_at))
         }
-        CodexQuotaState::Blocked => "Codex blocked".into(),
-        CodexQuotaState::Unknown => "Codex unknown".into(),
+        CodexQuotaState::Blocked => "blocked".into(),
+        CodexQuotaState::Unknown => "unknown".into(),
     };
     let mut description = String::from(match quota.state {
         CodexQuotaState::Fresh => "Codex quota state: fresh.",
@@ -683,7 +682,8 @@ impl WorkspaceScene {
         let tab_height = tab_height.min(height);
         let gap = tab_gap(metrics, tab_height);
         let quota_text = snapshot.codex_quota.as_ref().map(quota_text);
-        let quota_padding = metrics.padding * 2.0;
+        let quota_leading = metrics.font_size + metrics.padding / 2.0;
+        let quota_padding = metrics.padding * 2.0 + quota_leading;
         let mut quota_choice = quota_text.as_ref().map(|(wide, _, description)| {
             let (label, width) = header_text(None, wide);
             (label, width + quota_padding, description.clone())
@@ -708,6 +708,13 @@ impl WorkspaceScene {
             .zip(quota_rect)
             .map(|((label, _, description), rect)| WorkspaceQuota {
                 rect,
+                logo: SceneRect {
+                    left: rect.left + metrics.padding,
+                    top: rect.top + (rect.height - metrics.font_size) / 2.0,
+                    width: metrics.font_size,
+                    height: metrics.font_size,
+                },
+                accessible_label: format!("Codex {label}"),
                 label,
                 description,
             });

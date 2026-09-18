@@ -4,8 +4,9 @@ use crate::{
     scene::pane_chrome_rect,
 };
 use glyphon::{
-    Attrs, Buffer, Cache, Color, ColorMode, Family, FontSystem, Metrics, Resolution, Shaping,
-    Style, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
+    Attrs, Buffer, Cache, Color, ColorMode, ContentType, CustomGlyph, Family, FontSystem, Metrics,
+    RasterizeCustomGlyphRequest, RasterizedCustomGlyph, Resolution, Shaping, Style, SwashCache,
+    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight, Wrap,
 };
 use glyphon::{
     cosmic_text::{Fallback, PlatformFallback},
@@ -39,6 +40,10 @@ const VERTEX_SIZE: u64 = 24;
 const VERTICES_PER_QUAD: u32 = 6;
 const BRAILLE_FAMILY: &str = "DejaVu Sans";
 const NERD_FONT_FAMILY: &str = "Symbols Nerd Font Mono";
+const CODEX_LOGO_ID: u16 = 1;
+const CODEX_LOGO_SIZE: usize = 104;
+const CODEX_LOGO_RGBA: &[u8; CODEX_LOGO_SIZE * CODEX_LOGO_SIZE * 4] =
+    include_bytes!("../assets/codex-app-logo-104.rgba");
 const SHORT_CURSOR_ANIMATION: f32 = 0.04;
 const LONG_CURSOR_ANIMATION: f32 = 0.15;
 const MAX_CURSOR_DELTA: f32 = 0.1;
@@ -364,6 +369,7 @@ impl Error for RenderError {}
 
 struct PlacedText {
     buffer: Buffer,
+    custom_glyph: Option<CustomGlyph>,
     left: f32,
     top: f32,
     right: i32,
@@ -371,6 +377,56 @@ struct PlacedText {
     bound_left: i32,
     bound_top: i32,
     color: Color,
+}
+
+fn rasterize_codex_logo(request: RasterizeCustomGlyphRequest) -> Option<RasterizedCustomGlyph> {
+    if request.id != CODEX_LOGO_ID {
+        return None;
+    }
+    let width = usize::from(request.width);
+    let height = usize::from(request.height);
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let mut data = vec![0; width * height * 4];
+    for y in 0..height {
+        let top = y * CODEX_LOGO_SIZE / height;
+        let bottom = ((y + 1) * CODEX_LOGO_SIZE)
+            .div_ceil(height)
+            .max(top + 1)
+            .min(CODEX_LOGO_SIZE);
+        for x in 0..width {
+            let left = x * CODEX_LOGO_SIZE / width;
+            let right = ((x + 1) * CODEX_LOGO_SIZE)
+                .div_ceil(width)
+                .max(left + 1)
+                .min(CODEX_LOGO_SIZE);
+            let mut alpha = 0_u64;
+            let mut color = [0_u64; 3];
+            let count = ((right - left) * (bottom - top)) as u64;
+            for source_y in top..bottom {
+                for source_x in left..right {
+                    let source = (source_y * CODEX_LOGO_SIZE + source_x) * 4;
+                    let source_alpha = u64::from(CODEX_LOGO_RGBA[source + 3]);
+                    alpha += source_alpha;
+                    for channel in 0..3 {
+                        color[channel] +=
+                            u64::from(CODEX_LOGO_RGBA[source + channel]) * source_alpha;
+                    }
+                }
+            }
+            let destination = (y * width + x) * 4;
+            for channel in 0..3 {
+                data[destination + channel] =
+                    color[channel].checked_div(alpha).unwrap_or_default() as u8;
+            }
+            data[destination + 3] = (alpha / count) as u8;
+        }
+    }
+    Some(RasterizedCustomGlyph {
+        data,
+        content_type: ContentType::Color,
+    })
 }
 
 #[derive(Debug, PartialEq)]
@@ -1036,7 +1092,7 @@ impl Renderer {
             );
             if self
                 .text_renderer
-                .prepare(
+                .prepare_with_custom(
                     &self.device,
                     &self.queue,
                     &mut self.fonts.font_system,
@@ -1044,12 +1100,13 @@ impl Renderer {
                     &self.viewport,
                     text_areas(&self.text, self.text_overlay),
                     &mut self.swash_cache,
+                    rasterize_codex_logo,
                 )
                 .is_err()
             {
                 self.atlas.trim();
                 self.text_renderer
-                    .prepare(
+                    .prepare_with_custom(
                         &self.device,
                         &self.queue,
                         &mut self.fonts.font_system,
@@ -1057,6 +1114,7 @@ impl Renderer {
                         &self.viewport,
                         text_areas(&self.text, self.text_overlay),
                         &mut self.swash_cache,
+                        rasterize_codex_logo,
                     )
                     .map_err(display_error("the Venus glyph atlas is full"))?;
             }
@@ -1841,10 +1899,12 @@ impl Renderer {
                     b: 46,
                 },
             );
-            let label_width = (quota.rect.width - self.metrics.padding * 2.0).max(0.0);
+            self.push_codex_logo(quota.logo);
+            let label_left = quota.logo.right() + self.metrics.padding / 2.0;
+            let label_width = (quota.rect.right() - self.metrics.padding - label_left).max(0.0);
             self.push_text_clipped(
                 &quota.label,
-                quota.rect.left + self.metrics.padding,
+                label_left,
                 quota.rect.top + (quota.rect.height - self.metrics.height).max(0.0) / 2.0,
                 label_width,
                 label_width,
@@ -2286,6 +2346,28 @@ impl Renderer {
         width
     }
 
+    fn push_codex_logo(&mut self, rect: SceneRect) {
+        let mut buffer = Buffer::new_empty(Metrics::new(rect.height, rect.height));
+        buffer.set_size(Some(rect.width), Some(rect.height));
+        self.text.push(PlacedText {
+            buffer,
+            custom_glyph: Some(CustomGlyph {
+                id: CODEX_LOGO_ID,
+                width: rect.width,
+                height: rect.height,
+                snap_to_physical_pixel: true,
+                ..CustomGlyph::default()
+            }),
+            left: rect.left,
+            top: rect.top,
+            right: rect.right().ceil() as i32,
+            bottom: rect.bottom().ceil() as i32,
+            bound_left: rect.left.floor() as i32,
+            bound_top: rect.top.floor() as i32,
+            color: Color::rgb(255, 255, 255),
+        });
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn push_text(
         &mut self,
@@ -2368,6 +2450,7 @@ impl Renderer {
         };
         self.text.push(PlacedText {
             buffer,
+            custom_glyph: None,
             left: left + left_offset,
             top: top
                 - if matches!(kind, DrawStyleKind::Preedit | DrawStyleKind::Link) {
@@ -2432,6 +2515,7 @@ impl Renderer {
             buffer.shape_until_scroll(&mut self.fonts.font_system, false);
             self.text.push(PlacedText {
                 buffer,
+                custom_glyph: None,
                 left,
                 top: top
                     - if box_drawing {
@@ -2808,7 +2892,7 @@ fn text_areas(
                 scale: 1.0,
                 bounds,
                 default_color: text.color,
-                custom_glyphs: &[],
+                custom_glyphs: text.custom_glyph.as_slice(),
             })
     })
 }
@@ -3443,7 +3527,46 @@ fn handle_uncaptured_gpu_error(device_lost: &AtomicBool, error: WgpuError) {
 mod tests {
     use super::*;
     use crate::{DrawCell, DrawCursor, DrawRow};
+    use glyphon::cosmic_text::SubpixelBin;
     use orbit_protocol::{CellWidth, Screen};
+
+    #[test]
+    fn codex_logo_preserves_bundled_color_art_when_scaled() {
+        let image = rasterize_codex_logo(RasterizeCustomGlyphRequest {
+            id: CODEX_LOGO_ID,
+            width: 16,
+            height: 16,
+            x_bin: SubpixelBin::Zero,
+            y_bin: SubpixelBin::Zero,
+            scale: 1.0,
+        })
+        .unwrap();
+
+        assert_eq!(image.content_type, ContentType::Color);
+        assert_eq!(image.data.len(), 16 * 16 * 4);
+        assert_eq!(
+            image.data[3], 0,
+            "the official transparent corner remains clear"
+        );
+        assert!(
+            image
+                .data
+                .chunks_exact(4)
+                .any(|pixel| pixel[0..3].iter().all(|channel| *channel > 180) && pixel[3] > 200),
+            "the official white prompt remains visible"
+        );
+        assert!(
+            rasterize_codex_logo(RasterizeCustomGlyphRequest {
+                id: CODEX_LOGO_ID + 1,
+                width: 16,
+                height: 16,
+                x_bin: SubpixelBin::Zero,
+                y_bin: SubpixelBin::Zero,
+                scale: 1.0,
+            })
+            .is_none()
+        );
+    }
 
     #[test]
     fn configured_fonts_resolve_fallbacks_and_scale_one_grid() {

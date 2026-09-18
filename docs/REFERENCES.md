@@ -75,6 +75,22 @@ one-row priority. Exact shaped width selects full text, then a truthful compact
 label, then no chip; no provider worker, timer, action, focus target, dependency,
 module, or copied source is added.
 
+For provider identity, OpenAI's current
+[brand guidelines](https://openai.com/brand/) permit an official mark when it
+directly identifies the related OpenAI service, require exact artwork without
+alteration, and prohibit implied endorsement. Venus uses the exact 104×104 RGBA
+Codex application mark from OpenAI's official Linux ChatGPT/Codex package
+26.901.20858 (`app.asar` SHA-256
+`6be4f6074b300590459f9c5e1e8ea22bd57db08557a1186c521f055302d99c8a`;
+source PNG SHA-256
+`8e82b26c98a10e45798ce48124515720657f7735fb8d0853b3f087eaa8a6b74e`).
+The checked-in raw RGBA encoding round-trips pixel-exactly and has SHA-256
+`b3c1a3bb0eac0bdc8ca09682e045211b5d29ba26f3722ecee30b7888eaaf2470`.
+The mark remains OpenAI's property and is subordinate to Eon's identity. The
+existing glyphon 0.12 custom-glyph hook scales and caches that fixed color art;
+a decoder, second GPU pipeline, generic icon API, altered mark, and text-shaped
+lookalike are rejected.
+
 ## Rounded pane frames
 
 `ven-pane-stack-chrome-suu` inspects Nova

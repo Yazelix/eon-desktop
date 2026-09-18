@@ -304,7 +304,7 @@ impl Snapshot {
             }
             if let Some(quota) = &workspace.quota {
                 let mut node = Node::new(Role::Label);
-                node.set_value(quota.label.as_str());
+                node.set_value(quota.accessible_label.as_str());
                 node.set_description(quota.description.as_str());
                 node.set_bounds(rect(quota.rect));
                 nodes.push((QUOTA, node));
@@ -782,13 +782,15 @@ mod tests {
                 "fresh wide",
                 800,
                 quota(CodexQuotaState::Fresh, windows()),
+                Some("3h/5h 74% · 6d4h/7d 42%"),
                 Some("Codex 3h/5h 74% · 6d4h/7d 42%"),
                 "5h window: 74% remaining; observed 3h into 5h. 7d window: 42% remaining; observed 6d4h into 7d",
             ),
             (
                 "fresh compact",
-                500,
+                400,
                 quota(CodexQuotaState::Fresh, windows()),
+                Some("6d4h/7d 42%"),
                 Some("Codex 6d4h/7d 42%"),
                 "state: fresh",
             ),
@@ -803,6 +805,7 @@ mod tests {
                         resets_at: Some(1_789_750_631),
                     }],
                 ),
+                Some("0m/90m 50%"),
                 Some("Codex 0m/90m 50%"),
                 "observed 0m into 90m",
             ),
@@ -817,13 +820,15 @@ mod tests {
                         resets_at: None,
                     }],
                 ),
+                Some("5h 74%"),
                 Some("Codex 5h 74%"),
                 "reset time unavailable",
             ),
             (
                 "stale compact",
-                500,
+                425,
                 quota(CodexQuotaState::Stale, windows()),
+                Some("6d4h/7d 42% old"),
                 Some("Codex 6d4h/7d 42% old"),
                 "state: stale",
             ),
@@ -832,12 +837,14 @@ mod tests {
                 300,
                 quota(CodexQuotaState::Stale, windows()),
                 None,
+                None,
                 "",
             ),
             (
                 "blocked",
                 400,
                 quota(CodexQuotaState::Blocked, Vec::new()),
+                Some("blocked"),
                 Some("Codex blocked"),
                 "permission: blocked",
             ),
@@ -845,13 +852,14 @@ mod tests {
                 "unknown",
                 400,
                 quota(CodexQuotaState::Unknown, Vec::new()),
+                Some("unknown"),
                 Some("Codex unknown"),
                 "permission: unknown",
             ),
-            ("absent", 800, None, None, ""),
+            ("absent", 800, None, None, None, ""),
         ];
 
-        for (name, width, codex_quota, expected_label, detail) in cases {
+        for (name, width, codex_quota, expected_label, expected_accessible_label, detail) in cases {
             let workspace_snapshot = WorkspaceSnapshot {
                 active_tab: "t1".into(),
                 geometry: PopupGeometry {
@@ -880,6 +888,22 @@ mod tests {
                 "{name}"
             );
             if let Some(quota) = &workspace.quota {
+                assert_eq!(
+                    Some(quota.accessible_label.as_str()),
+                    expected_accessible_label,
+                    "{name}"
+                );
+                assert_eq!(quota.logo.width, metrics.font_size, "{name}");
+                assert_eq!(quota.logo.height, metrics.font_size, "{name}");
+                assert!(
+                    quota.rect.contains(quota.logo.left, quota.logo.top),
+                    "{name}"
+                );
+                assert!(
+                    quota.logo.right() <= quota.rect.right()
+                        && quota.logo.bottom() <= quota.rect.bottom(),
+                    "{name}"
+                );
                 assert!(quota.description.contains(detail), "{name}");
                 assert!(!quota.description.contains("Unix time"), "{name}");
                 assert_eq!(
@@ -907,7 +931,7 @@ mod tests {
             assert_eq!(quota_node.is_some(), expected_label.is_some(), "{name}");
             if let Some((_, node)) = quota_node {
                 assert_eq!(node.role(), Role::Label, "{name}");
-                assert_eq!(node.value(), expected_label, "{name}");
+                assert_eq!(node.value(), expected_accessible_label, "{name}");
                 assert!(
                     node.description()
                         .is_some_and(|value| value.contains(detail))

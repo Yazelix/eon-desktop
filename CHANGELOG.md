@@ -3,12 +3,14 @@
 ## Unreleased
 
 - Consume exact EONW v6 and render Eon's optional Codex quota observation as one
-  noninteractive Eon Bar chip. Wide labels show every elapsed/total window and
-  remaining percentage; compact labels keep the complete lowest-remaining
+  noninteractive Eon Bar chip. The exact Codex application mark replaces the
+  visible provider word; wide labels show every elapsed/total window and
+  remaining percentage, compact labels keep the complete lowest-remaining
   window, and the chip yields entirely before required tabs or controls. Stale,
-  blocked, and unknown states stay explicit, with human hover and static
-  AccessKit descriptions instead of Unix timestamps. Quota-only refreshes
-  preserve the current workspace navigation and terminal scroll.
+  blocked, and unknown states stay explicit, while hover and static AccessKit
+  descriptions continue to name Codex and use human time instead of Unix
+  timestamps. Quota-only refreshes preserve workspace navigation and terminal
+  scroll.
 
 - Turn the existing workspace tab strip into the one-row native Eon Bar. Keep
   fixed New tab, Keyboard shortcuts, and active-tab Close controls beside a
