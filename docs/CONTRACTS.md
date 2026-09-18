@@ -1334,7 +1334,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C22 — Codex quota fact chip
 
-- **Status:** Candidate
+- **Status:** Proven
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
@@ -1373,11 +1373,22 @@ qualified by the identities and boundaries below.
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** The earlier text-only presentation remains proven at published
-  source `2e7174c1d359b792947218c5a11158574f2e48e0`. The mark candidate passes
-  locked fmt/check/test/clippy with 139 ordinary tests. Exact native mark,
-  responsive-label, hover, AccessKit, and installed-product proof remains open
-  under `eon-codex-logo-eon-bar-p9e`; macOS proof remains outside VEN-C22.
+- **Proof:** Published source
+  `b8b8835b8890dfb4359c3f9db31012ede6135ef8` has runtime diff
+  `8ece8ce2092927d3774bd26b72a30e11f15ec4811990248ac88dec178fd118e5`
+  over `1aeada737f425a980f0999e62daee18a997c079e`. Locked format, check,
+  test, warning-strict all-target Clippy, and the exact-source Nix build pass
+  with 139 ordinary tests; five native tests remain gated. Exact artifact
+  `/nix/store/7h20yjr6zvf0w5r54ijy9bd7dihy4fwc-yazelix-venus-codex-logo-proof-0.1.0`
+  passed one isolated x86_64 Linux Sway 1.12 / Mesa 26.1.2 lavapipe run at
+  scale 1. Wide, compact, stale, blocked, unknown, absent, live-Codex, and
+  producer-loss states rendered the exact color mark without the visible
+  provider word. Hover and AT-SPI retained explicit human Codex descriptions,
+  no epoch timestamp, action, focus target, or terminal-focus change. The run
+  stopped its private processes, restored accessibility, and preserved 27
+  ambient product identities. Evidence is retained under
+  `~/.local/state/eon/proofs/eon-codex-logo-eon-bar-p9e-2026-09-18/`.
+  Downstream exact Eon activation and macOS proof remain outside VEN-C22.
 
 ## Rules
 

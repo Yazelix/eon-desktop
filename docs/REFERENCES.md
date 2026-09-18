@@ -57,7 +57,8 @@ native Wayland interaction are the falsifiers.
 
 ### Codex quota fact chip
 
-`ven-render-codex-quota-eon-bar-wfe` consumes Eon's bounded EONW v6 facts at
+`ven-render-codex-quota-eon-bar-wfe` and `eon-codex-logo-eon-bar-p9e` consume
+Eon's bounded EONW v6 facts at
 exact source `3103a00a904c347472899549ce611da765a71650`. Eon remains the sole
 owner of Codex process, authentication, account invalidation, refresh, retry,
 freshness, permission, and normalization policy. Venus derives only
