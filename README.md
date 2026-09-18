@@ -18,10 +18,11 @@ row keeps fixed New tab, Keyboard shortcuts, and active-tab Close controls plus
 a bounded empty region for dragging an undecorated window. Tooltips name the
 accepted shortcuts, and the drag region yields before tabs or controls on narrow
 surfaces. When Eon supplies current Codex quota facts, one noninteractive chip
-shows the Codex mark followed by each elapsed/total window position and remaining
-percentage, collapses to the mark and complete lowest-remaining window, then
-disappears before tabs or controls lose space. Stale, blocked, and unknown states
-remain explicit; hovering exposes the same observation in human time.
+shows the monochrome OpenAI Blossom followed by each elapsed/total window
+position and remaining percentage, collapses to the mark and complete
+lowest-remaining window, then disappears before tabs or controls lose space.
+Stale, blocked, and unknown states remain explicit; hovering exposes the same
+observation in human time.
 Pane headers use quiet backgrounds and a lighter selected fill and label. One
 rounded frame connects the pane stack, with full-width separators and a small
 bottom gap sharing the terminal background. Selection and hover fills follow the
@@ -53,10 +54,7 @@ Venus consumes EONW v6 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 `3103a00a904c347472899549ce611da765a71650`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
-collection and normalization, and Session mappings. Full-Eon activation of
-accepted Venus source `b8b8835b8890dfb4359c3f9db31012ede6135ef8`
-remains downstream; the installed product retains source
-`2e7174c1d359b792947218c5a11158574f2e48e0` until that delivery. Venus consumes
+collection and normalization, and Session mappings. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -414,13 +412,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 426 |
+| README | 424 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,171 |
+| Contracts and references | 2,159 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
 | Changelog | 283 |
-| Rust source, including unit tests | 19,792 |
+| Rust source, including unit tests | 19,778 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,422** |
+| **Total** | **24,394** |

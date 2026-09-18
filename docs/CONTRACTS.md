@@ -1334,20 +1334,20 @@ qualified by the identities and boundaries below.
 
 ## VEN-C22 — Codex quota fact chip
 
-- **Status:** Proven
+- **Status:** Candidate under `eon-codex-logo-eon-bar-p9e`
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
   removes its optional Codex quota observation.
 - **Result:** Venus projects one noninteractive fact chip into the existing
-  single-row Eon Bar. Fresh facts show the exact Codex application mark followed
-  by every available elapsed/total window position and remaining percentage at
-  ordinary width, such as `[mark] 3h/5h 74% · 6d4h/7d 42%`. Under pressure the
-  chip keeps the mark and complete lowest-remaining window, then disappears
-  before active-tab identity, fixed controls, or the bounded drag region lose
-  their accepted space. Stale labels include `old`; blocked and unknown
-  observations show the mark followed by `blocked` or `unknown`. Hover text and
-  the static AccessKit label continue to name Codex explicitly and expose every
+  single-row Eon Bar. Fresh facts show the exact monochrome OpenAI Blossom
+  followed by every available elapsed/total window position and remaining
+  percentage at ordinary width, such as `[mark] 3h/5h 74% · 6d4h/7d 42%`.
+  Under pressure the chip keeps the mark and complete lowest-remaining window,
+  then disappears before active-tab identity, fixed controls, or the bounded
+  drag region lose their accepted space. Stale labels include `old`; blocked
+  and unknown observations show the mark followed by `blocked` or `unknown`.
+  Hover text and the static AccessKit label continue to name Codex explicitly and expose every
   window's human-readable position and remaining percentage, reset availability,
   and source freshness or permission state without raw epoch timestamps.
 - **Important failures:** An absent observation creates no rectangle, gap, hit,
@@ -1361,34 +1361,22 @@ qualified by the identities and boundaries below.
 - **Owner:** Eon owns Codex process, authentication, account invalidation,
   refresh, retry, normalization, freshness, permission state, and the optional
   EONW field. Venus Scene owns chip text and responsive geometry; the existing
-  glyphon renderer owns the exact color mark; hover and AccessKit own the
+  glyphon renderer owns the exact monochrome mark; hover and AccessKit own the
   explicit provider name.
-- **Consumes:** EONW v6 and Eon's EON-C22 candidate at exact Eon source
+- **Consumes:** EONW v6 at exact Eon source
   `3103a00a904c347472899549ce611da765a71650`; VEN-C21 at exact accepted source
   `2ce3594b9ca0f62a2723d5ce5a005ed3560aea64`; unchanged Orbit ORBF v2 / ORBS
   v11 at `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
-- **Boundary:** One fixed service mark adds no generic icon or image system,
-  decoder, provider parsing, process, filesystem or network access,
+- **Boundary:** One fixed monochrome service mark adds no generic icon or image
+  system, decoder, provider parsing, process, filesystem or network access,
   timer, cache, quota mutation, account identity, click action, focus target,
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** Published source
-  `b8b8835b8890dfb4359c3f9db31012ede6135ef8` has runtime diff
-  `8ece8ce2092927d3774bd26b72a30e11f15ec4811990248ac88dec178fd118e5`
-  over `1aeada737f425a980f0999e62daee18a997c079e`. Locked format, check,
-  test, warning-strict all-target Clippy, and the exact-source Nix build pass
-  with 139 ordinary tests; five native tests remain gated. Exact artifact
-  `/nix/store/7h20yjr6zvf0w5r54ijy9bd7dihy4fwc-yazelix-venus-codex-logo-proof-0.1.0`
-  passed one isolated x86_64 Linux Sway 1.12 / Mesa 26.1.2 lavapipe run at
-  scale 1. Wide, compact, stale, blocked, unknown, absent, live-Codex, and
-  producer-loss states rendered the exact color mark without the visible
-  provider word. Hover and AT-SPI retained explicit human Codex descriptions,
-  no epoch timestamp, action, focus target, or terminal-focus change. The run
-  stopped its private processes, restored accessibility, and preserved 27
-  ambient product identities. Evidence is retained under
-  `~/.local/state/eon/proofs/eon-codex-logo-eon-bar-p9e-2026-09-18/`.
-  Downstream exact Eon activation and macOS proof remain outside VEN-C22.
+- **Proof:** The colorful Codex application mark remains proven at published
+  source `b8b8835b8890dfb4359c3f9db31012ede6135ef8`. Exact monochrome Blossom,
+  responsive-label, hover, AccessKit, and installed-product proof is pending
+  under `eon-codex-logo-eon-bar-p9e`; macOS proof remains outside VEN-C22.
 
 ## Rules
 

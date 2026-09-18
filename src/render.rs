@@ -40,10 +40,10 @@ const VERTEX_SIZE: u64 = 24;
 const VERTICES_PER_QUAD: u32 = 6;
 const BRAILLE_FAMILY: &str = "DejaVu Sans";
 const NERD_FONT_FAMILY: &str = "Symbols Nerd Font Mono";
-const CODEX_LOGO_ID: u16 = 1;
-const CODEX_LOGO_SIZE: usize = 104;
-const CODEX_LOGO_RGBA: &[u8; CODEX_LOGO_SIZE * CODEX_LOGO_SIZE * 4] =
-    include_bytes!("../assets/codex-app-logo-104.rgba");
+const OPENAI_BLOSSOM_ID: u16 = 1;
+const OPENAI_BLOSSOM_SIZE: usize = 104;
+const OPENAI_BLOSSOM_ALPHA: &[u8; OPENAI_BLOSSOM_SIZE * OPENAI_BLOSSOM_SIZE] =
+    include_bytes!("../assets/openai-blossom-104.alpha");
 const SHORT_CURSOR_ANIMATION: f32 = 0.04;
 const LONG_CURSOR_ANIMATION: f32 = 0.15;
 const MAX_CURSOR_DELTA: f32 = 0.1;
@@ -379,8 +379,8 @@ struct PlacedText {
     color: Color,
 }
 
-fn rasterize_codex_logo(request: RasterizeCustomGlyphRequest) -> Option<RasterizedCustomGlyph> {
-    if request.id != CODEX_LOGO_ID {
+fn rasterize_openai_blossom(request: RasterizeCustomGlyphRequest) -> Option<RasterizedCustomGlyph> {
+    if request.id != OPENAI_BLOSSOM_ID {
         return None;
     }
     let width = usize::from(request.width);
@@ -388,44 +388,33 @@ fn rasterize_codex_logo(request: RasterizeCustomGlyphRequest) -> Option<Rasteriz
     if width == 0 || height == 0 {
         return None;
     }
-    let mut data = vec![0; width * height * 4];
+    let mut data = vec![0; width * height];
     for y in 0..height {
-        let top = y * CODEX_LOGO_SIZE / height;
-        let bottom = ((y + 1) * CODEX_LOGO_SIZE)
+        let top = y * OPENAI_BLOSSOM_SIZE / height;
+        let bottom = ((y + 1) * OPENAI_BLOSSOM_SIZE)
             .div_ceil(height)
             .max(top + 1)
-            .min(CODEX_LOGO_SIZE);
+            .min(OPENAI_BLOSSOM_SIZE);
         for x in 0..width {
-            let left = x * CODEX_LOGO_SIZE / width;
-            let right = ((x + 1) * CODEX_LOGO_SIZE)
+            let left = x * OPENAI_BLOSSOM_SIZE / width;
+            let right = ((x + 1) * OPENAI_BLOSSOM_SIZE)
                 .div_ceil(width)
                 .max(left + 1)
-                .min(CODEX_LOGO_SIZE);
+                .min(OPENAI_BLOSSOM_SIZE);
             let mut alpha = 0_u64;
-            let mut color = [0_u64; 3];
             let count = ((right - left) * (bottom - top)) as u64;
             for source_y in top..bottom {
                 for source_x in left..right {
-                    let source = (source_y * CODEX_LOGO_SIZE + source_x) * 4;
-                    let source_alpha = u64::from(CODEX_LOGO_RGBA[source + 3]);
-                    alpha += source_alpha;
-                    for channel in 0..3 {
-                        color[channel] +=
-                            u64::from(CODEX_LOGO_RGBA[source + channel]) * source_alpha;
-                    }
+                    alpha +=
+                        u64::from(OPENAI_BLOSSOM_ALPHA[source_y * OPENAI_BLOSSOM_SIZE + source_x]);
                 }
             }
-            let destination = (y * width + x) * 4;
-            for channel in 0..3 {
-                data[destination + channel] =
-                    color[channel].checked_div(alpha).unwrap_or_default() as u8;
-            }
-            data[destination + 3] = (alpha / count) as u8;
+            data[y * width + x] = (alpha / count) as u8;
         }
     }
     Some(RasterizedCustomGlyph {
         data,
-        content_type: ContentType::Color,
+        content_type: ContentType::Mask,
     })
 }
 
@@ -1100,7 +1089,7 @@ impl Renderer {
                     &self.viewport,
                     text_areas(&self.text, self.text_overlay),
                     &mut self.swash_cache,
-                    rasterize_codex_logo,
+                    rasterize_openai_blossom,
                 )
                 .is_err()
             {
@@ -1114,7 +1103,7 @@ impl Renderer {
                         &self.viewport,
                         text_areas(&self.text, self.text_overlay),
                         &mut self.swash_cache,
-                        rasterize_codex_logo,
+                        rasterize_openai_blossom,
                     )
                     .map_err(display_error("the Venus glyph atlas is full"))?;
             }
@@ -1899,7 +1888,7 @@ impl Renderer {
                     b: 46,
                 },
             );
-            self.push_codex_logo(quota.logo);
+            self.push_openai_blossom(quota.logo);
             let label_left = quota.logo.right() + self.metrics.padding / 2.0;
             let label_width = (quota.rect.right() - self.metrics.padding - label_left).max(0.0);
             self.push_text_clipped(
@@ -2346,13 +2335,13 @@ impl Renderer {
         width
     }
 
-    fn push_codex_logo(&mut self, rect: SceneRect) {
+    fn push_openai_blossom(&mut self, rect: SceneRect) {
         let mut buffer = Buffer::new_empty(Metrics::new(rect.height, rect.height));
         buffer.set_size(Some(rect.width), Some(rect.height));
         self.text.push(PlacedText {
             buffer,
             custom_glyph: Some(CustomGlyph {
-                id: CODEX_LOGO_ID,
+                id: OPENAI_BLOSSOM_ID,
                 width: rect.width,
                 height: rect.height,
                 snap_to_physical_pixel: true,
@@ -3531,9 +3520,9 @@ mod tests {
     use orbit_protocol::{CellWidth, Screen};
 
     #[test]
-    fn codex_logo_preserves_bundled_color_art_when_scaled() {
-        let image = rasterize_codex_logo(RasterizeCustomGlyphRequest {
-            id: CODEX_LOGO_ID,
+    fn openai_blossom_preserves_bundled_mask_when_scaled() {
+        let image = rasterize_openai_blossom(RasterizeCustomGlyphRequest {
+            id: OPENAI_BLOSSOM_ID,
             width: 16,
             height: 16,
             x_bin: SubpixelBin::Zero,
@@ -3542,22 +3531,19 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(image.content_type, ContentType::Color);
-        assert_eq!(image.data.len(), 16 * 16 * 4);
+        assert_eq!(image.content_type, ContentType::Mask);
+        assert_eq!(image.data.len(), 16 * 16);
         assert_eq!(
             image.data[3], 0,
             "the official transparent corner remains clear"
         );
         assert!(
-            image
-                .data
-                .chunks_exact(4)
-                .any(|pixel| pixel[0..3].iter().all(|channel| *channel > 180) && pixel[3] > 200),
-            "the official white prompt remains visible"
+            image.data.iter().any(|alpha| *alpha > 200),
+            "the official Blossom remains visible"
         );
         assert!(
-            rasterize_codex_logo(RasterizeCustomGlyphRequest {
-                id: CODEX_LOGO_ID + 1,
+            rasterize_openai_blossom(RasterizeCustomGlyphRequest {
+                id: OPENAI_BLOSSOM_ID + 1,
                 width: 16,
                 height: 16,
                 x_bin: SubpixelBin::Zero,

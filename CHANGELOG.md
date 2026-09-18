@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Consume exact EONW v6 and render Eon's optional Codex quota observation as one
-  noninteractive Eon Bar chip. The exact Codex application mark replaces the
+  noninteractive Eon Bar chip. The exact monochrome OpenAI Blossom replaces the
   visible provider word; wide labels show every elapsed/total window and
   remaining percentage, compact labels keep the complete lowest-remaining
   window, and the chip yields entirely before required tabs or controls. Stale,

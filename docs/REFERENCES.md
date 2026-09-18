@@ -79,18 +79,17 @@ module, or copied source is added.
 For provider identity, OpenAI's current
 [brand guidelines](https://openai.com/brand/) permit an official mark when it
 directly identifies the related OpenAI service, require exact artwork without
-alteration, and prohibit implied endorsement. Venus uses the exact 104×104 RGBA
-Codex application mark from OpenAI's official Linux ChatGPT/Codex package
-26.901.20858 (`app.asar` SHA-256
-`6be4f6074b300590459f9c5e1e8ea22bd57db08557a1186c521f055302d99c8a`;
-source PNG SHA-256
-`8e82b26c98a10e45798ce48124515720657f7735fb8d0853b3f087eaa8a6b74e`).
-The checked-in raw RGBA encoding round-trips pixel-exactly and has SHA-256
-`b3c1a3bb0eac0bdc8ca09682e045211b5d29ba26f3722ecee30b7888eaaf2470`.
+alteration, prohibit added Blossom colors, and prohibit implied endorsement.
+Venus uses the exact monochrome OpenAI logomark from OpenAI's own
+`openai/openai-cookbook` at commit
+`263b2d5b7b63836c4ea30ee9709e65b7a50cbf6f`; source SVG SHA-256 is
+`a41e8e53b14ef686319ed1529066d6a3391aca77d7f6eaaa9f0783acc717375f`.
+The checked-in 104×104 alpha mask has SHA-256
+`7bf5bf047a493ef0d76177d74a3de81783b5d1038dd13fcc6cd9b1db20edec91`.
 The mark remains OpenAI's property and is subordinate to Eon's identity. The
-existing glyphon 0.12 custom-glyph hook scales and caches that fixed color art;
-a decoder, second GPU pipeline, generic icon API, altered mark, and text-shaped
-lookalike are rejected.
+existing glyphon 0.12 custom-glyph hook scales and caches that fixed mask;
+image generation, a decoder, second GPU pipeline, generic icon API, altered
+mark, and text-shaped lookalike are rejected.
 
 ## Rounded pane frames
 
