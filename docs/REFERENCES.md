@@ -82,7 +82,9 @@ directly identifies the related OpenAI service, require exact artwork without
 alteration, prohibit added Blossom colors, and prohibit implied endorsement.
 Venus uses the exact monochrome OpenAI logomark from OpenAI's own
 `openai/openai-cookbook` at commit
-`263b2d5b7b63836c4ea30ee9709e65b7a50cbf6f`; source SVG SHA-256 is
+`263b2d5b7b63836c4ea30ee9709e65b7a50cbf6f`, file
+`examples/agents_sdk/deployment_manager/frontend/src/openai-logomark.svg`;
+source SVG SHA-256 is
 `a41e8e53b14ef686319ed1529066d6a3391aca77d7f6eaaa9f0783acc717375f`.
 The checked-in 104×104 alpha mask has SHA-256
 `7bf5bf047a493ef0d76177d74a3de81783b5d1038dd13fcc6cd9b1db20edec91`.
