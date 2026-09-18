@@ -416,11 +416,11 @@ benchmark CSV data, and disposable qualification patches.
 | Agent policy inputs | 216 |
 | README | 426 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,165 |
+| Contracts and references | 2,153 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
 | Changelog | 281 |
 | Rust source, including unit tests | 19,638 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,260** |
+| **Total** | **24,248** |

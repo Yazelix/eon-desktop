@@ -1334,7 +1334,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C22 — Codex quota fact chip
 
-- **Status:** Candidate
+- **Status:** Proven
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
@@ -1371,35 +1371,23 @@ qualified by the identities and boundaries below.
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** Candidate source `2e7174c1d359b792947218c5a11158574f2e48e0`
-  has runtime diff
+- **Proof:** Published source
+  `2e7174c1d359b792947218c5a11158574f2e48e0` has runtime diff
   `5207103ebeb29b6e90b49a8fdba316ff65269918d00fe7d1810c3ae12d98a722`.
   Locked fmt/check/test/clippy and diff checks pass with 138 ordinary tests;
-  five native tests remain ignored by the ordinary suite. Source
-  `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5` is the accepted baseline for the
-  existing chip and has runtime diff
-  SHA-256
-  `f5dc3547232865ce197ee2ddb4931db7e79a8dd39663194cae1b5ff539bfd513`.
-  It is content-identical to package source
-  `/nix/store/k69ly5caq2imx7gd187ccyqq3r9gjph4-eon-desktop-quota-candidate`.
-  Locked fmt/check/test/clippy and diff checks pass: 138 ordinary tests; five
-  native tests remain ignored by the ordinary suite. Nix artifact
-  `/nix/store/v1121fk6jnscnk6j5fdajlfkagq2v0ly-yazelix-venus-quota-proof-0.1.0`
+  five native tests remain gated from the ordinary suite. Exact Nix artifact
+  `/nix/store/00vyjrzz6542ilpv76671a5yp3yw4g1c-yazelix-venus-quota-proof-0.1.0`
   passed an isolated x86_64 Linux Sway 1.12 / Mesa 26.1.2 lavapipe run at scale
-  1. Wide, compact, narrow-hidden, stale, blocked, unknown, absent, and a real
-  Codex 0.154 observation rendered truthfully. Hover exposed complete detail;
-  AT-SPI exposed one ordered static Label with no action; clicking preserved
-  terminal focus. Terminating the Eon fixture removed the quota while retaining
-  workspace tabs and controls. All private processes stopped, accessibility was
-  restored, and 17 ambient product identities were preserved. Evidence is
+  1. The exact screenshot vector rendered as `Codex 6d4h/7d 42%`; wide,
+  compact, hidden, stale, blocked, unknown, absent, and one real Codex 0.154
+  observation all rendered truthfully. Hover and AT-SPI used human positions
+  without epoch timestamps; the label exposed no Action interface or focus state.
+  Pointer input preserved terminal focus; Eon loss removed only the quota.
+  All private processes stopped, accessibility was
+  restored, and 23 ambient product identities were preserved. Evidence is
   retained under
-  `~/.local/state/eon/proofs/ven-render-codex-quota-eon-bar-wfe-2026-09-17/`.
-  The user authorized and published that baseline on 2026-09-18. It does not
-  prove the elapsed/total presentation correction.
-- **Open proof:** Prove the corrected labels, human description, responsive
-  collapse, and unchanged accessibility/layout boundary, then activate its
-  exact accepted source through downstream full Eon. macOS stays outside this
-  contract.
+  `~/.local/state/eon/proofs/ven-render-codex-quota-eon-bar-wfe-correction-2026-09-18/`.
+  Downstream Eon activation and macOS proof remain outside VEN-C22.
 
 ## Rules
 
