@@ -52,9 +52,10 @@ Venus consumes EONW v6 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 `3103a00a904c347472899549ce611da765a71650`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
-collection and normalization, and Session mappings. Full-Eon activation of this
-v6 Venus candidate remains downstream; the installed product retains its accepted
-v5 composition until that delivery. Venus consumes
+collection and normalization, and Session mappings. Full-Eon activation of
+accepted Venus source `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5`
+remains downstream; the installed product retains its accepted v5 composition
+until that delivery. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
 `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
@@ -412,13 +413,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 424 |
+| README | 425 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,151 |
+| Contracts and references | 2,152 |
 | Memory benchmark report | 158 |
 | Crate decisions | 300 |
 | Changelog | 280 |
 | Rust source, including unit tests | 19,614 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,219** |
+| **Total** | **24,221** |

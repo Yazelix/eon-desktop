@@ -1334,8 +1334,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C22 — Codex quota fact chip
 
-- **Status:** Candidate with complete worktree proof; exact source commit and
-  downstream full-Eon activation remain open.
+- **Status:** Proven
 - **Consumer:** One person using a Venus surface controlled by a full Eon
   workspace.
 - **Trigger:** The current complete EONW v6 snapshot supplies, changes, or
@@ -1370,9 +1369,11 @@ qualified by the identities and boundaries below.
   alert, threshold color, chart, configuration, widget framework, second row,
   other provider, Orbit change, or platform expansion. Workspace transport loss
   expires the optional quota while retaining the last useful workspace.
-- **Proof:** Worktree candidate based on
-  `3961067894ba386ff33316b08c312665de1870a6`, with runtime diff SHA-256
+- **Proof:** Source `425d4a6afdfdb9304ffb9a2a5daf8251ee1298d5` has runtime diff
+  SHA-256
   `f5dc3547232865ce197ee2ddb4931db7e79a8dd39663194cae1b5ff539bfd513`.
+  It is content-identical to package source
+  `/nix/store/k69ly5caq2imx7gd187ccyqq3r9gjph4-eon-desktop-quota-candidate`.
   Locked fmt/check/test/clippy and diff checks pass: 138 ordinary tests; five
   native tests remain ignored by the ordinary suite. Nix artifact
   `/nix/store/v1121fk6jnscnk6j5fdajlfkagq2v0ly-yazelix-venus-quota-proof-0.1.0`
@@ -1385,9 +1386,9 @@ qualified by the identities and boundaries below.
   restored, and 17 ambient product identities were preserved. Evidence is
   retained under
   `~/.local/state/eon/proofs/ven-render-codex-quota-eon-bar-wfe-2026-09-17/`.
-- **Open proof:** Record the exact source commit, then activate that accepted
-  source through the downstream full-Eon issue. macOS stays outside this
-  contract.
+  The user authorized and published the proof-bearing source on 2026-09-18.
+- **Open proof:** Activate the accepted source through the downstream full-Eon
+  issue. macOS stays outside this contract.
 
 ## Rules
 
