@@ -1211,6 +1211,7 @@ pub struct DrawCursor {
     pub row: u16,
     pub at_wide_tail: bool,
     pub color: Color,
+    pub explicit_color: bool,
 }
 
 impl DrawCursor {
@@ -1311,6 +1312,7 @@ impl Scene {
             row: cursor.y,
             at_wide_tail: cursor.at_wide_tail,
             color: Color::from(frame.colors.cursor.unwrap_or(frame.colors.foreground)),
+            explicit_color: frame.colors.cursor.is_some(),
         });
 
         Self {

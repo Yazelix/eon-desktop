@@ -237,7 +237,8 @@ The presets are `magma` (`#FF3B30`), `solar` (`#FFD23F`), `lime` (`#B7F34A`),
 `forest` (`#35C978`), `ice` (`#7DDCFF`), `ocean` (`#5271FF`), `nebula`
 (`#A970FF`), and `bubblegum` (`#FF5DA2`). Every tail gets an automatic
 one-logical-pixel contrasting outline. The fill and outline animate and clip
-together; Orbit's cursor body keeps its authoritative color and shape.
+together. The cursor body uses the chosen color unless Orbit supplies an explicit
+cursor color; Orbit still owns its shape, visibility, and blink state.
 
 Pass `--cursor-effect-v1 none` for a static cursor. The lower-level complete
 tail profile remains available for an exact color and a finite duration
@@ -414,13 +415,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 426 |
+| README | 427 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,251 |
+| Contracts and references | 2,258 |
 | Memory benchmark report | 158 |
 | Crate decisions | 302 |
-| Changelog | 296 |
-| Rust source, including unit tests | 20,196 |
-| Rust integration tests | 1,036 |
+| Changelog | 297 |
+| Rust source, including unit tests | 20,233 |
+| Rust integration tests | 1,045 |
 | Cargo manifest | 33 |
-| **Total** | **24,921** |
+| **Total** | **24,976** |

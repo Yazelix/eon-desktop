@@ -409,6 +409,15 @@ fn canonical_orbit_frame_becomes_one_deterministic_scene() {
     assert_eq!(scene.content[0].cells[1].width, CellWidth::Wide);
     assert_eq!(scene.content[0].cells[1].hyperlink, "https://yazelix.dev");
     assert_eq!(scene.accessible_text(), "e\u{301}界");
+    assert!(!scene.cursor.unwrap().explicit_color);
+    let mut explicit = frame(8, Screen::Alternate);
+    explicit.colors.cursor = Some(Rgb { r: 1, g: 2, b: 3 });
+    let explicit_cursor = yazelix_venus::Scene::from_frame(&explicit).cursor.unwrap();
+    assert!(explicit_cursor.explicit_color);
+    assert_eq!(
+        explicit_cursor.color,
+        yazelix_venus::Color { r: 1, g: 2, b: 3 }
+    );
     assert_eq!(
         scene.snapshot(),
         concat!(

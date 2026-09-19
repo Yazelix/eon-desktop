@@ -3474,7 +3474,19 @@ fn build_tail_cursor(
         rectangles.push_quad(corners, outline_color, 1.0);
         rectangles.push_quad(inset_cursor_quad(corners, metrics.scale), trail_color, 1.0);
     }
-    push_cursor(rectangles, cursor, bounds, metrics);
+    push_cursor(
+        rectangles,
+        DrawCursor {
+            color: if cursor.explicit_color {
+                cursor.color
+            } else {
+                trail_color
+            },
+            ..cursor
+        },
+        bounds,
+        metrics,
+    );
     active
 }
 
@@ -4392,6 +4404,7 @@ mod tests {
             row: 0,
             at_wide_tail: false,
             color: SceneColor::default(),
+            explicit_color: false,
         };
         let mut draw_cursor = |cursor| {
             scene.cursor = Some(cursor);
@@ -4616,6 +4629,7 @@ mod tests {
                 row: 0,
                 at_wide_tail: false,
                 color: SceneColor { r: 1, g: 2, b: 3 },
+                explicit_color: false,
             }),
             content: vec![DrawRow {
                 wrapped: false,
@@ -4698,7 +4712,7 @@ mod tests {
         for (bytes, color) in [
             (&moving.bytes[..quad], outline),
             (&moving.bytes[quad..quad * 2], trail),
-            (&moving.bytes[quad * 2..], SceneColor { r: 1, g: 2, b: 3 }),
+            (&moving.bytes[quad * 2..], trail),
         ] {
             let expected = [color.r, color.g, color.b].map(|value| f32::from(value) / 255.0);
             assert!(
@@ -4707,6 +4721,27 @@ mod tests {
                     .all(|vertex| vertex_color(vertex) == expected)
             );
         }
+        scene.cursor.as_mut().unwrap().explicit_color = true;
+        let mut explicit = RectangleBatch::new(100, 100);
+        assert!(build_tail_cursor(
+            &mut explicit,
+            &mut animation,
+            &scene,
+            true,
+            metrics,
+            viewport,
+            None,
+            trail,
+            outline,
+            1.0,
+            0.0,
+        ));
+        let expected = [1.0 / 255.0, 2.0 / 255.0, 3.0 / 255.0];
+        assert!(
+            explicit.bytes[explicit.bytes.len() - quad..]
+                .chunks_exact(VERTEX_SIZE as usize)
+                .all(|vertex| vertex_color(vertex) == expected)
+        );
         let mut tick = RectangleBatch::new(100, 100);
         assert!(build_tail_cursor(
             &mut tick,
