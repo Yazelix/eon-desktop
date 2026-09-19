@@ -587,7 +587,8 @@ defines the sRGB transfer and weighted luminance calculation. The W3C
 [non-text contrast explanation](https://www.w3.org/WAI/WCAG22/understanding/non-text-contrast.html)
 treats 3:1 as an unrounded threshold. Venus uses those calculations only to
 derive the nearest integer tint or shade along the higher-contrast black/white
-direction for a tail outline; this is not a web-conformance claim.
+direction for a tail outline and the fallback-color cursor body's shape-aware
+edge; this is not a web-conformance claim.
 
 The existing launch parser, standard-library cosmetic entropy, wgpu rectangle
 pipeline, dynamic buffer upload, and scale-aware metrics are sufficient. The

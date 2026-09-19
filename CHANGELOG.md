@@ -35,8 +35,9 @@
   random by default. Accept named presets or a custom `#RRGGBB`, retain the
   static escape hatch and complete legacy scalar profile, and give every tail a
   one-logical-pixel automatically contrasting outline. The cursor body matches
-  the chosen color when Orbit has no explicit cursor color; explicit colors and
-  authoritative shape, visibility, and blink behavior remain intact.
+  the chosen color with a contrasting edge when Orbit has no explicit cursor
+  color; explicit colors and authoritative shape, visibility, and blink behavior
+  remain intact.
 
 - Establish the unsupported Apple Silicon macOS foundation with target-scoped
   AppKit/AccessKit and Metal dependencies, one shared renderer and model, and a

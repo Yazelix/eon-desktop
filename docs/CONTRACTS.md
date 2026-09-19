@@ -260,9 +260,10 @@ qualified by the identities and boundaries below.
     Its solid fill receives a one-logical-pixel tint or shade with at least 3:1
     fill-to-outline contrast while preserving authoritative cursor shape,
     visibility, blink, and wide-cell geometry. The cursor body matches that
-    selected color when Orbit supplies no cursor color; an explicit Orbit cursor
-    color takes precedence. With `none`, the static body uses Orbit's color or
-    foreground fallback.
+    selected color and receives the same shape-aware contrasting edge when
+    Orbit supplies no cursor color; an explicit Orbit cursor color takes
+    precedence without that edge. With `none`, the static body uses Orbit's
+    color or foreground fallback.
   - The immutable Scene alone owns accessible text and selection. Each visible,
     nonblank canonical head cell is one selectable UTF-8 unit; text above the
     AccessKit 255-byte unit limit becomes one U+FFFD accessibility unit without

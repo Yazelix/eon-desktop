@@ -3142,7 +3142,7 @@ fn build_scene_rectangles(
             .filter(|cursor| cursor.visible && (blink_visible || !cursor.blinking))
         && let Some(bounds) = cursor_bounds(scene, cursor, metrics, viewport)
     {
-        push_cursor(rectangles, cursor, bounds, metrics);
+        push_cursor(rectangles, cursor, bounds, metrics, None);
     }
     vertex_count(&rectangles.bytes)
 }
@@ -3351,8 +3351,38 @@ fn push_cursor(
     cursor: DrawCursor,
     bounds: SceneRect,
     metrics: CellMetrics,
+    outline: Option<SceneColor>,
 ) {
     let thickness = (metrics.width / 7.0).max(1.0);
+    if let Some(color) = outline {
+        match cursor.shape {
+            CursorShape::Bar => rectangles.push(
+                bounds.left,
+                bounds.top,
+                thickness + metrics.scale,
+                bounds.height,
+                color,
+                1.0,
+            ),
+            CursorShape::Underline => rectangles.push(
+                bounds.left,
+                bounds.bottom() - thickness - metrics.scale,
+                bounds.width,
+                thickness + metrics.scale,
+                color,
+                1.0,
+            ),
+            CursorShape::BlockHollow => rectangles.push_hollow(
+                bounds.left,
+                bounds.top,
+                bounds.width,
+                bounds.height,
+                thickness + metrics.scale,
+                color,
+            ),
+            CursorShape::Block => {}
+        }
+    }
     let (x, y, width, height, alpha) = match cursor.shape {
         CursorShape::Bar => (bounds.left, bounds.top, thickness, bounds.height, 1.0),
         CursorShape::Underline => (
@@ -3376,6 +3406,18 @@ fn push_cursor(
         }
     };
     rectangles.push(x, y, width, height, cursor.color, alpha);
+    if cursor.shape == CursorShape::Block
+        && let Some(color) = outline
+    {
+        rectangles.push_hollow(
+            bounds.left,
+            bounds.top,
+            bounds.width,
+            bounds.height,
+            metrics.scale,
+            color,
+        );
+    }
 }
 
 fn relative_luminance(color: SceneColor) -> f64 {
@@ -3486,6 +3528,7 @@ fn build_tail_cursor(
         },
         bounds,
         metrics,
+        (!cursor.explicit_color).then_some(outline_color),
     );
     active
 }
@@ -4681,7 +4724,7 @@ mod tests {
         ));
         assert_eq!(
             first.bytes.len(),
-            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize * 5
         );
 
         scene.cursor.as_mut().unwrap().column = 2;
@@ -4702,18 +4745,18 @@ mod tests {
         ));
         assert_eq!(
             moving.bytes.len(),
-            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize * 3
+            VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize * 7
         );
         let quad = VERTEX_SIZE as usize * VERTICES_PER_QUAD as usize;
         let vertex_color = |vertex: &[u8]| {
             [8, 12, 16]
                 .map(|offset| f32::from_ne_bytes(vertex[offset..offset + 4].try_into().unwrap()))
         };
-        for (bytes, color) in [
-            (&moving.bytes[..quad], outline),
-            (&moving.bytes[quad..quad * 2], trail),
-            (&moving.bytes[quad * 2..], trail),
-        ] {
+        for (bytes, color) in moving
+            .bytes
+            .chunks_exact(quad)
+            .zip([outline, trail, trail, outline, outline, outline, outline])
+        {
             let expected = [color.r, color.g, color.b].map(|value| f32::from(value) / 255.0);
             assert!(
                 bytes
@@ -4737,11 +4780,53 @@ mod tests {
             0.0,
         ));
         let expected = [1.0 / 255.0, 2.0 / 255.0, 3.0 / 255.0];
+        assert_eq!(explicit.bytes.len(), 3 * quad);
         assert!(
             explicit.bytes[explicit.bytes.len() - quad..]
                 .chunks_exact(VERTEX_SIZE as usize)
                 .all(|vertex| vertex_color(vertex) == expected)
         );
+        scene.cursor.as_mut().unwrap().explicit_color = false;
+        for (shape, colors) in [
+            (CursorShape::Bar, &[outline, trail][..]),
+            (CursorShape::Underline, &[outline, trail][..]),
+            (
+                CursorShape::Block,
+                &[trail, outline, outline, outline, outline][..],
+            ),
+            (
+                CursorShape::BlockHollow,
+                &[
+                    outline, outline, outline, outline, trail, trail, trail, trail,
+                ][..],
+            ),
+        ] {
+            scene.cursor.as_mut().unwrap().shape = shape;
+            let mut body = RectangleBatch::new(100, 100);
+            assert!(!build_tail_cursor(
+                &mut body,
+                &mut CursorAnimation::default(),
+                &scene,
+                true,
+                metrics,
+                viewport,
+                None,
+                trail,
+                outline,
+                1.0,
+                0.0,
+            ));
+            assert_eq!(body.bytes.len(), colors.len() * quad, "{shape:?}");
+            for (bytes, color) in body.bytes.chunks_exact(quad).zip(colors) {
+                let expected = [color.r, color.g, color.b].map(|value| f32::from(value) / 255.0);
+                assert!(
+                    bytes
+                        .chunks_exact(VERTEX_SIZE as usize)
+                        .all(|vertex| vertex_color(vertex) == expected)
+                );
+            }
+        }
+        scene.cursor.as_mut().unwrap().shape = CursorShape::Block;
         let mut tick = RectangleBatch::new(100, 100);
         assert!(build_tail_cursor(
             &mut tick,
