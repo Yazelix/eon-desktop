@@ -4,7 +4,8 @@
 
 - Place New tab directly after the rightmost tab when tabs fit, while keeping
   it visible at the tab-region edge during overflow and on narrow windows.
-  The accessibility tree puts it before the optional Codex quota chip.
+  The accessibility tree puts it before the optional Codex quota chip. Keep
+  that chip adjacent to Shortcuts and the blank window-drag region continuous.
 
 - Make the authoritative scrollback count a `↓ N rows` return-to-live pill.
   Its whole painted area and AccessKit button send Orbit's single semantic

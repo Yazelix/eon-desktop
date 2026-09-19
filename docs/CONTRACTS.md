@@ -1377,6 +1377,17 @@ qualified by the identities and boundaries below.
   pane panel in that order. New tab's extent starts at x=78, quota at x=738.
   The private run stopped; the ambient supervisor and Codex Session survived.
   This proves AT-SPI tree order, not a screen-reader workflow or macOS.
+- **Quota-gap correction:** Source `6aa79f6405229cd64bd1d55e01c5b11b96657c71`
+  moves the optional quota chip into the slot vacated by New tab, keeping the
+  blank drag region continuous and the chip adjacent to Shortcuts. The focused
+  geometry assertion failed against the prior source and passed after the fix;
+  locked format, check, 141 ordinary Rust tests, and strict Clippy passed.
+  Exact Eon `/nix/store/0j919y26rigssy25w2mz96n9kpxiq7hv-eon-0.1.0`
+  ran under private Sway 1.12 headless/pixman at scale 1. Its 960-pixel capture
+  shows the new layout; a real drag from the restored blank region moved the
+  window from (100, 100) to (200, 170). The private generation stopped and
+  ambient Sessions survived. The capture is retained under
+  `~/.local/state/eon/proofs/ven-place-new-tab-beside-tabs-pct-review-2026-09-19/`.
 
 ## VEN-C22 — Codex quota fact chip
 
