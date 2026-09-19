@@ -1315,6 +1315,8 @@ qualified by the identities and boundaries below.
   `Close tab — Alt+Shift+W`. A bounded empty region between New tab and the
   trailing controls starts compositor-owned window movement only from its
   immediate left press.
+  The accessibility tree orders tabs, New tab, optional quota, Shortcuts,
+  then Close tab.
   It yields before tabs or controls when width contracts. Tab and Shift+Tab
   traverse focused header controls; Enter and Space activate them. Hover,
   pressed, and focus states remain distinct, and focus includes an outline.
@@ -1366,6 +1368,15 @@ qualified by the identities and boundaries below.
   retained active tab and controls. Evidence is retained under
   `~/.local/state/eon/proofs/ven-place-new-tab-beside-tabs-pct/`. Private
   processes stopped and the live Eon supervisor and Codex Session survived.
+- **Accessibility correction:** Source `6036430ffed1b84fd2995525e0a19f071809c588`
+  makes the AccessKit child order match the visual order with quota present.
+  The focused assertion failed on the former order and passed after the fix;
+  locked format, check, 141 ordinary Rust tests, strict Clippy, and the exact
+  composed Eon build pass. Under private Sway 1.12 headless/pixman, the native
+  AT-SPI window returned tabs, New tab, Codex quota, Shortcuts, Close tab, and
+  pane panel in that order. New tab's extent starts at x=78, quota at x=738.
+  The private run stopped; the ambient supervisor and Codex Session survived.
+  This proves AT-SPI tree order, not a screen-reader workflow or macOS.
 
 ## VEN-C22 — Codex quota fact chip
 
