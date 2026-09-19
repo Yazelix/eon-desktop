@@ -1306,12 +1306,15 @@ qualified by the identities and boundaries below.
 - **Result:** The existing workspace tab strip remains one row at its existing
   height. Scrollable tabs keep the leading space and retain their labels,
   overflow, reveal, selection, hover path, stable identity, and accessibility.
-  Fixed trailing New tab, Keyboard shortcuts, and active-tab Close buttons use
-  the existing CreateTab and exact-active-tab CloseTab EONW actions and the
-  existing local VEN-C20 viewer. Their tooltips and accessible names are
+  New tab follows the rightmost tab when tabs fit and stays at the tab-region
+  edge during overflow. Keyboard shortcuts and active-tab Close remain trailing
+  controls. The buttons use the existing CreateTab and exact-active-tab CloseTab
+  EONW actions and the existing local VEN-C20 viewer. Their tooltips and
+  accessible names are
   `New tab — Alt+Shift+T`, `Keyboard shortcuts — Alt+/`, and
-  `Close tab — Alt+Shift+W`. A bounded empty region between tabs and controls
-  starts compositor-owned window movement only from its immediate left press.
+  `Close tab — Alt+Shift+W`. A bounded empty region between New tab and the
+  trailing controls starts compositor-owned window movement only from its
+  immediate left press.
   It yields before tabs or controls when width contracts. Tab and Shift+Tab
   traverse focused header controls; Enter and Space activate them. Hover,
   pressed, and focus states remain distinct, and focus includes an outline.
@@ -1326,7 +1329,7 @@ qualified by the identities and boundaries below.
   and action routing; AccessKit projects the same rectangles and identities.
   Eon retains workspace topology and action-policy ownership; winit and the
   compositor own native window movement.
-- **Consumes:** VEN-C8, VEN-C20, EONW v5 at exact source
+- **Initial consumes:** VEN-C8, VEN-C20, EONW v5 at exact source
   `0cc8f477298681ae3945903e8fdb5852d487c5ab`, Orbit ORBF v2 / ORBS v11 at
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, and patched winit 0.30.13 at
   `7c209ec5bebbd2963f75a39f79b320af6b03f72c`.
@@ -1350,6 +1353,19 @@ qualified by the identities and boundaries below.
   The user authorized the proof-bearing source commit on 2026-09-17. The native
   boundary is x86_64 Linux Wayland; Apple Silicon macOS remains under its
   separate proof chain.
+- **Placement follow-up:** Source `562cacf74e101ee9ea18460c21e47d86eec2376d`
+  consumes EONW v6 `3103a00a904c347472899549ce611da765a71650` and Orbit
+  ORBS v12 `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` without changing
+  either. It moves only Scene-owned New tab geometry. Focused ordinary,
+  overflow, and narrow hit-target checks passed with the locked Venus suite (80 library, 44
+  application, 17 integration tests), check, format, and strict Clippy. The
+  exact Eon candidate `/nix/store/31mwvisf7s1aiyp42agslc2wjbz47lms-eon-0.1.0`
+  built and ran under private Sway 1.12 headless/pixman with Mesa 26.1.2
+  lavapipe at scale 1. A real New tab pointer click created a second tab;
+  960-, 320-, and 100-pixel captures show the adjacent or pinned button and
+  retained active tab and controls. Evidence is retained under
+  `~/.local/state/eon/proofs/ven-place-new-tab-beside-tabs-pct/`. Private
+  processes stopped and the live Eon supervisor and Codex Session survived.
 
 ## VEN-C22 — Codex quota fact chip
 

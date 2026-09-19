@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Place New tab directly after the rightmost tab when tabs fit, while keeping
+  it visible at the tab-region edge during overflow and on narrow windows.
+
 - Make the authoritative scrollback count a `↓ N rows` return-to-live pill.
   Its whole painted area and AccessKit button send Orbit's single semantic
   action; hidden or stale counts cannot activate it. Consume exact ORBS v12.

@@ -14,8 +14,9 @@ and the leaf, `~`, or `/` derived from Eon's authoritative launch directory.
 Pill-shaped tabs fit their labels, with middle ellipsis for long names
 and full launch-path previews on hover. Selected tabs use a brighter fill and
 label without an underline; keyboard tab focus adds a rounded outline. The same
-row keeps fixed New tab, Keyboard shortcuts, and active-tab Close controls plus
-a bounded empty region for dragging an undecorated window. Tooltips name the
+row places New tab beside the rightmost tab, pinning it at the tab-region edge
+when tabs overflow. Keyboard shortcuts and active-tab Close stay at the right,
+with a bounded empty region for dragging an undecorated window. Tooltips name the
 accepted shortcuts, and the drag region yields before tabs or controls on narrow
 surfaces. When Eon supplies current Codex quota facts, one noninteractive chip
 shows the monochrome OpenAI Blossom followed by each elapsed/total window
@@ -413,13 +414,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 425 |
+| README | 426 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,197 |
+| Contracts and references | 2,213 |
 | Memory benchmark report | 158 |
 | Crate decisions | 302 |
-| Changelog | 287 |
-| Rust source, including unit tests | 20,102 |
+| Changelog | 290 |
+| Rust source, including unit tests | 20,130 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,763** |
+| **Total** | **24,811** |
