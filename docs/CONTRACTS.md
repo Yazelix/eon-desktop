@@ -259,7 +259,10 @@ qualified by the identities and boundaries below.
   - A bounded four-corner trail approaches Orbit's exact cursor destination.
     Its solid fill receives a one-logical-pixel tint or shade with at least 3:1
     fill-to-outline contrast while preserving authoritative cursor shape,
-    visibility, blink, wide-cell geometry, and color.
+    visibility, blink, and wide-cell geometry. The cursor body matches that
+    selected color when Orbit supplies no cursor color; an explicit Orbit cursor
+    color takes precedence. With `none`, the static body uses Orbit's color or
+    foreground fallback.
   - The immutable Scene alone owns accessible text and selection. Each visible,
     nonblank canonical head cell is one selectable UTF-8 unit; text above the
     AccessKit 255-byte unit limit becomes one U+FFFD accessibility unit without
@@ -269,12 +272,26 @@ qualified by the identities and boundaries below.
   or accessibility state.
 - **Owner:** Venus Scene, renderer, and cursor-animation state; Orbit retains
   terminal and cursor authority.
-- **Consumes:** Orbit `ORB-C4` and `ORB-C6` through canonical ORBF v2 / ORBS v11
-  and `orbit-protocol` 0.1.0 at accepted proof/package revision
+- **Consumes:** Orbit `ORB-C4` and `ORB-C6` through canonical ORBF v2 / ORBS v12
+  and `orbit-protocol` 0.1.0 at accepted source
+  `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `73195f5812cdc8f32841eab644c1bf4b3af9f756`
-  - **Cursor color slice:** Focused parsing, exact preset, deterministic random,
+- **Proof:** `f0885517cbd63f6fac966e913e48aecccfc212eb`
+  - **Cursor-body color refinement:** Focused red/green draw-byte and canonical
+    frame checks prove that an absent Orbit cursor color uses the chosen trail
+    RGB, an explicit color wins, and static rendering keeps its foreground
+    fallback. The complete locked Rust route passes on x86_64 Linux. Private
+    Sway 1.12 headless/pixman and host lavapipe rendered `preset:ice` against
+    exact ORBS v12 Orbit; the native capture is
+    `~/.local/state/eon/proofs/ven-phm-2026-09-19/candidate-ice.png` (SHA-256
+    `c2f6753f51ad116385ef2280c595807223b82d29027d5e03db51c62e9e02e948`).
+    Eon `a8540ff575e1ca6f3ab3825af7fd92d810e20ba6` pins this source and
+    its installed EonTerm proof is recorded at
+    `ee2a8fda1146b1f4481a5214f478d6c03104f622`. The block cursor keeps its
+    existing 0.55 alpha, so its displayed pixel is darker than the opaque
+    trail despite sharing RGB. Existing VEN-C1 quality limits remain.
+  - **Earlier cursor color slice:** Focused parsing, exact preset, deterministic random,
     custom RGB, conflict, contrast, inset, clipping, lifecycle, and draw-order
     checks pass in the complete locked Rust suite. On a private Sway 1.12
     headless Wayland output, `preset:ice` rendered `#7DDCFF` with outline
