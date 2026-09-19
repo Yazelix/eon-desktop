@@ -5,7 +5,7 @@ remaining limitations. Beads and Git retain execution history; `CHANGELOG.md`
 retains accepted user-visible chronology.
 
 `VEN-C16` owns platform scope. The current locked consumer uses ORBF v2 /
-ORBS v11 at Orbit `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`, with source
+ORBS v12 at Orbit `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`, with source
 acceptance indexed in `VEN-C7`, and EONW v6 at Eon
 `3103a00a904c347472899549ce611da765a71650`. Older consumed revisions below
 identify their named proofs; they do not select the current dependency.
@@ -440,16 +440,20 @@ qualified by the identities and boundaries below.
 
 - **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
 - **Consumer:** One presented Venus terminal surface.
-- **Trigger:** Native wheel or touchpad movement, one left-pointer sequence, or
-  explicit copy.
+- **Trigger:** Native wheel or touchpad movement, one left-pointer sequence,
+  explicit copy, or activation of the visible scrollback pill.
 - **Result:**
-  - While away from live output, Venus displays `↑ N rows` (`↑ 1 row` for one)
+  - While away from live output, Venus displays `↓ N rows` (`↓ 1 row` for one)
     from the accepted frame's authoritative wrapped display-row distance. Live
     bottom, alternate screen, recovery and known terminal-owned routing hide it.
+    Activating the whole visible pill requests one semantic return to live;
+    Orbit alone moves the viewport and publishes its new position. An
+    unpresented, hidden, or occluded pill is inert.
     Idle preview cleanup and rejected input preserve routing evidence until a
     fresh frame or preview replaces it.
     Preview movement never changes the count; accessibility exposes committed
-    position as a description rather than an alert. The selected pane header
+    position as a description and the visible return action as a button, not an
+    alert. The selected pane header
     reserves space for the count and fits its directory label into the remaining
     width using the existing cluster-safe header fitter. Standalone and picker
     terminals use a small top-right overlay that preserves grid dimensions and yields to selection,
@@ -501,8 +505,8 @@ qualified by the identities and boundaries below.
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
 - **Consumes:** Orbit `ORB-C4`, `ORB-C5`, `ORB-C6`, `ORB-C8`, and `ORB-C9`
-  through canonical ORBF v2 / ORBS v11 at
-  `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`; exact patched winit
+  through canonical ORBF v2 / ORBS v12 at
+  `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`; exact patched winit
   `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,

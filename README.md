@@ -55,8 +55,8 @@ Venus consumes EONW v6 through `eon-workspace-protocol` 0.1.0 at exact Eon sourc
 optional selection, pending-tab state, identities, tab launch directories,
 popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
 collection and normalization, and Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v2, and ORBS v11 at exact Orbit proof
-`ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`. One reducer turns complete canonical
+`orbit-protocol` 0.1.0, ORBF v2, and ORBS v12 at exact Orbit proof
+`f8ad14e5195109ba8cb421f30e5ae4a9619a1419`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -326,8 +326,9 @@ refreshing content; Orbit continues parsing output and owns the anchored
 history viewport. Resize, screen, workspace, and attachment changes still
 require fresh presentation.
 
-While scrolled, `↑ N rows` shows the last committed viewport's wrapped display
-rows above live output (`↑ 1 row` for one). The selected pane header reserves
+While scrolled, the clickable `↓ N rows` pill shows the last committed viewport's
+wrapped display-row distance above live output (`↓ 1 row` for one). Its whole
+area returns to live output through Orbit. The selected pane header reserves
 space for it, preserving the directory ending when the label needs shortening.
 Standalone and popup terminals use a small top-right overlay
 without resizing the grid; it yields to selection, link previews, notices,
@@ -396,8 +397,8 @@ same renderer/model path with AppKit, AccessKit, Metal, and target-only arboard.
 Its opaque foundation and a bounded clipboard/key slice have native M1 proof;
 held-key repeat, dead keys, other IMEs, physical trackpad gesture quality, a
 host-access failure notice, lifecycle acceptance, effects, and Eon composition remain open.
-The exact `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` Orbit package revision supplies
-accepted ORBF v2 / ORBS v11, including authoritative scrollback position,
+The exact `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` Orbit package revision supplies
+accepted ORBF v2 / ORBS v12, including authoritative scrollback position and return to live,
 selection completion, routed native
 left-pointer gestures that survive compatible live output, bounded row-window
 previews, signed scroll batches, and read-only pane metadata. The exact source
@@ -412,13 +413,13 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 424 |
+| README | 425 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,171 |
+| Contracts and references | 2,182 |
 | Memory benchmark report | 158 |
-| Crate decisions | 300 |
-| Changelog | 283 |
-| Rust source, including unit tests | 19,778 |
+| Crate decisions | 302 |
+| Changelog | 287 |
+| Rust source, including unit tests | 20,102 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,406** |
+| **Total** | **24,748** |

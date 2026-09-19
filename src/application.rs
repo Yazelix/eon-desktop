@@ -1185,6 +1185,7 @@ struct Application {
     window_occluded: bool,
     workspace_focus: WorkspaceFocus,
     header_press: Option<HeaderPress>,
+    scrollback_press: Option<PresentationIdentity>,
     shortcut_viewer: ShortcutViewerState,
     tab_texts: HashMap<String, (String, f32)>,
     quota_widths: HashMap<String, f32>,
@@ -1258,6 +1259,7 @@ impl Application {
             window_occluded: false,
             workspace_focus: WorkspaceFocus::Terminal,
             header_press: None,
+            scrollback_press: None,
             shortcut_viewer: ShortcutViewerState::default(),
             tab_texts: HashMap::new(),
             quota_widths: HashMap::new(),
@@ -1579,6 +1581,26 @@ impl Application {
             return None;
         }
         self.model.scrollback_label()
+    }
+
+    fn visible_scrollback_label(&self, workspace: Option<&WorkspaceScene>) -> Option<String> {
+        self.scrollback_label(workspace).filter(|_| {
+            workspace.is_some_and(|workspace| workspace.popup_label().is_none())
+                || (!self.input.pointer_busy()
+                    && self.links.focus.is_none()
+                    && !self.model.scene().is_some_and(Scene::has_selected_content))
+        })
+    }
+
+    fn scrollback_rect(&self, workspace: Option<&WorkspaceScene>) -> Option<SceneRect> {
+        self.visible_scrollback_label(workspace)?;
+        if !self
+            .presentation
+            .is_current(self.presentation_candidate(workspace))
+        {
+            return None;
+        }
+        self.window.as_ref()?.renderer.presented_scrollback_rect()
     }
 
     fn presentation_candidate(&self, workspace: Option<&WorkspaceScene>) -> PresentationIdentity {
@@ -2412,6 +2434,7 @@ impl Application {
         let workspace = self.workspace_scene();
         let shortcut_viewer = self.shortcut_viewer_scene();
         let scrollback_label = self.scrollback_label(workspace.as_ref());
+        let scrollback_rect = self.scrollback_rect(workspace.as_ref());
         let workspace_focus = self.workspace_focus;
         let ime_allowed = shortcut_viewer.is_none()
             && ime_allowed(
@@ -2442,13 +2465,19 @@ impl Application {
             );
         }
         state.window.set_ime_allowed(ime_allowed);
-        state
-            .window
-            .set_cursor(if shortcut_viewer.is_none() && self.links.focus.is_some() {
+        state.window.set_cursor(
+            if shortcut_viewer.is_none()
+                && (self.links.focus.is_some()
+                    || scrollback_rect.is_some_and(|rect| {
+                        self.links.pointer_inside
+                            && rect.contains(self.cursor.x as f32, self.cursor.y as f32)
+                    }))
+            {
                 CursorIcon::Pointer
             } else {
                 CursorIcon::Default
-            });
+            },
+        );
         state.accessibility.update(
             &mut state.adapter,
             self.model.scene(),
@@ -2457,6 +2486,7 @@ impl Application {
             workspace_focus,
             &status,
             scrollback_label.as_deref(),
+            scrollback_rect,
             state.renderer.size(),
             state.renderer.metrics(),
             link_generation,
@@ -2534,6 +2564,7 @@ impl Application {
 
     fn cancel_pointer_sequence(&mut self) {
         self.header_press = None;
+        self.scrollback_press = None;
         let cancel_server = pointer_sequence_needs_cancel(
             &self.selection_gate,
             self.input.is_selecting(),
@@ -2756,14 +2787,8 @@ impl Application {
         let link_generation = (candidate.revision.is_some()
             && self.link_surface_available(scroll_offset == 0.0))
         .then_some(candidate.generation);
-        let scrollback_label = self.scrollback_label(workspace.as_ref()).filter(|_| {
-            workspace
-                .as_ref()
-                .is_some_and(|workspace| workspace.popup_label().is_none())
-                || (!self.input.pointer_busy()
-                    && self.links.focus.is_none()
-                    && !self.model.scene().is_some_and(Scene::has_selected_content))
-        });
+        let scrollback_label = self.visible_scrollback_label(workspace.as_ref());
+        let prior_scrollback_target = self.scrollback_rect(workspace.as_ref());
         let highlighted_link = self.focused_link().map(|link| (link.row, link.column));
         let hovered_hit = (shortcut_viewer.is_none()
             && self.window_focused
@@ -2813,7 +2838,8 @@ impl Application {
         ) {
             Ok(PresentOutcome::Presented) => {
                 presented = true;
-                refresh = self.render_notice.take().is_some();
+                refresh = self.render_notice.take().is_some()
+                    || state.renderer.presented_scrollback_rect() != prior_scrollback_target;
                 self.presentation.publish(candidate);
                 self.links.unshifted = scroll_offset == 0.0;
                 state.accessibility.present_links(
@@ -2855,6 +2881,7 @@ impl Application {
                         workspace_focus,
                         notice,
                         scrollback_label.as_deref(),
+                        None,
                         state.renderer.size(),
                         state.renderer.metrics(),
                         None,
@@ -2916,6 +2943,7 @@ impl ApplicationHandler<UserEvent> for Application {
         let candidate = self.presentation_candidate(workspace.as_ref());
         let presentation_current = self.presentation.has_presented_geometry();
         let presented_revision = self.presentation.presented_revision();
+        let scrollback_rect = self.scrollback_rect(workspace.as_ref());
         let Some(state) = &mut self.window else {
             return;
         };
@@ -3083,9 +3111,26 @@ impl ApplicationHandler<UserEvent> for Application {
                 {
                     state.window.request_redraw();
                 }
+                let was_scrollback = scrollback_rect
+                    .is_some_and(|rect| rect.contains(self.cursor.x as f32, self.cursor.y as f32));
+                let over_scrollback = scrollback_rect
+                    .is_some_and(|rect| rect.contains(position.x as f32, position.y as f32));
                 self.cursor = position;
                 self.links.pointer_inside = true;
-                if self.links.pressed.is_some() || self.header_press.is_some() {
+                if over_scrollback {
+                    self.links.focus = None;
+                    if was_scrollback != over_scrollback {
+                        self.refresh_client_view();
+                    }
+                    return;
+                }
+                if self.links.pressed.is_some()
+                    || self.header_press.is_some()
+                    || self.scrollback_press.is_some()
+                {
+                    if was_scrollback != over_scrollback {
+                        self.refresh_client_view();
+                    }
                     return;
                 }
                 let motion = move_terminal_pointer(&mut self.input, position, workspace.as_ref());
@@ -3107,9 +3152,13 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.send(message);
                 }
                 self.inspect_pointer_link();
+                if was_scrollback != over_scrollback {
+                    self.refresh_client_view();
+                }
             }
             WindowEvent::CursorLeft { .. } => {
                 self.links.pointer_inside = false;
+                self.scrollback_press = None;
                 state.window.request_redraw();
                 self.cancel_terminal_scroll();
                 self.cancel_pointer_sequence();
@@ -3134,6 +3183,26 @@ impl ApplicationHandler<UserEvent> for Application {
                 let window = Arc::clone(&state.window);
                 if button == MouseButton::Left && button_state == ElementState::Pressed {
                     self.header_press = None;
+                }
+                let scrollback_target = scrollback_rect
+                    .filter(|rect| {
+                        self.links.pointer_inside
+                            && rect.contains(self.cursor.x as f32, self.cursor.y as f32)
+                    })
+                    .map(|_| candidate);
+                if let Some(activate) = scrollback_button(
+                    &mut self.scrollback_press,
+                    button_state,
+                    button,
+                    scrollback_target,
+                ) {
+                    if activate {
+                        self.send(ClientMessage::ReturnToLive);
+                    } else if button_state == ElementState::Pressed {
+                        self.links.pressed = None;
+                    }
+                    self.refresh_client_view();
+                    return;
                 }
                 if self.handle_link_button(button_state, button) {
                     return;
@@ -3249,6 +3318,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 self.links.pressed = None;
                 self.header_press = None;
+                self.scrollback_press = None;
                 let metrics = state.renderer.metrics();
                 let hit = workspace.as_ref().and_then(|workspace| {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
@@ -3372,6 +3442,14 @@ impl ApplicationHandler<UserEvent> for Application {
                         match target {
                             Some(AccessibilityTarget::Link { row, column, copy }) => {
                                 self.activate_accessible_link(row, column, copy);
+                            }
+                            Some(AccessibilityTarget::ReturnToLive) => {
+                                if self
+                                    .scrollback_rect(self.workspace_scene().as_ref())
+                                    .is_some()
+                                {
+                                    self.send(ClientMessage::ReturnToLive);
+                                }
                             }
                             Some(AccessibilityTarget::HeaderControl { control, activate }) => {
                                 self.set_workspace_focus(WorkspaceFocus::Header(control));
@@ -3671,6 +3749,25 @@ fn button_reaches_terminal(
     state == ElementState::Released || presentation_current && (!workspace || terminal_hit)
 }
 
+fn scrollback_button(
+    pressed: &mut Option<PresentationIdentity>,
+    state: ElementState,
+    button: MouseButton,
+    target: Option<PresentationIdentity>,
+) -> Option<bool> {
+    if button != MouseButton::Left {
+        return None;
+    }
+    if state == ElementState::Released {
+        return pressed.take().map(|press| Some(press) == target);
+    }
+    if state == ElementState::Pressed {
+        *pressed = target;
+        return target.map(|_| false);
+    }
+    None
+}
+
 fn ime_allowed(
     window_focused: bool,
     workspace_focus: WorkspaceFocus,
@@ -3712,7 +3809,9 @@ fn accessibility_workspace_focus(
         AccessibilityTarget::Terminal => return Some(WorkspaceFocus::Terminal),
         AccessibilityTarget::Tab(id) => (WorkspaceFocus::Tabs, id),
         AccessibilityTarget::Pane(id) => (WorkspaceFocus::Panes, id),
-        AccessibilityTarget::HeaderControl { .. } | AccessibilityTarget::Link { .. } => {
+        AccessibilityTarget::HeaderControl { .. }
+        | AccessibilityTarget::Link { .. }
+        | AccessibilityTarget::ReturnToLive => {
             return None;
         }
     };
@@ -4861,6 +4960,108 @@ mod tests {
                     "leaving terminal focus must retire a captured link press"
                 );
                 app.set_workspace_focus(WorkspaceFocus::Terminal);
+                let size = surface_size(
+                    app.terminal_size().unwrap(),
+                    app.window.as_ref().unwrap().renderer.metrics(),
+                )
+                .unwrap();
+                let TransportEvent::Server(ServerMessage::Frame(mut scrolled)) =
+                    linked_frame(9, "")
+                else {
+                    unreachable!()
+                };
+                let mut blank = scrolled.rows[0].cells[0].clone();
+                blank.width = orbit_protocol::CellWidth::Narrow;
+                blank.text.clear();
+                blank.hyperlink.clear();
+                scrolled.dimensions = Dimensions {
+                    cols: size.cols,
+                    rows: size.rows,
+                };
+                scrolled.screen = Screen::Primary;
+                scrolled.scroll_position = orbit_protocol::ScrollPosition {
+                    rows_from_live: 12,
+                    history_rows: 12,
+                };
+                scrolled.rows = vec![
+                    orbit_protocol::Row {
+                        wrapped: false,
+                        wrap_continuation: false,
+                        kitty_virtual_placeholder: false,
+                        cells: vec![blank; usize::from(size.cols)],
+                    };
+                    usize::from(size.rows)
+                ];
+                app.handle_transport(TransportEvent::Server(ServerMessage::Frame(scrolled)));
+                assert!(
+                    app.scrollback_rect(app.workspace_scene().as_ref())
+                        .is_none()
+                );
+                app.render();
+                let pill = app
+                    .scrollback_rect(app.workspace_scene().as_ref())
+                    .expect("the presented scrollback pill is actionable");
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::CursorMoved {
+                        device_id,
+                        position: PhysicalPosition::new(
+                            f64::from(pill.left + 1.0),
+                            f64::from(pill.top + pill.height / 2.0),
+                        ),
+                    },
+                );
+                for event in [
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Pressed,
+                        button: MouseButton::Left,
+                    },
+                    WindowEvent::MouseWheel {
+                        device_id,
+                        delta: MouseScrollDelta::LineDelta(0.0, 1.0),
+                        phase: TouchPhase::Moved,
+                    },
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Released,
+                        button: MouseButton::Left,
+                    },
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Pressed,
+                        button: MouseButton::Left,
+                    },
+                    WindowEvent::MouseInput {
+                        device_id,
+                        state: ElementState::Released,
+                        button: MouseButton::Left,
+                    },
+                ] {
+                    app.window_event(event_loop, id, event);
+                }
+                let stream = self.stream.as_mut().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_millis(300)))
+                    .unwrap();
+                let mut returns = 0;
+                loop {
+                    let mut header = [0; session::HEADER_BYTES];
+                    if stream.read_exact(&mut header).is_err() {
+                        break;
+                    }
+                    let mut bytes = Vec::from(header);
+                    bytes.resize(session::client_message_len(&header).unwrap().unwrap(), 0);
+                    stream
+                        .read_exact(&mut bytes[session::HEADER_BYTES..])
+                        .unwrap();
+                    returns += usize::from(
+                        session::decode_client_message(&bytes).unwrap()
+                            == ClientMessage::ReturnToLive,
+                    );
+                }
+                assert_eq!(returns, 1, "the pill sends one semantic action");
                 let snapshot = app.workspace_model.snapshot().unwrap().clone();
                 app.links.pressed = link;
                 app.handle_workspace(WorkspaceEvent::Unavailable("offline".into()));
@@ -5913,6 +6114,37 @@ mod tests {
             assert_eq!(
                 button_reaches_terminal(workspace, terminal_hit, state, current),
                 expected
+            );
+        }
+    }
+
+    #[test]
+    fn scrollback_pill_activates_only_a_complete_left_click() {
+        use ElementState::{Pressed, Released};
+        let mut pressed = None;
+        let current = Some(PresentationIdentity {
+            generation: 1,
+            revision: Some(4),
+        });
+        let replaced = Some(PresentationIdentity {
+            generation: 2,
+            revision: Some(5),
+        });
+        for (state, target, expected) in [
+            (Pressed, None, None),
+            (Released, current, None),
+            (Pressed, current, Some(false)),
+            (Released, None, Some(false)),
+            (Pressed, current, Some(false)),
+            (Released, replaced, Some(false)),
+            (Pressed, current, Some(false)),
+            (Released, current, Some(true)),
+            (Released, current, None),
+        ] {
+            assert_eq!(
+                scrollback_button(&mut pressed, state, MouseButton::Left, target),
+                expected,
+                "{state:?} {target:?}"
             );
         }
     }

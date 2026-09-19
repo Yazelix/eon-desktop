@@ -207,7 +207,7 @@ impl SessionModel {
             return None;
         }
         let rows = self.reducer.current()?.scroll_position.rows_from_live;
-        (rows > 0).then(|| format!("↑ {rows} row{}", if rows == 1 { "" } else { "s" }))
+        (rows > 0).then(|| format!("↓ {rows} row{}", if rows == 1 { "" } else { "s" }))
     }
 
     #[must_use]

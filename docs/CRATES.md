@@ -32,6 +32,8 @@ already-locked Wayland data-control owner.
 
 `ven-scrollback-position-ddo` consumes authoritative display-row distance through
 ORBF v2 / ORBS v11 using the same dependency-free canonical package.
+`ven-scrollback-return-to-live-j8u` advances the same exact package to ORBS v12
+for one zero-payload semantic action without a new dependency or adapter.
 
 ## Current decisions
 
@@ -58,10 +60,10 @@ ORBF v2 / ORBS v11 using the same dependency-free canonical package.
 
 ### Orbit protocol consumer
 
-- **Selected shape:** Exact Git revision `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5` of the
+- **Selected shape:** Exact Git revision `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` of the
   dependency-free, publish-false `orbit-protocol` 0.1.0 package
 - **Status:** Active
-- **Owner consequence:** Orbit alone owns ORBS v11, ORBF v2, semantic values, history and its display-row position,
+- **Owner consequence:** Orbit alone owns ORBS v12, ORBF v2, semantic values, history, its display-row position and absolute return-to-live,
   terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel
   outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied
   text, compatible-live-output gesture preservation, terminal clipboard effects, read-only

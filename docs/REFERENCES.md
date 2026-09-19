@@ -652,6 +652,13 @@ FrankenTUI `479436597890a14e82676d0067e3917b2a9de8f5` ADR-002 supplies
 required complete-state projection evidence. Its MIT rider was evaluated for
 independent user-directed inspection; no source was copied, adapted or executed.
 
+`ven-scrollback-return-to-live-j8u` consumes Orbit `ORB-C8` at exact producer
+proof `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`: ORBS v12 adds a
+zero-payload `ReturnToLive` action and Orbit owns the authoritative jump and
+terminal-routing rejection. Venus reuses its existing painted pill bounds for
+pointer and AccessKit Click routing. The foot and Ghostty references above
+remain placement comparisons, not sources for another scrollbar or widget.
+
 ## Apple Silicon native-window foundation
 
 `ven-bring-up-opaque-appkit-metal-g4a` inspected the exact locked

@@ -24,6 +24,7 @@ const NEW_TAB: NodeId = NodeId(6);
 const SHORTCUTS: NodeId = NodeId(7);
 const CLOSE_TAB: NodeId = NodeId(8);
 const QUOTA: NodeId = NodeId(9);
+const SCROLLBACK: NodeId = NodeId(10);
 // Scene rows are u16, so this range cannot collide with fixed or text-run nodes.
 const WORKSPACE_NODE_START: u64 = 1 << 32;
 const LINK_NODE_START: u64 = 1 << 48;
@@ -46,6 +47,7 @@ struct Snapshot {
     content: AccessibleText,
     status: String,
     scrollback_label: Option<String>,
+    scrollback_rect: Option<SceneRect>,
     size: PhysicalSize<u32>,
     metrics: CellMetrics,
     columns: Option<u16>,
@@ -67,6 +69,7 @@ impl Snapshot {
             content: AccessibleText::default(),
             status: "Connecting to Orbit".into(),
             scrollback_label: None,
+            scrollback_rect: None,
             size,
             metrics: CellMetrics::for_scale(1.0),
             columns: None,
@@ -155,6 +158,11 @@ impl Snapshot {
 
     fn tree(&self) -> TreeUpdate {
         let terminal = self.columns.is_some();
+        let scrollback = self
+            .scrollback_label
+            .as_deref()
+            .zip(self.scrollback_rect)
+            .filter(|_| terminal);
         let mut root = Node::new(Role::Window);
         root.set_label(self.title.as_str());
         root.set_bounds(bounds(self.size));
@@ -203,7 +211,7 @@ impl Snapshot {
             };
         }
         let status_alert = terminal && !self.status.is_empty();
-        root.set_children(if self.workspace.is_some() {
+        let mut root_children = if self.workspace.is_some() {
             let mut children = vec![TAB_LIST];
             if self
                 .workspace
@@ -221,7 +229,11 @@ impl Snapshot {
             vec![CONTENT, STATUS]
         } else {
             vec![CONTENT]
-        });
+        };
+        if scrollback.is_some() {
+            root_children.push(SCROLLBACK);
+        }
+        root.set_children(root_children);
 
         let mut content = Node::new(if terminal {
             Role::Terminal
@@ -277,6 +289,14 @@ impl Snapshot {
         }
 
         let mut nodes = vec![(WINDOW, root), (CONTENT, content)];
+        if let Some((label, pill)) = scrollback {
+            let mut button = Node::new(Role::Button);
+            button.set_label("Return to live output");
+            button.set_description(format!("{label} above live output"));
+            button.set_bounds(rect(pill));
+            button.add_action(Action::Click);
+            nodes.push((SCROLLBACK, button));
+        }
         if let Some(workspace) = &self.workspace {
             let mut tab_list = Node::new(Role::TabList);
             tab_list.set_label("Eon workspace tabs");
@@ -431,6 +451,13 @@ impl Snapshot {
         if self.shortcut_viewer.is_some() {
             return None;
         }
+        if target == SCROLLBACK && action == Action::Click {
+            return self
+                .scrollback_label
+                .as_ref()
+                .zip(self.scrollback_rect)
+                .map(|_| AccessibilityTarget::ReturnToLive);
+        }
         if let Some(link) = self
             .links
             .iter()
@@ -511,6 +538,7 @@ impl Accessibility {
         workspace_focus: WorkspaceFocus,
         status: &str,
         scrollback_label: Option<&str>,
+        scrollback_rect: Option<SceneRect>,
         size: PhysicalSize<u32>,
         metrics: CellMetrics,
         link_generation: Option<u64>,
@@ -521,6 +549,7 @@ impl Accessibility {
             snapshot.metrics = metrics;
             snapshot.status = status.to_owned();
             snapshot.scrollback_label = scrollback_label.map(str::to_owned);
+            snapshot.scrollback_rect = scrollback_rect;
             snapshot.set_workspace(workspace);
             snapshot.shortcut_viewer = shortcut_viewer.cloned();
             snapshot.workspace_focus = workspace_focus;
@@ -582,6 +611,7 @@ fn accessible_link_label(uri: &str) -> String {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AccessibilityTarget {
     Terminal,
+    ReturnToLive,
     Tab(String),
     Pane(String),
     HeaderControl {
@@ -1713,10 +1743,28 @@ mod tests {
         let mut snapshot = Snapshot::new(PhysicalSize::new(800, 600));
         snapshot.columns = Some(80);
         snapshot.status.clear();
-        for label in [Some("↑ 240 rows"), Some("↑ 1 row"), None] {
+        for label in [Some("↓ 240 rows"), Some("↓ 1 row"), None] {
             snapshot.scrollback_label = label.map(str::to_owned);
+            snapshot.scrollback_rect = label.map(|_| SceneRect {
+                left: 650.0,
+                top: 8.0,
+                width: 140.0,
+                height: 24.0,
+            });
             let update = snapshot.tree();
             assert_eq!(node(&update, CONTENT).role(), Role::Terminal);
+            assert_eq!(
+                snapshot.action_target(SCROLLBACK, Action::Click),
+                label.map(|_| AccessibilityTarget::ReturnToLive)
+            );
+            if label.is_some() {
+                let button = node(&update, SCROLLBACK);
+                assert_eq!(button.role(), Role::Button);
+                assert_eq!(button.label(), Some("Return to live output"));
+                assert!(button.supports_action(Action::Click));
+            } else {
+                assert!(update.nodes.iter().all(|(id, _)| *id != SCROLLBACK));
+            }
             assert_eq!(
                 node(&update, CONTENT).description(),
                 label

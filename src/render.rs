@@ -734,6 +734,8 @@ pub struct Renderer {
     quota_hovered: bool,
     pressed_header: Option<WorkspaceHeaderControl>,
     scrollback_label: Option<String>,
+    scrollback_rect: Option<SceneRect>,
+    presented_scrollback_rect: Option<SceneRect>,
     cursor_tail: Option<(SceneColor, SceneColor, f32)>,
     cursor_animation: CursorAnimation,
     last_cursor_frame: Option<Instant>,
@@ -748,6 +750,10 @@ pub struct Renderer {
 impl Renderer {
     pub fn set_scrollback_label(&mut self, label: Option<String>) {
         self.scrollback_label = label;
+    }
+
+    pub fn presented_scrollback_rect(&self) -> Option<SceneRect> {
+        self.presented_scrollback_rect
     }
 
     pub fn set_hovered_header(&mut self, header: Option<(WorkspaceFocus, String)>) {
@@ -981,6 +987,8 @@ impl Renderer {
             quota_hovered: false,
             pressed_header: None,
             scrollback_label: None,
+            scrollback_rect: None,
+            presented_scrollback_rect: None,
             cursor_tail: cursor_tail
                 .map(|(color, duration)| (color, cursor_outline(color), duration)),
             cursor_animation: CursorAnimation::default(),
@@ -1202,6 +1210,7 @@ impl Renderer {
         self.queue.present(frame);
         ensure_device_available(&self.device_lost)?;
         self.atlas.trim();
+        self.presented_scrollback_rect = self.scrollback_rect;
         Ok(PresentOutcome::Presented)
     }
 
@@ -1239,6 +1248,7 @@ impl Renderer {
 
         self.text.clear();
         self.text_overlay = None;
+        self.scrollback_rect = None;
         let viewport = workspace.map_or(
             SceneRect {
                 left: 0.0,
@@ -1596,6 +1606,18 @@ impl Renderer {
             padding,
             (self.config.width as f32 - width - padding).max(padding),
         );
+        let tooltip = SceneRect {
+            left,
+            top,
+            width,
+            height,
+        };
+        if self
+            .scrollback_rect
+            .is_some_and(|pill| pill.intersection(tooltip).is_some())
+        {
+            self.scrollback_rect = None;
+        }
         text.left = left + padding;
         text.bound_left = text.left.floor() as i32;
         text.right = (left + width - padding).ceil() as i32;
@@ -1611,12 +1633,7 @@ impl Renderer {
             },
         ));
         rectangles.push_rounded(
-            SceneRect {
-                left,
-                top,
-                width,
-                height,
-            },
+            tooltip,
             padding / 2.0,
             SceneColor {
                 r: 37,
@@ -2071,6 +2088,7 @@ impl Renderer {
         {
             return 0.0;
         }
+        self.scrollback_rect = Some(rect);
         let first = self.text.len();
         self.push_text_clipped(
             &label,
@@ -2087,16 +2105,24 @@ impl Renderer {
             DrawStyleKind::Status(Wrap::None),
             clip,
         );
-        if !in_header {
-            rectangles.push_rounded(
-                rect,
-                padding / 2.0,
+        rectangles.push_rounded(
+            rect,
+            height / 2.0,
+            if in_header {
+                SceneColor {
+                    r: 37,
+                    g: 58,
+                    b: 74,
+                }
+            } else {
                 SceneColor {
                     r: 28,
                     g: 43,
                     b: 58,
-                },
-            );
+                }
+            },
+        );
+        if !in_header {
             self.text_overlay = Some((
                 first,
                 TextBounds {
@@ -2137,6 +2163,12 @@ impl Renderer {
         workspace: Option<&WorkspaceScene>,
     ) {
         let rect = self.notice_rect(workspace);
+        if self
+            .scrollback_rect
+            .is_some_and(|pill| pill.intersection(rect).is_some())
+        {
+            self.scrollback_rect = None;
+        }
         // Text is drawn after rectangles; clip underlying rows out of this overlay.
         for text in &mut self.text {
             if text.top < rect.top {
@@ -3850,8 +3882,17 @@ mod tests {
                     "",
                     1,
                 );
+                let pane_color = |label| {
+                    renderer
+                        .text
+                        .iter()
+                        .find(|text| text.buffer.lines[0].text() == label)
+                        .unwrap()
+                        .color
+                };
                 assert_ne!(
-                    renderer.text[2].color, renderer.text[3].color,
+                    pane_color("p2 offline"),
+                    pane_color("p3 offline"),
                     "offline pane selection disappears with decorative frames off"
                 );
                 renderer.rebuild_if_needed(
@@ -3880,7 +3921,7 @@ mod tests {
                     |_| Some(&metadata),
                     |_, label| renderer.fit_tab_text(label),
                 );
-                renderer.set_scrollback_label(Some("↑ 240 rows".into()));
+                renderer.set_scrollback_label(Some("↓ 240 rows".into()));
                 renderer.rebuild_if_needed(
                     None,
                     None,
@@ -3896,8 +3937,10 @@ mod tests {
                 let indicator = renderer
                     .text
                     .iter()
-                    .find(|text| text.buffer.lines[0].text() == "↑ 240 rows")
+                    .find(|text| text.buffer.lines[0].text() == "↓ 240 rows")
                     .unwrap();
+                let pill = renderer.scrollback_rect.unwrap();
+                assert!(pill.contains(pill.left + 1.0, pill.top + 1.0));
                 let pane = workspace.panes.iter().find(|pane| pane.selected).unwrap();
                 assert!(
                     fit_header_text(
@@ -3940,9 +3983,10 @@ mod tests {
                     renderer
                         .text
                         .iter()
-                        .all(|text| !text.buffer.lines[0].text().starts_with('↑'))
+                        .all(|text| !text.buffer.lines[0].text().starts_with('↓'))
                 );
-                renderer.set_scrollback_label(Some("↑ 18446744073709551615 rows".into()));
+                assert!(renderer.scrollback_rect.is_none());
+                renderer.set_scrollback_label(Some("↓ 18446744073709551615 rows".into()));
                 let viewport = SceneRect {
                     left: 0.0,
                     top: 0.0,
@@ -3957,7 +4001,7 @@ mod tests {
                 let (first, overlay) = renderer.text_overlay.unwrap();
                 assert_eq!(
                     renderer.text[first].buffer.lines[0].text(),
-                    "↑ 18446744073709551615 rows"
+                    "↓ 18446744073709551615 rows"
                 );
                 assert!(
                     text_areas(&renderer.text[..first], renderer.text_overlay).all(|area| {

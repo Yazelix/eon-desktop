@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Make the authoritative scrollback count a `↓ N rows` return-to-live pill.
+  Its whole painted area and AccessKit button send Orbit's single semantic
+  action; hidden or stale counts cannot activate it. Consume exact ORBS v12.
+
 - Consume exact EONW v6 and render Eon's optional Codex quota observation as one
   noninteractive Eon Bar chip. The exact monochrome OpenAI Blossom replaces the
   visible provider word; wide labels show every elapsed/total window and

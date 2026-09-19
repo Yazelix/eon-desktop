@@ -100,11 +100,11 @@ fn scrollback_label_follows_only_current_authoritative_frames()
     apply_wire(&mut model, ServerMessage::Attached)?;
     for (revision, distance, history, expected) in [
         (1, 0, 240, None),
-        (2, 1, 240, Some("↑ 1 row")),
-        (3, 240, 240, Some("↑ 240 rows")),
-        (4, 243, 243, Some("↑ 243 rows")),
-        (5, 100, 100, Some("↑ 100 rows")),
-        (6, u64::MAX, u64::MAX, Some("↑ 18446744073709551615 rows")),
+        (2, 1, 240, Some("↓ 1 row")),
+        (3, 240, 240, Some("↓ 240 rows")),
+        (4, 243, 243, Some("↓ 243 rows")),
+        (5, 100, 100, Some("↓ 100 rows")),
+        (6, u64::MAX, u64::MAX, Some("↓ 18446744073709551615 rows")),
         (7, 0, 0, None),
     ] {
         let mut next = frame(revision, Screen::Primary);
@@ -133,7 +133,7 @@ fn scrollback_label_follows_only_current_authoritative_frames()
             },
         }),
     )?;
-    assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    assert_eq!(model.scrollback_label().as_deref(), Some("↓ 12 rows"));
     model.clear_viewport_preview();
     assert!(model.scroll_preview().is_none());
     apply_wire(
@@ -161,14 +161,14 @@ fn scrollback_label_follows_only_current_authoritative_frames()
     );
     held.revision = 9;
     apply_wire(&mut model, ServerMessage::Frame(Box::new(held.clone())))?;
-    assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    assert_eq!(model.scrollback_label().as_deref(), Some("↓ 12 rows"));
     model.prepare_reconnect();
     assert!(model.scene().is_some(), "recovery retains old pixels");
     assert_eq!(model.scrollback_label(), None);
     apply_wire(&mut model, ServerMessage::Attached)?;
     assert_eq!(model.scrollback_label(), None);
     apply_wire(&mut model, ServerMessage::Frame(Box::new(held)))?;
-    assert_eq!(model.scrollback_label().as_deref(), Some("↑ 12 rows"));
+    assert_eq!(model.scrollback_label().as_deref(), Some("↓ 12 rows"));
     apply_wire(
         &mut model,
         ServerMessage::Frame(Box::new(frame(10, Screen::Alternate))),
