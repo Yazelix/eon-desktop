@@ -945,7 +945,8 @@ mod tests {
                     "{name}"
                 );
                 assert!(
-                    quota.rect.right() <= workspace.controls[0].rect.left,
+                    workspace.controls[0].rect.right() <= quota.rect.left
+                        && quota.rect.right() <= workspace.controls[1].rect.left,
                     "{name}"
                 );
             } else {

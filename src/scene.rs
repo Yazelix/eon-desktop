@@ -703,7 +703,7 @@ impl WorkspaceScene {
         if geometry.3.is_none() {
             quota_choice = None;
         }
-        let (header, tab_viewport, drag_region, quota_rect, controls) = geometry;
+        let (header, mut tab_viewport, mut drag_region, quota_rect, mut controls) = geometry;
         let quota = quota_choice
             .zip(quota_rect)
             .map(|((label, _, description), rect)| WorkspaceQuota {
@@ -762,6 +762,12 @@ impl WorkspaceScene {
                 }
             })
             .collect();
+        tab_viewport.width = tab_viewport.width.min(tab_end);
+        controls[0].rect.left = tab_viewport.right();
+        drag_region.left = controls[0].rect.right();
+        drag_region.width = (quota_rect.map_or(controls[1].rect.left, |quota| quota.left)
+            - drag_region.left)
+            .max(0.0);
         let tab_scroll_limit = (tab_end - tab_viewport.width).max(0.0);
         let active = tabs[active_tab].rect;
         let active_tab_scroll = (active.left - (tab_viewport.width - active.width).max(0.0) / 2.0)
@@ -1632,8 +1638,9 @@ mod tests {
             if width == 100 {
                 assert!(scene.tabs[1].rect.width - metrics.padding * 2.0 >= metrics.width);
             }
-            assert!(scene.tab_viewport.right() <= scene.drag_region.left);
-            assert!(scene.drag_region.right() <= scene.controls[0].rect.left);
+            assert!(scene.tab_viewport.right() <= scene.controls[0].rect.left);
+            assert!(scene.controls[0].rect.right() <= scene.drag_region.left);
+            assert!(scene.drag_region.right() <= scene.controls[1].rect.left);
             for pair in scene.controls.windows(2) {
                 assert!(pair[0].rect.right() <= pair[1].rect.left);
             }
@@ -1659,6 +1666,11 @@ mod tests {
             0.0,
             |_, text| (text.into(), text.len() as f32 * 10.0),
         );
+        assert_eq!(wide.tab_scroll_limit(), 0.0);
+        assert_eq!(
+            wide.controls[0].rect.left,
+            wide.tabs.last().unwrap().rect.right() + tab_gap(metrics, wide.header.height)
+        );
         assert!(wide.drag_region.width > 0.0);
         assert_eq!(
             wide.hit_test(
@@ -1676,7 +1688,22 @@ mod tests {
             0.0,
             |_, text| (text.into(), text.len() as f32 * 10.0),
         );
+        assert!(narrow.tab_scroll_limit() > 0.0);
+        assert_eq!(narrow.controls[0].rect.left, narrow.tab_viewport.right());
         assert_eq!(narrow.drag_region.width, 0.0);
+        let scrolled = WorkspaceScene::from_snapshot(
+            &snapshot,
+            PhysicalSize::new(100, 600),
+            metrics,
+            narrow.tab_scroll_limit(),
+            0.0,
+            |_, text| (text.into(), text.len() as f32 * 10.0),
+        );
+        assert_eq!(scrolled.controls[0].rect, narrow.controls[0].rect);
+        assert_eq!(
+            scrolled.tabs.last().unwrap().rect.right() + tab_gap(metrics, scrolled.header.height),
+            scrolled.controls[0].rect.left
+        );
     }
 
     #[test]
