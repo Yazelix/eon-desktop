@@ -940,9 +940,9 @@ mod tests {
                     Some(crate::WorkspaceHit::Quota),
                     "{name}"
                 );
+                assert_eq!(workspace.drag_region.right(), quota.rect.left, "{name}");
                 assert!(
-                    workspace.controls[0].rect.right() <= quota.rect.left
-                        && quota.rect.right() <= workspace.controls[1].rect.left,
+                    (quota.rect.right() - workspace.controls[1].rect.left).abs() < 0.01,
                     "{name}"
                 );
             } else {

@@ -704,6 +704,10 @@ impl WorkspaceScene {
             quota_choice = None;
         }
         let (header, mut tab_viewport, mut drag_region, quota_rect, mut controls) = geometry;
+        let quota_rect = quota_rect.map(|mut rect| {
+            rect.left += controls[0].rect.width;
+            rect
+        });
         let quota = quota_choice
             .zip(quota_rect)
             .map(|((label, _, description), rect)| WorkspaceQuota {
