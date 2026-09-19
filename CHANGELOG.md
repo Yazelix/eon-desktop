@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Consume EONW v7 so separate pending Project picker tabs remain visible and
+  independently selectable. New tab and Alt+Shift+W keep their existing semantic
+  actions; the native client attaches only the active picker.
+
 - Place New tab directly after the rightmost tab when tabs fit, while keeping
   it visible at the tab-region edge during overflow and on narrow windows.
   The accessibility tree puts it before the optional Codex quota chip. Keep

@@ -1,5 +1,5 @@
 use crate::{model::active_popup, render::CellMetrics};
-use eon_workspace_protocol::v6::{CodexQuota, CodexQuotaState, CodexQuotaWindow, Snapshot};
+use eon_workspace_protocol::v7::{CodexQuota, CodexQuotaState, CodexQuotaWindow, Snapshot};
 use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
@@ -1539,7 +1539,7 @@ mod tests {
 
     #[test]
     fn popup_outer_chrome_reuses_the_pane_stack_rectangle() {
-        use eon_workspace_protocol::v6::{
+        use eon_workspace_protocol::v7::{
             ALT, Pane, Popup, PopupEntry, PopupGeometry, Shortcut, Tab,
         };
 
@@ -1598,7 +1598,7 @@ mod tests {
 
     #[test]
     fn eon_bar_keeps_tabs_controls_and_drag_hits_disjoint_under_pressure() {
-        use eon_workspace_protocol::v6::{Pane, PopupGeometry, Tab};
+        use eon_workspace_protocol::v7::{Pane, PopupGeometry, Tab};
 
         let snapshot = Snapshot {
             active_tab: "t2".into(),

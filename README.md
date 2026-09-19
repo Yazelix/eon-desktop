@@ -51,8 +51,8 @@ Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v6 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`3103a00a904c347472899549ce611da765a71650`. Eon alone owns workspace order,
+Venus consumes EONW v7 through `eon-workspace-protocol` 0.1.0 at exact Eon source
+`f41a41c9aecc4c436edfa2f394b832aa6d8711ad`. Eon alone owns workspace order,
 optional selection, pending-tab state, identities, tab launch directories,
 popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
 collection and normalization, and Session mappings. Venus consumes
@@ -256,7 +256,7 @@ mixed high-level and lower-level options, incomplete profiles, non-finite
 durations, and out-of-range durations before opening a window.
 
 In Eon's supervised mode, Venus reads one private bounded presentation stream.
-The `stdin-ready-v1` mode consumes one canonical EONW v6 startup snapshot for
+The `stdin-ready-v1` mode consumes one canonical EONW v7 startup snapshot for
 workspace launches, then reports `ready-v1` on stdout after admitting fonts and
 the actual window's initial native geometry, before terminal attachment. Eon
 bounds that exchange and starts new commands only after readiness.
@@ -416,11 +416,11 @@ benchmark CSV data, and disposable qualification patches.
 | Agent policy inputs | 216 |
 | README | 426 |
 | Repository attributes and ignore rules | 7 |
-| Contracts and references | 2,235 |
+| Contracts and references | 2,242 |
 | Memory benchmark report | 158 |
 | Crate decisions | 302 |
-| Changelog | 292 |
-| Rust source, including unit tests | 20,136 |
+| Changelog | 296 |
+| Rust source, including unit tests | 20,196 |
 | Rust integration tests | 1,036 |
 | Cargo manifest | 33 |
-| **Total** | **24,841** |
+| **Total** | **24,912** |

@@ -6,8 +6,8 @@ retains accepted user-visible chronology.
 
 `VEN-C16` owns platform scope. The current locked consumer uses ORBF v2 /
 ORBS v12 at Orbit `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`, with source
-acceptance indexed in `VEN-C7`, and EONW v6 at Eon
-`3103a00a904c347472899549ce611da765a71650`. Older consumed revisions below
+acceptance indexed in `VEN-C7`, and candidate EONW v7 at Eon
+`f41a41c9aecc4c436edfa2f394b832aa6d8711ad`. Older consumed revisions below
 identify their named proofs; they do not select the current dependency.
 
 ## VEN-C19 — Startup typography and terminal geometry
@@ -54,7 +54,7 @@ identify their named proofs; they do not select the current dependency.
   accepted source for Eon and EonTerm.
 - **Supervised startup admission:**
   `EON_VENUS_PRESENTATION_CONTROL=stdin-ready-v1` uses private stdin/stdout.
-  Workspace mode first reads one bounded canonical EONW v6 Snapshot from stdin;
+  Workspace mode first reads one bounded canonical EONW v7 Snapshot from stdin;
   standalone mode has no snapshot prefix. After font/renderer initialization
   and real-window initial native-scale admission, Venus writes exactly
   `ready-v1` (eight bytes) and starts attachment. The caller may then start
@@ -1193,6 +1193,13 @@ qualified by the identities and boundaries below.
   Escape returns chrome focus to the terminal. While the terminal is focused,
   Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit
   input. Popup entry labels also name the accessible tab panel.
+- **v7 expansion (candidate):** Venus accepts multiple pending tabs and their
+  independent Project popup endpoints from one canonical EONW v7 snapshot.
+  It attaches only the active tab's selected picker and preserves the others
+  across tab switches. New tab and Alt+Shift+W retain the existing semantic
+  CreateTab and exact-active-tab CloseTab actions. No local cancellation state
+  or native picker is added; acceptance awaits an exact Eon v7 producer and
+  native consumer proof.
 - **Geometry:** A selected popup reuses the pane stack's exact outer rounded
   frame, so toggling preserves every chrome edge. Shared Eon-supplied logical
   margins inset the popup terminal content within that stable shell. A compact

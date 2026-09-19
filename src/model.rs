@@ -1,5 +1,5 @@
 use crate::scene::{DrawRow, Scene, ScenePreview};
-use eon_workspace_protocol::v6::{Popup, Response as WorkspaceResponse, Snapshot};
+use eon_workspace_protocol::v7::{Popup, Response as WorkspaceResponse, Snapshot};
 use orbit_protocol::FrameReducer;
 use orbit_protocol::session::{
     ClipboardLocation, FailureCode, PreviewOutcome, ScrollOutcome, ServerMessage, WheelOutcome,
@@ -483,7 +483,9 @@ fn bounded(mut detail: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eon_workspace_protocol::v6::{CodexQuota, CodexQuotaState, Failure, Pane, Tab};
+    use eon_workspace_protocol::v7::{
+        self as workspace, CodexQuota, CodexQuotaState, Failure, Pane, PopupEntry, Shortcut, Tab,
+    };
 
     #[test]
     fn quota_refresh_and_workspace_failures_preserve_structure() {
@@ -519,7 +521,7 @@ mod tests {
                     }],
                 },
             ],
-            geometry: eon_workspace_protocol::v6::PopupGeometry {
+            geometry: eon_workspace_protocol::v7::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -588,6 +590,64 @@ mod tests {
         assert_eq!(
             model.active_attachment(),
             Some((&b"/run/eon/orbit.sock"[..], false))
+        );
+    }
+
+    #[test]
+    fn independent_pending_picker_tabs_attach_only_the_active_endpoint() {
+        let pending = |number: usize| Tab {
+            id: format!("t{number}"),
+            directory: b"/tmp".to_vec(),
+            pending: true,
+            selected_pane: None,
+            selected_popup: Some(format!("u{number}")),
+            panes: vec![],
+            popups: vec![Popup {
+                id: format!("u{number}"),
+                entry: "project".into(),
+                session: format!("directory-picker-{number}"),
+                endpoint: format!("/run/eon/k{number}.sock").into_bytes(),
+            }],
+        };
+        let mut snapshot = Snapshot {
+            active_tab: "t2".into(),
+            geometry: workspace::PopupGeometry {
+                side_margin: 8.0,
+                vertical_margin: 4.0,
+            },
+            entries: vec![PopupEntry {
+                id: "project".into(),
+                label: "Project".into(),
+                shortcut: Shortcut {
+                    modifiers: workspace::ALT,
+                    key: "KeyZ".into(),
+                },
+            }],
+            tabs: vec![pending(1), pending(2)],
+            codex_quota: None,
+        };
+        let wire =
+            workspace::encode_response(&WorkspaceResponse::Snapshot(snapshot.clone())).unwrap();
+        let mut model = WorkspaceModel::default();
+        model.apply(workspace::decode_response(&wire).unwrap());
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/k2.sock"[..], true))
+        );
+
+        snapshot.active_tab = "t1".into();
+        model.apply(WorkspaceResponse::Snapshot(snapshot.clone()));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/k1.sock"[..], true))
+        );
+
+        snapshot.tabs.remove(0);
+        snapshot.active_tab = "t2".into();
+        model.apply(WorkspaceResponse::Snapshot(snapshot));
+        assert_eq!(
+            model.active_attachment(),
+            Some((&b"/run/eon/k2.sock"[..], true))
         );
     }
 }

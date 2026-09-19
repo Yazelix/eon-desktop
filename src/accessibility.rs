@@ -706,7 +706,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use crate::{Color, DrawCell, DrawRow, DrawStyle, PaneMetadata, ShortcutGroup, ShortcutRow};
-    use eon_workspace_protocol::v6::{
+    use eon_workspace_protocol::v7::{
         CodexQuota, CodexQuotaState, CodexQuotaWindow, Pane, Popup, PopupEntry, PopupGeometry,
         Shortcut, Snapshot as WorkspaceSnapshot, Tab,
     };
@@ -737,7 +737,7 @@ mod tests {
             &WorkspaceSnapshot {
                 active_tab: active_tab.into(),
                 tabs,
-                geometry: eon_workspace_protocol::v6::PopupGeometry {
+                geometry: eon_workspace_protocol::v7::PopupGeometry {
                     side_margin: 8.0,
                     vertical_margin: 4.0,
                 },
@@ -1271,7 +1271,7 @@ mod tests {
                 workspace_tab("t2", &["pane-7"], "pane-7"),
                 workspace_tab("t3", &["pane-8"], "pane-8"),
             ],
-            geometry: eon_workspace_protocol::v6::PopupGeometry {
+            geometry: eon_workspace_protocol::v7::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -1488,7 +1488,7 @@ mod tests {
                         }],
                     },
                 ],
-                geometry: eon_workspace_protocol::v6::PopupGeometry {
+                geometry: eon_workspace_protocol::v7::PopupGeometry {
                     side_margin: 8.0,
                     vertical_margin: 4.0,
                 },
@@ -1560,7 +1560,7 @@ mod tests {
                 id: "project".into(),
                 label: "Project".into(),
                 shortcut: Shortcut {
-                    modifiers: eon_workspace_protocol::v6::ALT,
+                    modifiers: eon_workspace_protocol::v7::ALT,
                     key: "KeyZ".into(),
                 },
             }],

@@ -1,6 +1,6 @@
 use crate::{Result, launch::LaunchArguments};
 use accesskit_winit::{Event as AccessKitEvent, WindowEvent as AccessKitWindowEvent};
-use eon_workspace_protocol::v6::{
+use eon_workspace_protocol::v7::{
     Action as WorkspaceAction, Direction as WorkspaceDirection, InvokeIntent, Snapshot,
     WorkspaceAction as CommonAction,
 };
@@ -871,13 +871,13 @@ fn native_pointer_shortcut_for(
         .find(|shortcut| shortcut.matches_pointer(platform, button, modifiers))
 }
 
-fn shortcut_groups(entries: &[eon_workspace_protocol::v6::PopupEntry]) -> Vec<ShortcutGroup> {
+fn shortcut_groups(entries: &[eon_workspace_protocol::v7::PopupEntry]) -> Vec<ShortcutGroup> {
     shortcut_groups_for(NATIVE_PLATFORM, entries)
 }
 
 fn shortcut_groups_for(
     platform: NativePlatform,
-    entries: &[eon_workspace_protocol::v6::PopupEntry],
+    entries: &[eon_workspace_protocol::v7::PopupEntry],
 ) -> Vec<ShortcutGroup> {
     let mut groups = ["Navigate", "Tabs and panes", "Host"]
         .into_iter()
@@ -922,7 +922,7 @@ fn shortcut_groups_for(
 }
 
 fn physical_shortcut_label_for(platform: NativePlatform, modifiers: u8, key: &str) -> String {
-    use eon_workspace_protocol::v6 as wire;
+    use eon_workspace_protocol::v7 as wire;
 
     let mut parts = Vec::with_capacity(5);
     let labels = match platform {
@@ -961,7 +961,7 @@ fn physical_shortcut_label_for(platform: NativePlatform, modifiers: u8, key: &st
 }
 
 fn wire_modifiers(modifiers: session::Modifiers) -> u8 {
-    use eon_workspace_protocol::v6 as wire;
+    use eon_workspace_protocol::v7 as wire;
 
     [
         (session::Modifiers::SHIFT, wire::SHIFT),
@@ -1746,7 +1746,7 @@ impl Application {
 
     fn handle_workspace(&mut self, event: WorkspaceEvent) {
         let (received_snapshot, snapshot_changed) = match &event {
-            WorkspaceEvent::Response(eon_workspace_protocol::v6::Response::Snapshot(snapshot)) => {
+            WorkspaceEvent::Response(eon_workspace_protocol::v7::Response::Snapshot(snapshot)) => {
                 (true, self.workspace_model.snapshot() != Some(snapshot))
             }
             _ => (false, false),
@@ -3616,7 +3616,7 @@ fn retry_is_allowed(
 }
 
 fn visible_metadata_endpoints(
-    snapshot: &eon_workspace_protocol::v6::Snapshot,
+    snapshot: &eon_workspace_protocol::v7::Snapshot,
     selected_endpoint: Option<&[u8]>,
     selected_attached: bool,
 ) -> HashSet<Vec<u8>> {
@@ -3930,7 +3930,7 @@ fn popup_shortcut(
     terminal_focused: bool,
 ) -> Option<WorkspaceAction> {
     let normalized = wire_modifiers(modifiers);
-    // winit's physical KeyCode names are the canonical names in EONW v6.
+    // winit's physical KeyCode names are the canonical names in EONW v7.
     let key = format!("{code:?}");
     let entry = snapshot
         .entries
@@ -4133,7 +4133,7 @@ fn initial_window_size(
     rows: Option<u16>,
     metrics: CellMetrics,
     scale: f64,
-    snapshot: Option<&eon_workspace_protocol::v6::Snapshot>,
+    snapshot: Option<&eon_workspace_protocol::v7::Snapshot>,
 ) -> Result<PhysicalSize<u32>> {
     let (horizontal, vertical) = snapshot.map_or((0.0, 0.0), |snapshot| {
         WorkspaceScene::initial_overhead(snapshot, metrics)
@@ -4227,7 +4227,7 @@ pub(super) fn run(arguments: LaunchArguments) -> Result {
     let mut application = Application::new(arguments, event_loop.create_proxy());
     if application.startup_admission && application.workspace_socket.is_some() {
         let response = yazelix_venus::read_workspace_response(&mut io::stdin().lock())?;
-        if !matches!(response, eon_workspace_protocol::v6::Response::Snapshot(_)) {
+        if !matches!(response, eon_workspace_protocol::v7::Response::Snapshot(_)) {
             return Err("Venus startup admission requires an Eon workspace snapshot".into());
         }
         application.workspace_model.apply(response);
@@ -4265,14 +4265,14 @@ fn run_presentation_control(mut input: impl Read, mut send: impl FnMut(UserEvent
 mod tests {
     use super::*;
     use crate::launch;
-    use eon_workspace_protocol::v6::{Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab};
+    use eon_workspace_protocol::v7::{Pane, Popup, PopupEntry, Shortcut, Snapshot, Tab};
 
     fn show_test_popup(snapshot: &mut Snapshot) {
         snapshot.entries = vec![PopupEntry {
             id: "project".into(),
             label: "Project".into(),
             shortcut: Shortcut {
-                modifiers: eon_workspace_protocol::v6::ALT,
+                modifiers: eon_workspace_protocol::v7::ALT,
                 key: "KeyZ".into(),
             },
         }];
@@ -4297,9 +4297,9 @@ mod tests {
                 assert!(self.0.window.is_none(), "wait for workspace geometry");
                 self.0
                     .workspace_model
-                    .apply(eon_workspace_protocol::v6::Response::Snapshot(Snapshot {
+                    .apply(eon_workspace_protocol::v7::Response::Snapshot(Snapshot {
                         active_tab: "t1".into(),
-                        geometry: eon_workspace_protocol::v6::PopupGeometry {
+                        geometry: eon_workspace_protocol::v7::PopupGeometry {
                             side_margin: 8.0,
                             vertical_margin: 4.0,
                         },
@@ -4476,7 +4476,7 @@ mod tests {
     fn initial_grid_includes_workspace_chrome_at_each_scale() {
         let mut snapshot = Snapshot {
             active_tab: "t1".into(),
-            geometry: eon_workspace_protocol::v6::PopupGeometry {
+            geometry: eon_workspace_protocol::v7::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -4535,7 +4535,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn live_output_keeps_application_input_admitted_before_repaint() {
-        use eon_workspace_protocol::v6 as workspace;
+        use eon_workspace_protocol::v7 as workspace;
         use orbit_protocol::{
             Capabilities, Colors, Cursor, CursorShape, Dimensions, Frame, Rgb, Screen,
         };
@@ -5122,7 +5122,7 @@ mod tests {
                 empty.tabs[0].selected_pane = None;
                 empty.tabs[0].selected_popup = None;
                 app.handle_workspace(WorkspaceEvent::Response(
-                    eon_workspace_protocol::v6::Response::Snapshot(empty),
+                    eon_workspace_protocol::v7::Response::Snapshot(empty),
                 ));
                 assert!(app.transport.is_none());
                 assert!(app.model.scene().is_none());
@@ -5147,7 +5147,7 @@ mod tests {
         let workspace_listener = UnixListener::bind(&workspace_socket).unwrap();
         let snapshot = Snapshot {
             active_tab: "t1".into(),
-            geometry: eon_workspace_protocol::v6::PopupGeometry {
+            geometry: eon_workspace_protocol::v7::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -5578,7 +5578,7 @@ mod tests {
                     }],
                 },
             ],
-            geometry: eon_workspace_protocol::v6::PopupGeometry {
+            geometry: eon_workspace_protocol::v7::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },
@@ -6259,7 +6259,7 @@ mod tests {
             id: "project".into(),
             label: "Money ops".into(),
             shortcut: Shortcut {
-                modifiers: eon_workspace_protocol::v6::ALT,
+                modifiers: eon_workspace_protocol::v7::ALT,
                 key: "KeyZ".into(),
             },
         }];
@@ -6515,7 +6515,7 @@ mod tests {
         ));
         let mut snapshot = Snapshot {
             active_tab: "t1".into(),
-            geometry: eon_workspace_protocol::v6::PopupGeometry {
+            geometry: eon_workspace_protocol::v7::PopupGeometry {
                 side_margin: 8.0,
                 vertical_margin: 4.0,
             },

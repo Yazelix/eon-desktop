@@ -3744,7 +3744,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[ignore = "requires an isolated native Wayland display and Vulkan renderer"]
     fn long_workspace_labels_stay_on_the_visible_line() {
-        use eon_workspace_protocol::v6::{Pane, Snapshot, Tab};
+        use eon_workspace_protocol::v7::{Pane, Snapshot, Tab};
         use winit::{
             application::ApplicationHandler, event::WindowEvent, event_loop::EventLoop,
             platform::wayland::EventLoopBuilderExtWayland, window::WindowId,
@@ -3769,7 +3769,7 @@ mod tests {
                 .unwrap();
                 let snapshot = Snapshot {
                     active_tab: "t2".into(),
-                    geometry: eon_workspace_protocol::v6::PopupGeometry {
+                    geometry: eon_workspace_protocol::v7::PopupGeometry {
                         side_margin: 8.0,
                         vertical_margin: 4.0,
                     },
