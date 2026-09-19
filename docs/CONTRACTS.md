@@ -1174,7 +1174,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C18 — Shared popup and picker-first presentation
 
-- **Status:** Proved for the v5 Venus consumer; full-Eon activation pending
+- **Status:** Proven for EONW v5 and v7 on x86_64 Linux Wayland
 - **Consumer:** One person using a Venus workspace supplied through EONW v5.
 - **Trigger:** The active tab selects a popup, its selection changes, or the
   person invokes an Eon-supplied catalog shortcut.
@@ -1193,13 +1193,22 @@ qualified by the identities and boundaries below.
   Escape returns chrome focus to the terminal. While the terminal is focused,
   Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit
   input. Popup entry labels also name the accessible tab panel.
-- **v7 expansion (candidate):** Venus accepts multiple pending tabs and their
-  independent Project popup endpoints from one canonical EONW v7 snapshot.
+- **v7 expansion (proved on x86_64 Linux Wayland):** Venus accepts multiple
+  pending tabs and their independent Project popup endpoints from one canonical
+  EONW v7 snapshot.
   It attaches only the active tab's selected picker and preserves the others
   across tab switches. New tab and Alt+Shift+W retain the existing semantic
   CreateTab and exact-active-tab CloseTab actions. No local cancellation state
-  or native picker is added; acceptance awaits an exact Eon v7 producer and
-  native consumer proof.
+  or native picker is added. The exact Eon producer
+  `f41a41c9aecc4c436edfa2f394b832aa6d8711ad`, Venus consumer
+  `479d7cef29aaa40d2d93d610567517357479877c`, and Orbit
+  `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` passed locked Rust and Nix
+  checks. Isolated native Sway input on composed Eon artifact
+  `/nix/store/0m637rzcg5ksm27c5q0p6pd8gk2mw9yc-eon-0.1.0` switched between
+  two pending picker endpoints, exercised both, and closed only the selected
+  tab. A headless Mesa screenshot sometimes misses picker body text on both
+  this candidate and the previously installed single-picker Eon; the canonical
+  frames and Venus scenes contain the text. This is not a clean-frame claim.
 - **Geometry:** A selected popup reuses the pane stack's exact outer rounded
   frame, so toggling preserves every chrome edge. Shared Eon-supplied logical
   margins inset the popup terminal content within that stable shell. A compact
