@@ -513,6 +513,21 @@ qualified by the identities and boundaries below.
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
+- **Return-to-live consumer proof:** `ead00dfcb3510eb595173c02f4627d2cd8b36b0a`
+  consumes accepted Orbit `ORB-C8` at
+  `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` (ORBF v2 / ORBS v12).
+  Locked fmt/check/test/clippy/build pass (140 ordinary tests), including
+  canonical label and routing checks, painted-bounds and AccessKit Click
+  checks. In private Sway 1.12 / host lavapipe on x86_64 Linux, the native
+  renderer and Application checks pass; the latter observes exactly one
+  encoded `ReturnToLive` for a complete click, none after a wheel, and no hit
+  before presentation. Prior real Orbit/Venus dogfood showed `↓ 10 rows` above
+  rows 57–90; clicking the pill restores live rows 66–99 and hides it, without
+  PTY input.
+  Captures and bounded process logs are retained under
+  `~/.local/state/eon/proofs/ven-scrollback-return-to-live-2026-09-19/attempt3/`.
+  This source proof does not accept installed Eon, macOS, or screen-reader
+  behavior; paired installed delivery remains Eon's responsibility.
 - **Scrollback review proof:** `74d22276e9039dc3ee6151d69b9283114ab02ea1`
   - Idle cleanup and rejected input preserve terminal-routing evidence; the
     selected pane label keeps its directory ending beside the count. Existing
