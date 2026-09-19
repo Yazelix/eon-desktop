@@ -211,16 +211,12 @@ impl Snapshot {
             };
         }
         let status_alert = terminal && !self.status.is_empty();
-        let mut root_children = if self.workspace.is_some() {
-            let mut children = vec![TAB_LIST];
-            if self
-                .workspace
-                .as_ref()
-                .is_some_and(|workspace| workspace.quota.is_some())
-            {
+        let mut root_children = if let Some(workspace) = &self.workspace {
+            let mut children = vec![TAB_LIST, NEW_TAB];
+            if workspace.quota.is_some() {
                 children.push(QUOTA);
             }
-            children.extend([NEW_TAB, SHORTCUTS, CLOSE_TAB, PANE_PANEL]);
+            children.extend([SHORTCUTS, CLOSE_TAB, PANE_PANEL]);
             if status_alert {
                 children.push(STATUS);
             }
@@ -960,15 +956,21 @@ mod tests {
             let update = accessible.tree();
             let quota_node = update.nodes.iter().find(|(id, _)| *id == QUOTA);
             assert_eq!(quota_node.is_some(), expected_label.is_some(), "{name}");
-            if let Some((_, node)) = quota_node {
-                assert_eq!(node.role(), Role::Label, "{name}");
-                assert_eq!(node.value(), expected_accessible_label, "{name}");
+            if let Some((_, quota_node)) = quota_node {
+                assert_eq!(
+                    node(&update, WINDOW).children(),
+                    &[TAB_LIST, NEW_TAB, QUOTA, SHORTCUTS, CLOSE_TAB, PANE_PANEL],
+                    "{name}"
+                );
+                assert_eq!(quota_node.role(), Role::Label, "{name}");
+                assert_eq!(quota_node.value(), expected_accessible_label, "{name}");
                 assert!(
-                    node.description()
+                    quota_node
+                        .description()
                         .is_some_and(|value| value.contains(detail))
                 );
-                assert!(!node.supports_action(Action::Click), "{name}");
-                assert!(!node.supports_action(Action::Focus), "{name}");
+                assert!(!quota_node.supports_action(Action::Click), "{name}");
+                assert!(!quota_node.supports_action(Action::Focus), "{name}");
             }
         }
     }
