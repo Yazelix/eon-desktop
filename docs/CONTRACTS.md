@@ -278,7 +278,19 @@ qualified by the identities and boundaries below.
   `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `f0885517cbd63f6fac966e913e48aecccfc212eb`
+- **Proof:** `f6c1ebdb16df2960077dbd88ab6728a921b789d8`
+  - **Fallback visibility refinement:** The selected fill now has a
+    shape-aware one-logical-pixel contrasting edge for block, bar, underline,
+    and hollow stationary cursors. Focused red/green draw checks cover that
+    edge, explicit Orbit color, blink, and moving trail; the full locked Rust
+    route passes on x86_64 Linux. Private Sway 1.12 headless/pixman with exact
+    ORBS v12 and host lavapipe showed `custom:#000000` invisible on black
+    before this revision and visibly bounded afterward. Captures are
+    `~/.local/state/eon/proofs/ven-phm-2026-09-19/review/before-black.png`
+    (SHA-256 `8a4383a79496ca12dfbf68e179b15837f83d76a51ac3b1044fe666018028fd3d`)
+    and `after-black.png` (SHA-256
+    `8b8631443c372e1553453706b4fbfdac189e5c16f65797acd49bc7f3392b053f`).
+    Static `none` and explicit Orbit cursor colors keep their prior draw paths.
   - **Cursor-body color refinement:** Focused red/green draw-byte and canonical
     frame checks prove that an absent Orbit cursor color uses the chosen trail
     RGB, an explicit color wins, and static rendering keeps its foreground
