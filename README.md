@@ -405,7 +405,7 @@ accepted ORBF v2 / ORBS v12, including authoritative scrollback position and ret
 selection completion, routed native
 left-pointer gestures that survive compatible live output, bounded row-window
 previews, signed scroll batches, and read-only pane metadata. The exact source
-revision must be available in the Git checkout cache or published to GitHub.
+revision is available from the public Eon Sessions repository.
 
 ## License
 
