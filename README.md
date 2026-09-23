@@ -4,6 +4,12 @@ Eon Desktop is the repository for Eon for desktop. Its Venus subsystem renders
 structured presentation state authored by the Orbit subsystem in Eon Sessions
 and sends semantic interaction back to the authoritative session runtime.
 
+## Product demo
+
+[![Venus rendering Eon's two-pane native Wayland workspace](https://raw.githubusercontent.com/Yazelix/eon/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.png)](https://github.com/Yazelix/eon/blob/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.mp4)
+
+[Watch the scripted recording](https://github.com/Yazelix/eon/blob/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.mp4) of the composed Linux alpha. Venus renders the window and pane stack from Eon's workspace state and Orbit's terminal frames.
+
 ## Status
 
 The Venus client implements one native Wayland window on Linux for an Eon workspace or one
@@ -422,7 +428,7 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 436 |
+| README | 442 |
 | Repository attributes and ignore rules | 7 |
 | License | 201 |
 | Third-party notices | 37 |
@@ -433,4 +439,4 @@ benchmark CSV data, and disposable qualification patches.
 | Rust source, including unit tests | 20,318 |
 | Rust integration tests | 1,045 |
 | Cargo manifest | 33 |
-| **Total** | **25,336** |
+| **Total** | **25,342** |
