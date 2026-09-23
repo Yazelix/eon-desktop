@@ -407,6 +407,12 @@ left-pointer gestures that survive compatible live output, bounded row-window
 previews, signed scroll batches, and read-only pane metadata. The exact source
 revision must be available in the Git checkout cache or published to GitHub.
 
+## License
+
+The copyright holder offers the project-owned source history under
+[Apache-2.0](LICENSE). The OpenAI mark has separate copyright attribution and
+trademark terms in [third-party notices](THIRD_PARTY_NOTICES.md).
+
 ## LOC scorecard
 
 The scorecard counts tracked handwritten text and code. It excludes `.git/`,
@@ -416,8 +422,10 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 428 |
+| README | 436 |
 | Repository attributes and ignore rules | 7 |
+| License | 201 |
+| Third-party notices | 37 |
 | Contracts and references | 2,285 |
 | Memory benchmark report | 158 |
 | Crate decisions | 302 |
@@ -425,4 +433,4 @@ benchmark CSV data, and disposable qualification patches.
 | Rust source, including unit tests | 20,318 |
 | Rust integration tests | 1,045 |
 | Cargo manifest | 33 |
-| **Total** | **25,090** |
+| **Total** | **25,336** |

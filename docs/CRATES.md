@@ -140,8 +140,8 @@ feature, or Nix change. Orbit's canonical codec owns bounded metadata values,
 read-only observation, scroll preview windows, and routed left-pointer values;
 Venus consumes them without a backport, dual decoder, or adapter. Replacement
 remains one exact pin plus exhaustive consumer matches.
-The unpublished Orbit source still records no durable license metadata, so this
-internal dependency decision makes no public-distribution claim.
+Orbit's project-owned source is Apache-2.0 under its root license. This
+dependency decision does not establish public-distribution proof.
 
 ## Measured comparison
 
