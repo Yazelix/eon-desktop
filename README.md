@@ -1,417 +1,42 @@
 # Eon Desktop
 
-Eon Desktop is the repository for Eon for desktop. Its Venus subsystem renders
-structured presentation state authored by the Orbit subsystem in Eon Sessions
-and sends semantic interaction back to the authoritative session runtime.
+Eon Desktop contains Venus, the native client that renders Orbit Sessions and
+sends user input back to their authoritative runtime. In an Eon workspace,
+Venus draws the tabs, pane stack, and popups from Eon's workspace state.
 
-## Product demo
+## Demo
 
 [![Venus rendering Eon's two-pane native Wayland workspace](https://raw.githubusercontent.com/Yazelix/eon/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.png)](https://github.com/Yazelix/eon/blob/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.mp4)
 
-[Watch the scripted recording](https://github.com/Yazelix/eon/blob/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.mp4) of the composed Linux alpha. Venus renders the window and pane stack from Eon's workspace state and Orbit's terminal frames.
+[Watch the scripted recording](https://github.com/Yazelix/eon/blob/a8e5874a31a3b7b27eaa754e8ad9a6d44cbb07c8/assets/demo/eon-demo.mp4) of the composed Linux alpha.
 
-## Status
+## Run locally
 
-The Venus client implements one native Wayland window on Linux for an Eon workspace or one
-standalone already-running local Orbit session. In workspace mode it renders
-Eon-authored horizontal tabs and every fitting header in a one-expanded vertical
-pane accordion. Tab headers show their current one-based position, two spaces,
-and the leaf, `~`, or `/` derived from Eon's authoritative launch directory.
-Pill-shaped tabs fit their labels, with middle ellipsis for long names
-and full launch-path previews on hover. Selected tabs use a brighter fill and
-label without an underline; keyboard tab focus adds a rounded outline. The same
-row places New tab beside the rightmost tab, pinning it at the tab-region edge
-when tabs overflow. Keyboard shortcuts and active-tab Close stay at the right,
-with a bounded empty region for dragging an undecorated window. Tooltips name the
-accepted shortcuts, and the drag region yields before tabs or controls on narrow
-surfaces. When Eon supplies current Codex quota facts, one noninteractive chip
-shows the monochrome OpenAI Blossom followed by each elapsed/total window
-position and remaining percentage, collapses to the mark and complete
-lowest-remaining window, then disappears before tabs or controls lose space.
-Stale, blocked, and unknown states remain explicit; hovering exposes the same
-observation in human time.
-Pane headers use quiet backgrounds and a lighter selected fill and label. One
-rounded frame connects the pane stack, with full-width separators and a small
-bottom gap sharing the terminal background. Selection and hover fills follow the
-stack corners; keyboard focus adds a rounded accent outline.
-Visible live pane headers show Eon's opaque pane identity, a
-two-space gutter, and a compact label for Orbit's working directory, using a home
-marker at `HOME`; unset or empty `HOME` leaves paths absolute, while
-only the selected endpoint receives presentation and input. A fresh workspace
-and every new tab may begin with no pane while Eon publishes a Project popup.
-Tool popups and the project chooser share one rounded terminal surface covering
-the stack. Its outer frame keeps the pane stack's exact edges while Eon-supplied
-logical margins inset terminal content beneath its compact border label. Tabs
-remain visible and actionable. A tab containing only hidden popups has an empty body
-and keeps keyboard/accessibility focus on its selected tab until it reopens
-retained work through the catalog shortcut. Venus
-automatically recovers that attachment after retryable local socket loss, detaches
-without ending any Session, and does not own a PTY, terminal emulator, or
-workspace topology.
-
-## Ownership
-
-```text
-Eon                     -> product policy, composition, distribution
-Eon Desktop / Venus     -> native presentation, interaction, client failure UX
-Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
-```
-
-Venus consumes EONW v7 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`f41a41c9aecc4c436edfa2f394b832aa6d8711ad`. Eon alone owns workspace order,
-optional selection, pending-tab state, identities, tab launch directories,
-popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
-collection and normalization, and Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v2, and ORBS v12 at exact Orbit proof
-`f8ad14e5195109ba8cb421f30e5ae4a9619a1419`. One reducer turns complete canonical
-frames into immutable scene data used by drawing and accessibility. The native
-host owns the local socket, window, input mapping, and redraw lifecycle; it owns
-no terminal state.
-
-An Eon Workspace is composition, not another Session. Each pane references an
-independent Orbit Session. Venus keeps the EONW connection for workspace state
-and actions, one presentation connection to the selected popup or pane, and one read-only
-metadata observer for each visible live pane. Hidden and offline Sessions have no
-Venus observer and remain alive independently.
-
-## Run
-
-Pass the Eon Sessions Orbit Unix socket to the Venus client:
+The proved host is **x86_64 Linux on native Wayland with Vulkan**. With an Orbit
+server running, point Venus at its Unix socket:
 
 ```sh
 cargo run --locked -- /path/to/orbit.sock
 ```
 
-On Linux, Venus requires a native Wayland display and fails before presentation
-attachment when one is unavailable. This is the only proved host. The Apple
-Silicon macOS implementation has a proved opaque AppKit, AccessKit, and Metal
-foundation plus a partial native-interaction proof. M1 evidence covers Unicode
-terminal clipboard writes, Command+C link copy, ordinary and Unicode key text,
-Command+V paste, focus loss and resumption, click-drag selection and exact copy,
-Command+click Open, an empty-paste failure notice, Kotoeri `にほん` to `日本`
-composition, and supervised exit. Held-key repeat, dead keys, other IMEs,
-physical trackpad gestures, and a host-access failure notice remain unaccepted.
-macOS stays unsupported until VEN-C16 succeeds. X11, Xwayland, and Intel macOS
-remain unsupported.
-
-### Typography and initial size
-
-Startup options apply to standalone and workspace surfaces:
-
-```sh
-cargo run --locked -- \
-  --font-family 'DejaVu Sans Mono' \
-  --font-fallback 'Symbols Nerd Font Mono' \
-  --font-size 20 --line-height 1.5 \
-  --columns 100 --rows 30 /path/to/orbit.sock
-```
-
-The primary family must be installed and monospace. Repeat `--font-fallback`
-for up to eight installed families in preference order; platform fallback
-follows them. Names are nonempty trimmed UTF-8, at most 128 bytes without
-controls. Missing named fonts fail launch. Font availability does not promise
-all glyphs or style variants; Venus does not install fonts.
-
-`--font-size` accepts 6–96 nominal logical pixels, and `--line-height` accepts
-1–3 times that size. Absence preserves 16 px nominal text and 10 by 18 logical
-cells. One rounded physical cell grid drives text, cursor, pointer, selection,
-scrolling, IME and accessibility.
-
-Positive `--columns` and `--rows` request a terminal grid, including space for
-workspace headers or popup margins. An omitted dimension retains its existing
-initial window dimension; the default window is 960 by 600 logical pixels.
-Requests must fit Orbit's 100,000-cell and native surface limits. The compositor
-may override initial sizing, and later user resizing remains unconstrained.
-Typography must leave room for a terminal cell in the initial window, including
-workspace headers, even when columns and rows are omitted.
-These are startup options; Eon owns persistent product configuration.
-
-### Hyperlinks
-
-Hover an explicit OSC 8 link to highlight it and preview its actual target.
-Ctrl+left click opens it on Linux; Command+left click opens it on macOS.
-Ctrl+Shift+C on Linux or Command+C on macOS copies the hovered target
-unless the terminal has selected text, in which case it copies that selection.
-Physical M1 proof covers both Command actions on an exact hovered link.
-Ordinary clicks retain terminal mouse reporting and selection behavior;
-ordinary URL-looking text is not detected as a link. The accessibility tree
-exposes each current visible target as an Open link followed by a Copy button.
-A changed frame retires both. Hover and actions pause during scroll animation
-and renderer recovery.
-
-Opening accepts ASCII HTTP/HTTPS targets up to 4096 bytes, with a host and
-without credentials. Other schemes, malformed targets and oversized links
-produce an accessible notice. Copy accepts target text up to the same limit
-without control characters, including schemes that cannot be opened.
-The native Linux host must provide `gio` on PATH and a registered HTTP/HTTPS
-handler; macOS uses fixed `/usr/bin/open`. Venus passes one exact URI argument
-without a shell, allows one dispatch at a time, and retires a stalled dispatcher
-after ten seconds. Copy does not require an opener. Broader compositor and
-fractional-scale proof remain open.
-
-### Attachment
-
-Without an argument, Venus uses
-`$XDG_RUNTIME_DIR/yazelix-orbit/orbit.sock`, or
-`/tmp/yazelix-orbit-{effective-uid}/orbit.sock` otherwise.
-Only one presentation client can attach to an Orbit session at a time.
-Venus may start before Orbit. A missing, refused, reset, or dropped local socket
-retries after 250 ms, 500 ms, 1 s, 2 s, 4 s, and then every 5 s. Venus retains
-the last coherent scene during recovery and replaces it only with a fresh
-complete frame. Busy, incompatible, exited, invalid protocol or model, resource,
-queue, input, and worker-start failures remain terminal and visible.
-Routine workspace attachment and first-frame progress are silent; standalone
-attachment retains progress messages.
-
-For an Eon workspace, select workspace mode with only the EONW socket:
+Venus can also start before Orbit and reconnect when the socket appears. To
+view an Eon workspace, pass its workspace socket instead:
 
 ```sh
 cargo run --locked -- --workspace /path/to/eon.sock
 ```
 
-Pass `--pane-frames false` to hide decorative pane borders. The default is
-`true`; both modes keep the same terminal grid, pane headers, click targets and
-accessible bounds. Keyboard focus and hover remain visible with frames off.
-Missing, duplicate or invalid boolean values fail before window creation.
-Standalone and popup presentation have no pane frames; popups retain their own
-rounded outline. This is a
-startup option; Eon owns persistent product configuration.
+[Running Venus](docs/LAUNCH.md) covers fonts, window options, attachment, and
+supervised startup. Apple Silicon macOS has partial native proof and remains
+unsupported as a product target.
 
-Workspace mode opens the EONW transport first and waits for its accepted
-snapshot before attaching its terminal endpoint. The first snapshot may select
-a popup or have no visible terminal; no initial Orbit endpoint, durable pane,
-or placeholder Session is required.
+## Read more
 
-Pass `--application-id ID` before the launch target when the caller owns a
-distinct desktop identity. The bounded ASCII token becomes the Wayland app ID
-before window creation and does not replace Orbit-authored window titles.
-Direct Venus launches use `eon`:
-
-```sh
-cargo run --locked -- --application-id eonova /path/to/orbit.sock
-```
-
-Pass `--no-decorations` to request a window without its native title bar. The
-default remains decorated:
-
-```sh
-cargo run --locked -- --no-decorations --workspace /path/to/eon.sock
-```
-
-Pass `--background-opacity VALUE` with a finite value from `0.0` through `1.0`
-to control the terminal default background. Venus uses `1.0` when the option is
-absent. This example uses the Nova-selected opacity:
-
-```sh
-cargo run --locked -- --background-opacity 0.88 /path/to/orbit.sock
-```
-
-The opacity follows Orbit-authored default background changes and covers empty
-terminal padding and exposed popup margins. Explicit cell backgrounds, selection, inverse video,
-workspace chrome, notices, focus borders, text, and cursors retain their
-existing presentation. Visual transparency does not change pointer or keyboard
-input. Venus rejects invalid values during launch and rejects translucent
-launches before presenting its first frame when the native surface lacks
-premultiplied alpha support. Winit does not expose Wayland window visibility
-control. Eon owns persistence and product defaults for composed launches.
-
-Pass `--background-blur` to ask the native compositor for full-surface blur at
-window creation, before the first frame. Blur and opacity are independent: an
-opaque default background hides the effect, while lower opacity reveals it. This
-COSMIC Wayland example leaves terminal-default pixels fully transparent:
-
-```sh
-cargo run --locked -- \
-  --background-opacity 0.0 \
-  --background-blur \
-  /path/to/orbit.sock
-```
-
-COSMIC owns the blur algorithm and strength. Unsupported or policy-disabled
-Wayland compositors may ignore the best-effort request without failing launch.
-Venus does not configure blur strength.
-
-Venus chooses one random built-in cursor-tail color per launch by default and
-keeps it for that process. Choose `random`, a named preset, or a custom color:
-
-```sh
-cargo run --locked -- --cursor-trail-color preset:ice /path/to/orbit.sock
-cargo run --locked -- --cursor-trail-color 'custom:#12ABCF' /path/to/orbit.sock
-```
-
-The presets are `magma` (`#FF3B30`), `solar` (`#FFD23F`), `lime` (`#B7F34A`),
-`forest` (`#35C978`), `ice` (`#7DDCFF`), `ocean` (`#5271FF`), `nebula`
-(`#A970FF`), and `bubblegum` (`#FF5DA2`). Every tail gets an automatic
-one-logical-pixel contrasting outline. The fill and outline animate and clip
-together. The cursor body uses the chosen color and a shape-aware contrasting
-edge unless Orbit supplies an explicit cursor color; Orbit still owns its shape,
-visibility, and blink state.
-
-Pass `--cursor-effect-v1 none` for a static cursor. The lower-level complete
-tail profile remains available for an exact color and a finite duration
-multiplier from `0.25` through `4.0`:
-
-```sh
-cargo run --locked -- \
-  --cursor-effect-v1 tail \
-  --cursor-trail-color-v1 '#89b4fa' \
-  --cursor-trail-duration-v1 1.0 \
-  /path/to/orbit.sock
-```
-
-Venus rejects unknown presets, malformed custom colors, duplicate choices,
-mixed high-level and lower-level options, incomplete profiles, non-finite
-durations, and out-of-range durations before opening a window.
-
-In Eon's supervised mode, Venus reads one private bounded presentation stream.
-The `stdin-ready-v1` mode consumes one canonical EONW v7 startup snapshot for
-workspace launches, then reports `ready-v1` on stdout after admitting fonts and
-the actual window's initial native geometry, before terminal attachment. Eon
-bounds that exchange and starts new commands only after readiness.
-Each complete Present command keeps the same Venus process and terminal
-attachment and asks the native window system to present its existing window.
-If that stream closes or fails, Venus exits without stopping Orbit and releases
-its presentation attachment; an immediate supervised replacement retries a
-transient Busy while the departing client releases it. Standalone Busy remains
-terminal. Direct focus and unminimize are unavailable through winit on Wayland;
-xdg activation remains compositor-controlled.
-
-The accepted Eon snapshot supplies the authoritative terminal endpoint: the
-active tab's selected popup, otherwise its selected Orbit pane. An empty body
-detaches the presentation without stopping hidden Sessions.
-While the window is open, Venus re-inspects Eon every 250 ms so accepted
-workspace changes from another client appear without a click or restart.
-Recovery continues only while that exact attachment remains current and live;
-endpoint replacement or authoritative offline state cancels obsolete retry
-state.
-Click a tab or pane header to select it. Alt+1 through Alt+9 select tab positions
-1 through 9, and Alt+0 selects position 10; missing positions do nothing.
-The header's `+`, `?`, and `×` controls request a tab, open Shortcuts, and close
-the exact active tab. Hover exposes their shortcut-bearing names. Pressing only
-the empty region between tabs and controls asks the compositor to move an
-undecorated window; tabs, controls, tab-scroll gaps, panes, and terminal content
-do not drag it.
-Alt+H/L walks every tab, Alt+K/J walks panes,
-Ctrl+Alt+H/L moves the active tab, Ctrl+Alt+K/J moves the selected pane,
-Alt+Shift+W closes the expected active non-final tab, Alt+M creates a pane,
-Alt+Shift+T requests a pending tab. Eon's catalog supplies popup shortcuts,
-including Alt+Z for Project. A shortcut invokes its exact tab, entry and current
-instance: Toggle from terminal focus, Focus from workspace chrome. Repeated
-press events do not create duplicate structural actions. Eon decides whether
-each action is available and owns dismissal, cwd changes and command lifetime.
-Switching tabs retains each tab's popup selection. F6 cycles terminal and tabs,
-plus panes when visible; Left/Right on tabs and Up/Down on panes traverse them.
-From tab focus, Tab and Shift+Tab traverse the three fixed header controls;
-Enter or Space activates the focused control. Escape returns chrome focus to
-the terminal. While the terminal has focus,
-Escape, Ctrl+C, Tab and Enter reach its application through ordinary Orbit input.
-Alt+/ opens a native Shortcuts dialog for the Eon surface. It uses the same
-fixed binding descriptors as dispatch and appends the enabled Project/tool rows
-from the current Eon catalog; child-application bindings remain in those apps.
-Wheel, Up/Down, Page Up/Down, Home and End scroll the list. Escape or Alt+/
-closes it and restores the prior terminal or chrome focus without sending a
-workspace action or terminal key.
-Popup margins shrink to preserve a usable cell grid; tiny surfaces omit the
-label before clipping terminal content. Tab headers show the current positional
-`N  leaf`, `N  ~`, or `N  /` from Eon's launch directory while hit testing and
-actions retain stable `tN`; accessibility and hover details pair the current
-position with its full launch path. Tab widths follow shaped text plus padding up to
-280 logical pixels at default typography; larger fonts scale that limit.
-Long labels preserve both ends without cutting shaped clusters. If the name and
-ellipsis cannot fit, the tab keeps its number whenever that fits. Hover previews
-wrap the path within the window. Shell `cd` changes pane metadata, while tab
-names and widths stay tied to the launch directory.
-Pane headers show pane identity, two spaces, then the
-home marker at exact home, a `~/`-anchored path below home, or an absolute path elsewhere;
-unset or empty `HOME` keeps paths absolute. Overlong labels preserve their
-rightmost components. Terminal titles stay in
-the selected native window, and Session mappings remain in Eon diagnostics.
-Wheel over the tab strip, including its gaps, or a pane header to reach clipped
-headers without scrolling the terminal. In standalone mode these keys remain Orbit input.
-
-Compatible terminal output keeps scrolling, selection, and tab/pane focus usable
-between repaints. Venus retains the last presented input geometry while
-refreshing content; Orbit continues parsing output and owns the anchored
-history viewport. Resize, screen, workspace, and attachment changes still
-require fresh presentation.
-
-While scrolled, the clickable `↓ N rows` pill shows the last committed viewport's
-wrapped display-row distance above live output (`↓ 1 row` for one). Its whole
-area returns to live output through Orbit. The selected pane header reserves
-space for it, preserving the directory ending when the label needs shortening.
-Standalone and popup terminals use a small top-right overlay
-without resizing the grid; it yields to selection, link previews, notices,
-popup tab previews, and an overlapping terminal cursor. Live bottom, alternate screen, recovery, pending reflow,
-and known terminal-owned scrolling hide it. Fractional preview movement never
-changes the number. If the complete label cannot fit, it stays available in the
-terminal's accessible description; digits are never truncated. The description
-is not a live alert.
-
-Precision touchpad movement tracks Orbit-owned retained history at twice its
-native pixel distance, and a complete gesture may continue with bounded momentum
-after release. A bounded Orbit-authored row window keeps multi-row movement
-continuous while signed commits are in flight. Discrete wheel steps move three
-retained rows without synthetic momentum. Terminal-owned mouse modes continue to
-receive their canonical Orbit input instead. Hold Shift while dragging the left
-mouse button to bypass that capture. Drag to select cells, double-click to
-select words, or triple-click to select logical lines. Releasing writes Orbit's
-exact bounded text to both the ordinary Wayland clipboard and primary
-selection; Ctrl+Shift+C remains an explicit ordinary-clipboard copy.
-Press Ctrl+Shift+V or the native Paste key to read the ordinary clipboard once.
-Orbit applies normal or bracketed paste from its authoritative terminal mode.
-Terminal programs can also request bounded text writes through Orbit. On Linux,
-Venus sends the standard destination to the ordinary clipboard and sends the
-selection or primary destination to the primary clipboard. The macOS candidate
-uses Command+C and Command+V and maps every destination to the general native
-pasteboard; it does not emulate a primary selection. M1 proof covers one
-Unicode terminal clipboard write, one Unicode Command+V paste, and visible
-rejection of empty, PNG-only, and oversized values. A native host-access failure
-notice remains unaccepted.
-
-## Architecture and evidence
-
-- [`docs/CONTRACTS.md`](docs/CONTRACTS.md) indexes Venus subsystem behavior and proof.
-- [`docs/REFERENCES.md`](docs/REFERENCES.md) records the exact architectural
-  evidence used by the implementation gate.
-- [`docs/CRATES.md`](docs/CRATES.md) records the measured dependency selection,
-  owner seams, and rejected alternatives.
-- The [memory comparison](docs/benchmarks/venus-memory-2026-09-08.md) records
-  the cell-buffer allocation savings and their environment limits.
-
-```sh
-cargo fmt --check
-cargo check --locked
-cargo test --locked
-cargo clippy --locked --all-targets -- -D warnings
-```
-
-The application regression also needs an isolated native Wayland display and
-Vulkan renderer. Point `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY` at that display,
-and `TMPDIR` at disposable proof storage, then run:
-
-```sh
-timeout 30s cargo test --locked --bin yazelix-venus live_output_keeps_application_input_admitted_before_repaint -- --ignored
-```
-
-## Exclusions
-
-Arbitrary split trees, simultaneous expanded panes, sidebars,
-popup command/lifetime policy, persistent Venus configuration, blur strength or live blur changes,
-background images, plugins, remote and web access, packaging, and distribution
-are outside this slice.
-
-The proved Linux host uses winit, wgpu, glyphon, AccessKit, and wl-clipboard-rs
-with native Wayland and Vulkan. The unsupported Apple Silicon host reuses the
-same renderer/model path with AppKit, AccessKit, Metal, and target-only arboard.
-Its opaque foundation and a bounded clipboard/key slice have native M1 proof;
-held-key repeat, dead keys, other IMEs, physical trackpad gesture quality, a
-host-access failure notice, lifecycle acceptance, effects, and Eon composition remain open.
-The exact `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` Orbit package revision supplies
-accepted ORBF v2 / ORBS v12, including authoritative scrollback position and return to live,
-selection completion, routed native
-left-pointer gestures that survive compatible live output, bounded row-window
-previews, signed scroll batches, and read-only pane metadata. The exact source
-revision is available from the public Eon Sessions repository.
+- [Interaction](docs/INTERACTION.md): links, workspace controls, scrolling, selection, and clipboard.
+- [Presentation and ownership](docs/PRESENTATION.md): visual behavior, component boundaries, and limits.
+- [Development checks](docs/DEVELOPMENT.md): local and native proof commands.
+- [Contract index](docs/CONTRACTS.md): accepted behavior, exact revisions, and remaining gaps.
+- [References](docs/REFERENCES.md), [crate decisions](docs/CRATES.md), and the [memory comparison](docs/benchmarks/venus-memory-2026-09-08.md): design evidence.
 
 ## License
 
@@ -428,15 +53,16 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 442 |
+| README | 68 |
 | Repository attributes and ignore rules | 7 |
 | License | 201 |
 | Third-party notices | 37 |
 | Contracts and references | 2,285 |
+| Guides | 408 |
 | Memory benchmark report | 158 |
 | Crate decisions | 302 |
 | Changelog | 298 |
 | Rust source, including unit tests | 20,318 |
 | Rust integration tests | 1,045 |
 | Cargo manifest | 33 |
-| **Total** | **25,342** |
+| **Total** | **25,376** |
