@@ -4,7 +4,8 @@
 
 - Continue a held top-row selection into older terminal history at a bounded
   pace. Orbit owns the viewport and selected text; release copies the complete
-  selection. Consume exact ORBS v13.
+  selection. Ordinary wheel input queued after release survives an expected
+  synthetic-tick rejection. Consume exact ORBS v13.
 
 - Consume EONW v7 so separate pending Project picker tabs remain visible and
   independently selectable. New tab and Alt+Shift+W keep their existing semantic

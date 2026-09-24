@@ -551,17 +551,20 @@ qualified by the identities and boundaries below.
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
-- **Upward selection source proof:** `666d666e18c713020a74a094a045e5a8d3871c8e`
+- **Upward selection source proof:** `ed0eda388fa3ce3c98ef0463fcdb2eac2087f47b`
+  corrects source `666d666e18c713020a74a094a045e5a8d3871c8e` and
   consumes accepted Orbit `b6cecf8f2ee35570b41cfdc578b095889d917fe2`
-  (ORBF v2 / ORBS v13). Locked Rust fmt, check, tests (80 library, 45 binary,
+  (ORBF v2 / ORBS v13). Locked Rust fmt, check, tests (80 library, 46 binary,
   17 integration), clippy, host release build, and Nix package build with
-  locked tests pass on x86_64 Linux. In private headless Sway 1.12, a held
-  drag moved through more than two screens of real Orbit history; release
-  copied exactly 1,092 Unicode bytes spanning lines
-  `LINE-071-界` through `LINE-154-界`. A terminal-routed drag preserved its
+  locked tests pass on x86_64 Linux. The correction adds a red/green check
+  that an expected synthetic-tick rejection after release retains queued
+  ordinary wheel input; other failures still clear it. In private headless
+  Sway 1.12, a held drag moved through more than two screens of real Orbit
+  history; release copied exactly 923 Unicode bytes spanning contiguous lines
+  `LINE-084-界` through `LINE-154-界`. A terminal-routed drag preserved its
   native SGR press and release without an error notice. Recipes, captures,
-  and copied bytes are kept under
-  `~/.local/state/eon/proofs/ven-selection-upward-autoscroll-2026-09-24/`.
+  copied bytes, and the Nix build record are kept under
+  `~/.local/state/eon/proofs/ven-wheel-after-selection-2026-09-24-ed0eda3/`.
   This is Venus source proof; installed Eon and macOS remain separate.
 - **Return-to-live consumer proof:** `ead00dfcb3510eb595173c02f4627d2cd8b36b0a`
   consumes accepted Orbit `ORB-C8` at
