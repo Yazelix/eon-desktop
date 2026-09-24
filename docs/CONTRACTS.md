@@ -470,8 +470,9 @@ qualified by the identities and boundaries below.
 
 - **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
 - **Consumer:** One presented Venus terminal surface.
-- **Trigger:** Native wheel or touchpad movement, one left-pointer sequence,
-  explicit copy, or activation of the visible scrollback pill.
+- **Trigger:** Native wheel or touchpad movement, one left-pointer sequence
+  including a held drag in the top visible row, explicit copy, or activation of
+  the visible scrollback pill.
 - **Result:**
   - While away from live output, Venus displays `↓ N rows` (`↓ 1 row` for one)
     from the accepted frame's authoritative wrapped display-row distance. Live
@@ -517,6 +518,10 @@ qualified by the identities and boundaries below.
   - Venus sends every left-pointer phase to Orbit. Orbit routes uncaptured
     input to cell, word, or logical-line selection, preserves terminal mouse
     capture, and treats Shift as a host-selection override.
+  - While a held host selection stays in the top visible row, Venus sends one
+    upward selection tick at a time. Orbit moves at most one history row per
+    tick and extends the same gesture; Venus waits for the accepted frame
+    before the next tick and stops at the oldest edge or on release.
   - Pointer phases and explicit copy that arrive before Orbit completes the
     preceding sequence retain their order. Venus resumes them only after
     presenting the authoritative completion revision reported by Orbit.
@@ -528,6 +533,9 @@ qualified by the identities and boundaries below.
   input, failed gesture admission, resize, capture loss, lifecycle change,
   terminal-owned routing, history edge, or Orbit rejection cancels synthetic
   motion and cannot fabricate cells, selection, copied text, or viewport state.
+  Pointer/focus loss, stale presentation, attachment change, and reflow stop
+  selection ticks; invalid synthetic ticks keep the native release without a
+  routine error notice. Terminal and protocol failures remain visible.
   A change to screen, geometry, default cell colors, or palette retires the
   bounded preview before presentation. An unsolicited or mismatched scroll
   outcome is a protocol-order failure.
@@ -535,14 +543,26 @@ qualified by the identities and boundaries below.
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
 - **Consumes:** Orbit `ORB-C4`, `ORB-C5`, `ORB-C6`, `ORB-C8`, and `ORB-C9`
-  through canonical ORBF v2 / ORBS v12 at
-  `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`; exact patched winit
+  through canonical ORBF v2 / ORBS v13 at
+  `b6cecf8f2ee35570b41cfdc578b095889d917fe2`; exact patched winit
   `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
+- **Upward selection source proof:** `666d666e18c713020a74a094a045e5a8d3871c8e`
+  consumes accepted Orbit `b6cecf8f2ee35570b41cfdc578b095889d917fe2`
+  (ORBF v2 / ORBS v13). Locked Rust fmt, check, tests (80 library, 45 binary,
+  17 integration), clippy, host release build, and Nix package build with
+  locked tests pass on x86_64 Linux. In private headless Sway 1.12, a held
+  drag moved through more than two screens of real Orbit history; release
+  copied exactly 1,092 Unicode bytes spanning lines
+  `LINE-071-界` through `LINE-154-界`. A terminal-routed drag preserved its
+  native SGR press and release without an error notice. Recipes, captures,
+  and copied bytes are kept under
+  `~/.local/state/eon/proofs/ven-selection-upward-autoscroll-2026-09-24/`.
+  This is Venus source proof; installed Eon and macOS remain separate.
 - **Return-to-live consumer proof:** `ead00dfcb3510eb595173c02f4627d2cd8b36b0a`
   consumes accepted Orbit `ORB-C8` at
   `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` (ORBF v2 / ORBS v12).
