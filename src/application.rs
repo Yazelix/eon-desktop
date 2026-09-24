@@ -5292,18 +5292,18 @@ mod tests {
                     count
                 };
                 assert_eq!(returns(), 0, "return waits for the outstanding tick");
-                app.handle_transport(TransportEvent::Server(ServerMessage::ScrollOutcome(
-                    ScrollOutcome::Viewport {
-                        requested_rows: -1,
-                        applied_rows: -1,
-                        frame: tick_frame,
-                        next: orbit_protocol::session::PreviewOutcome::Viewport {
-                            cols: size.cols,
-                            edge_reached: false,
-                            rows: Vec::new(),
-                        },
+                let response = ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+                    requested_rows: -1,
+                    applied_rows: -1,
+                    frame: tick_frame,
+                    next: orbit_protocol::session::PreviewOutcome::Viewport {
+                        cols: size.cols,
+                        edge_reached: true,
+                        rows: Vec::new(),
                     },
-                )));
+                });
+                session::encode_server_message(&response).expect("canonical Orbit scroll response");
+                app.handle_transport(TransportEvent::Server(response));
                 assert!(app.model.is_attached(), "{:?}", app.model.connection());
                 assert_eq!(
                     returns(),
