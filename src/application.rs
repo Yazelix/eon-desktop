@@ -1292,6 +1292,7 @@ struct Application {
     pane_scroll: f32,
     terminal_scroll: TerminalScroll,
     selection_scroll: SelectionAutoscroll,
+    pending_return_to_live: bool,
     cursor: PhysicalPosition<f64>,
 }
 
@@ -1367,6 +1368,7 @@ impl Application {
             pane_scroll: 0.0,
             terminal_scroll: TerminalScroll::default(),
             selection_scroll: SelectionAutoscroll::default(),
+            pending_return_to_live: false,
             cursor: PhysicalPosition::new(0.0, 0.0),
         }
     }
@@ -1829,6 +1831,7 @@ impl Application {
     fn set_orbit_attachment(&mut self, endpoint: Option<Vec<u8>>, live: bool) {
         self.terminal_scroll.reset();
         self.selection_scroll.reset();
+        self.pending_return_to_live = false;
         self.deferred_selection.clear();
         self.selection_gate = SelectionGate::Ready;
         if let Some(message) = self.input.retire_orbit_generation() {
@@ -2374,6 +2377,7 @@ impl Application {
             TransportEvent::Incompatible { version } => self.model.mark_incompatible(version),
             TransportEvent::InvalidInput(detail) => {
                 self.terminal_scroll.reset();
+                self.pending_return_to_live = false;
                 self.model.set_venus_notice(
                     LocalNoticeSource::Input,
                     format!("Venus could not encode input: {detail}"),
@@ -2388,6 +2392,7 @@ impl Application {
         if retryable_event || self.model.is_terminal() {
             self.terminal_scroll.reset();
             self.selection_scroll.reset();
+            self.pending_return_to_live = false;
             self.deferred_selection.clear();
             self.selection_gate = SelectionGate::Ready;
             self.input.retire_orbit_generation();
@@ -2399,6 +2404,15 @@ impl Application {
             } else {
                 self.orbit_retry.reset();
             }
+        }
+        if self.pending_return_to_live
+            && self.model.is_attached()
+            && self.transport.is_some()
+            && !self.selection_scroll.in_flight
+            && self.terminal_scroll.in_flight.is_none()
+        {
+            self.pending_return_to_live = false;
+            self.send(ClientMessage::ReturnToLive);
         }
         self.refresh_client_view();
     }
@@ -2702,6 +2716,12 @@ impl Application {
         let Some(transport) = &self.transport else {
             return false;
         };
+        if message == ClientMessage::ReturnToLive
+            && (self.selection_scroll.in_flight || self.terminal_scroll.in_flight.is_some())
+        {
+            self.pending_return_to_live = true;
+            return true;
+        }
         if let Err(error) = transport.send(message) {
             self.model
                 .set_venus_notice(LocalNoticeSource::Queue, error.to_string());
@@ -5194,6 +5214,10 @@ mod tests {
                     };
                     usize::from(size.rows)
                 ];
+                let mut tick_frame = scrolled.clone();
+                tick_frame.revision = 10;
+                tick_frame.scroll_position.rows_from_live = 13;
+                tick_frame.scroll_position.history_rows = 13;
                 app.handle_transport(TransportEvent::Server(ServerMessage::Frame(scrolled)));
                 assert!(
                     app.scrollback_rect(app.workspace_scene().as_ref())
@@ -5203,6 +5227,7 @@ mod tests {
                 let pill = app
                     .scrollback_rect(app.workspace_scene().as_ref())
                     .expect("the presented scrollback pill is actionable");
+                app.selection_scroll.in_flight = true;
                 app.window_event(
                     event_loop,
                     id,
@@ -5247,23 +5272,61 @@ mod tests {
                 stream
                     .set_read_timeout(Some(Duration::from_millis(300)))
                     .unwrap();
-                let mut returns = 0;
-                loop {
-                    let mut header = [0; session::HEADER_BYTES];
-                    if stream.read_exact(&mut header).is_err() {
-                        break;
+                let mut returns = || {
+                    let mut count = 0;
+                    loop {
+                        let mut header = [0; session::HEADER_BYTES];
+                        if stream.read_exact(&mut header).is_err() {
+                            break;
+                        }
+                        let mut bytes = Vec::from(header);
+                        bytes.resize(session::client_message_len(&header).unwrap().unwrap(), 0);
+                        stream
+                            .read_exact(&mut bytes[session::HEADER_BYTES..])
+                            .unwrap();
+                        count += usize::from(
+                            session::decode_client_message(&bytes).unwrap()
+                                == ClientMessage::ReturnToLive,
+                        );
                     }
-                    let mut bytes = Vec::from(header);
-                    bytes.resize(session::client_message_len(&header).unwrap().unwrap(), 0);
-                    stream
-                        .read_exact(&mut bytes[session::HEADER_BYTES..])
-                        .unwrap();
-                    returns += usize::from(
-                        session::decode_client_message(&bytes).unwrap()
-                            == ClientMessage::ReturnToLive,
-                    );
-                }
-                assert_eq!(returns, 1, "the pill sends one semantic action");
+                    count
+                };
+                assert_eq!(returns(), 0, "return waits for the outstanding tick");
+                app.handle_transport(TransportEvent::Server(ServerMessage::ScrollOutcome(
+                    ScrollOutcome::Viewport {
+                        requested_rows: -1,
+                        applied_rows: -1,
+                        frame: tick_frame,
+                        next: orbit_protocol::session::PreviewOutcome::Viewport {
+                            cols: size.cols,
+                            edge_reached: false,
+                            rows: Vec::new(),
+                        },
+                    },
+                )));
+                assert!(app.model.is_attached(), "{:?}", app.model.connection());
+                assert_eq!(
+                    returns(),
+                    1,
+                    "the pill sends one semantic action after the tick"
+                );
+                app.terminal_scroll.in_flight = Some(-1);
+                assert!(app.send(ClientMessage::ReturnToLive));
+                assert_eq!(returns(), 0, "return waits for an ordinary scroll batch");
+                app.handle_transport(TransportEvent::Server(ServerMessage::Failure(
+                    orbit_protocol::session::Failure {
+                        code: FailureCode::InvalidInput,
+                        detail: "deferred batch rejected".into(),
+                    },
+                )));
+                assert!(app.model.is_attached(), "{:?}", app.model.connection());
+                assert_eq!(returns(), 1, "return follows the rejected scroll batch");
+                app.terminal_scroll.in_flight = Some(-1);
+                assert!(app.send(ClientMessage::ReturnToLive));
+                assert_eq!(returns(), 0);
+                app.handle_transport(TransportEvent::InvalidInput("bad input".into()));
+                assert!(app.model.is_attached());
+                assert_eq!(returns(), 0, "a local failure cancels the queued return");
                 let snapshot = app.workspace_model.snapshot().unwrap().clone();
                 app.links.pressed = link;
                 app.handle_workspace(WorkspaceEvent::Unavailable("offline".into()));
