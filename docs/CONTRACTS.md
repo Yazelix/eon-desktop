@@ -551,21 +551,21 @@ qualified by the identities and boundaries below.
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
-- **Upward selection source proof:** `59c94f6e48891b9717697a76b0e9381ccbe7a963`
-  corrects source `ed0eda388fa3ce3c98ef0463fcdb2eac2087f47b` and
+- **Upward selection source proof:** `773c6bab7d3e21e0b0d7d942c9bba72260a08b42`
+  corrects the native response-order fixture from
+  `59c94f6e48891b9717697a76b0e9381ccbe7a963` and
   consumes accepted Orbit `b6cecf8f2ee35570b41cfdc578b095889d917fe2`
   (ORBF v2 / ORBS v13). Locked Rust fmt, check, tests (80 library, 46 binary,
   17 integration), clippy, host release build, and Nix package build with
-  locked tests pass on x86_64 Linux. A focused native Application check failed
-  before Venus serialized ReturnToLive behind an outstanding selection tick,
-  then passed for both that tick and an ordinary scroll batch. A local input
-  failure also canceled the queued return. With exact Orbit and Nix-packaged
-  Venus on private Sway 1.12, a held drag crossed more than two screens of
-  real history; release copied exactly 962
-  Unicode bytes spanning contiguous lines `LINE-081-界` through
+  locked tests pass on x86_64 Linux. The focused native Application check first
+  rejected an impossible empty, non-edge preview, then passed with a canonical
+  ORBS v13 response while retaining the ReturnToLive ordering assertions.
+  With exact Orbit and Nix-packaged Venus on private Sway 1.12, a held drag
+  crossed more than two screens of real history; release copied exactly 949
+  Unicode bytes spanning contiguous lines `LINE-082-界` through
   `LINE-154-界`. Terminal mouse mode preserved SGR press and release without
   an error notice. Recipes, captures, copied bytes, and Nix build logs are
-  kept under `~/.local/state/eon/proofs/ven-return-after-scroll-2026-09-24-59c94f6/`.
+  kept under `~/.local/state/eon/proofs/ven-scroll-fixture-2026-09-24/`.
   This is Venus source proof; installed Eon and macOS remain separate.
 - **Return-to-live consumer proof:** `ead00dfcb3510eb595173c02f4627d2cd8b36b0a`
   consumes accepted Orbit `ORB-C8` at
