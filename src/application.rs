@@ -420,6 +420,19 @@ impl SelectionAutoscroll {
     }
 }
 
+fn finish_scroll_failure(
+    terminal_scroll: &mut TerminalScroll,
+    selection_scroll: &mut SelectionAutoscroll,
+    expected_selection_rejection: bool,
+) {
+    if !expected_selection_rejection {
+        terminal_scroll.reset();
+    }
+    if selection_scroll.in_flight {
+        selection_scroll.fail();
+    }
+}
+
 struct OrbitRetry {
     deadline: Option<Instant>,
     next_delay: Duration,
@@ -2310,10 +2323,11 @@ impl Application {
                         }
                     }
                     if server_failure {
-                        self.terminal_scroll.reset();
-                        if selection_scroll_failure {
-                            self.selection_scroll.fail();
-                        }
+                        finish_scroll_failure(
+                            &mut self.terminal_scroll,
+                            &mut self.selection_scroll,
+                            expected_selection_rejection,
+                        );
                     } else if let Some((revision, direction)) = preview_response {
                         self.terminal_scroll.preview_arrived(revision, direction);
                     }
@@ -7088,5 +7102,24 @@ mod tests {
         scroll.fail();
         scroll.presented(10, start + SELECTION_SCROLL_INTERVAL * 8);
         assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 9));
+    }
+
+    #[test]
+    fn rejected_selection_tick_preserves_wheel_input_after_release() {
+        let start = Instant::now();
+        let mut wheel = TerminalScroll::default();
+        let mut selection = SelectionAutoscroll::default();
+        selection.edge(true, start);
+        assert!(selection.take_due(start + SELECTION_SCROLL_INTERVAL));
+        selection.cancel();
+        wheel.push_lines(1.0, 20.0);
+        let pending = wheel.pixels;
+
+        finish_scroll_failure(&mut wheel, &mut selection, true);
+        assert_eq!(wheel.pixels, pending);
+        assert!(!selection.in_flight);
+
+        finish_scroll_failure(&mut wheel, &mut selection, false);
+        assert_eq!(wheel.pixels, 0.0);
     }
 }
