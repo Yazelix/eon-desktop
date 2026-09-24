@@ -44,6 +44,7 @@ use yazelix_venus::{
 
 const BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+const SELECTION_SCROLL_INTERVAL: Duration = Duration::from_millis(40);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
 const SCROLL_SAMPLE_WINDOW: Duration = Duration::from_millis(150);
@@ -331,6 +332,91 @@ impl TerminalScroll {
             || self.pixels != 0.0
             || self.preview_pending.is_some()
             || self.in_flight.is_some() && !self.batch_cancelled
+    }
+}
+
+#[derive(Debug, Default)]
+struct SelectionAutoscroll {
+    edge: bool,
+    next: Option<Instant>,
+    in_flight: bool,
+    awaiting_frame: Option<u64>,
+    stopped: bool,
+}
+
+impl SelectionAutoscroll {
+    fn edge(&mut self, at_top: bool, now: Instant) {
+        if !at_top {
+            self.cancel();
+            return;
+        }
+        if !self.edge {
+            self.edge = true;
+            self.stopped = false;
+        }
+        self.schedule(now);
+    }
+
+    fn schedule(&mut self, now: Instant) {
+        if self.edge
+            && !self.stopped
+            && !self.in_flight
+            && self.awaiting_frame.is_none()
+            && self.next.is_none()
+        {
+            self.next = Some(now + SELECTION_SCROLL_INTERVAL);
+        }
+    }
+
+    fn take_due(&mut self, now: Instant) -> bool {
+        if self.next.is_none_or(|next| now < next) || self.in_flight {
+            return false;
+        }
+        self.next = None;
+        self.in_flight = true;
+        true
+    }
+
+    fn accept(&mut self, applied_rows: i16, frame_revision: u64) -> bool {
+        if !self.in_flight || !matches!(applied_rows, -1..=0) {
+            return false;
+        }
+        self.in_flight = false;
+        if applied_rows == 0 {
+            self.stopped = true;
+        } else {
+            self.awaiting_frame = Some(frame_revision);
+        }
+        true
+    }
+
+    fn presented(&mut self, revision: u64, now: Instant) {
+        if self
+            .awaiting_frame
+            .is_some_and(|required| revision >= required)
+        {
+            self.awaiting_frame = None;
+        }
+        self.schedule(now);
+    }
+
+    fn fail(&mut self) {
+        self.in_flight = false;
+        self.next = None;
+        self.awaiting_frame = None;
+        self.stopped = true;
+    }
+
+    fn cancel(&mut self) {
+        self.edge = false;
+        self.next = None;
+        self.awaiting_frame = None;
+        self.stopped = false;
+        // A sent tick still needs its ordered response after release.
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 
@@ -1192,6 +1278,7 @@ struct Application {
     tab_scroll: f32,
     pane_scroll: f32,
     terminal_scroll: TerminalScroll,
+    selection_scroll: SelectionAutoscroll,
     cursor: PhysicalPosition<f64>,
 }
 
@@ -1266,6 +1353,7 @@ impl Application {
             tab_scroll: 0.0,
             pane_scroll: 0.0,
             terminal_scroll: TerminalScroll::default(),
+            selection_scroll: SelectionAutoscroll::default(),
             cursor: PhysicalPosition::new(0.0, 0.0),
         }
     }
@@ -1389,6 +1477,9 @@ impl Application {
     }
 
     fn drive_terminal_scroll(&mut self) {
+        if self.selection_scroll.in_flight {
+            return;
+        }
         let Some(frame_revision) = self.model.scene().map(|scene| scene.revision) else {
             self.terminal_scroll.reset();
             return;
@@ -1425,6 +1516,45 @@ impl Application {
         }
         if !self.terminal_scroll.active() {
             self.model.clear_viewport_preview();
+        }
+    }
+
+    fn drive_selection_autoscroll(&mut self, now: Instant) {
+        if self
+            .selection_scroll
+            .next
+            .is_none_or(|deadline| now < deadline)
+        {
+            return;
+        }
+        let position = (self.window_focused
+            && !self.window_occluded
+            && !self.shortcut_viewer.open
+            && self.model.is_attached()
+            && self.deferred_selection.is_empty()
+            && matches!(self.selection_gate, SelectionGate::Ready)
+            && self.terminal_scroll.in_flight.is_none()
+            && self.presentation.presented_revision()
+                == self.model.scene().map(|scene| scene.revision))
+        .then(|| {
+            self.window.as_ref().and_then(|state| {
+                self.terminal_size()
+                    .and_then(|screen| surface_size(screen, state.renderer.metrics()))
+            })
+        })
+        .flatten()
+        .filter(|size| self.last_resize == Some(*size))
+        .and_then(|size| self.input.selection_at_top(size));
+        let Some(position) = position else {
+            self.selection_scroll.next = None;
+            return;
+        };
+        if self.selection_scroll.take_due(now)
+            && !self.send(ClientMessage::Selection(SelectionAction::AutoscrollUp {
+                position,
+            }))
+        {
+            self.selection_scroll.fail();
         }
     }
 
@@ -1685,6 +1815,7 @@ impl Application {
 
     fn set_orbit_attachment(&mut self, endpoint: Option<Vec<u8>>, live: bool) {
         self.terminal_scroll.reset();
+        self.selection_scroll.reset();
         self.deferred_selection.clear();
         self.selection_gate = SelectionGate::Ready;
         if let Some(message) = self.input.retire_orbit_generation() {
@@ -2113,6 +2244,9 @@ impl Application {
                     ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { .. })
                 );
                 let server_failure = matches!(&message, ServerMessage::Failure(_));
+                let selection_scroll_failure = server_failure && self.selection_scroll.in_flight;
+                let expected_selection_rejection = selection_scroll_failure
+                    && matches!(&message, ServerMessage::Failure(failure) if failure.code == FailureCode::InvalidInput);
                 let plain_frame = matches!(&message, ServerMessage::Frame(_));
                 if server_failure_suppresses_retry(&message) {
                     self.retry_suppressed = true;
@@ -2132,14 +2266,34 @@ impl Application {
                     .window
                     .as_ref()
                     .map_or(0.0, |state| f64::from(state.renderer.metrics().height));
-                let batch_accepted = batch_response.is_none_or(|(requested, applied)| {
-                    self.terminal_scroll
-                        .accept_batch(requested, applied, cell_height)
-                });
-                let result = if batch_accepted {
-                    self.model.apply(message)
+                let batch_accepted = if self.selection_scroll.in_flight {
+                    match &message {
+                        ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
+                            requested_rows,
+                            applied_rows,
+                            frame,
+                            ..
+                        }) => {
+                            *requested_rows == -1
+                                && self.selection_scroll.accept(*applied_rows, frame.revision)
+                        }
+                        ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { .. }) => false,
+                        _ => true,
+                    }
                 } else {
+                    batch_response.is_none_or(|(requested, applied)| {
+                        self.terminal_scroll
+                            .accept_batch(requested, applied, cell_height)
+                    })
+                };
+                let result = if !batch_accepted {
                     Err(ModelError::UnexpectedMessage)
+                } else if expected_selection_rejection {
+                    // ORBS v13 rejects terminal-routed synthetic ticks as invalid input.
+                    self.model.clear_viewport_preview();
+                    Ok(None)
+                } else {
+                    self.model.apply(message)
                 };
                 let accepted_frame = frame && result.is_ok();
                 let accepted = result.is_ok();
@@ -2157,6 +2311,9 @@ impl Application {
                     }
                     if server_failure {
                         self.terminal_scroll.reset();
+                        if selection_scroll_failure {
+                            self.selection_scroll.fail();
+                        }
                     } else if let Some((revision, direction)) = preview_response {
                         self.terminal_scroll.preview_arrived(revision, direction);
                     }
@@ -2167,6 +2324,7 @@ impl Application {
                     }
                 }
                 if server_failure
+                    && !selection_scroll_failure
                     && (self.has_pointer_sequence()
                         || !matches!(self.selection_gate, SelectionGate::Ready))
                 {
@@ -2190,6 +2348,7 @@ impl Application {
                     self.orbit_retry.reset();
                     self.deferred_selection.clear();
                     self.selection_gate = SelectionGate::Ready;
+                    self.selection_scroll.reset();
                     self.input.retire_orbit_generation();
                     self.send_resize();
                     if let Some(message) = self.input.latest_focus() {
@@ -2214,6 +2373,7 @@ impl Application {
         }
         if retryable_event || self.model.is_terminal() {
             self.terminal_scroll.reset();
+            self.selection_scroll.reset();
             self.deferred_selection.clear();
             self.selection_gate = SelectionGate::Ready;
             self.input.retire_orbit_generation();
@@ -2538,6 +2698,7 @@ impl Application {
             self.last_resize = Some(size);
             self.deferred_selection.clear();
             self.input.cancel_selection();
+            self.selection_scroll.cancel();
         }
         let queue_recovered = self.model.clear_venus_notice(LocalNoticeSource::Queue);
         let clipboard_cleared =
@@ -2563,6 +2724,7 @@ impl Application {
     }
 
     fn cancel_pointer_sequence(&mut self) {
+        self.selection_scroll.cancel();
         self.header_press = None;
         self.scrollback_press = None;
         let cancel_server = pointer_sequence_needs_cancel(
@@ -2841,6 +3003,9 @@ impl Application {
                 refresh = self.render_notice.take().is_some()
                     || state.renderer.presented_scrollback_rect() != prior_scrollback_target;
                 self.presentation.publish(candidate);
+                if let Some(revision) = candidate.revision {
+                    self.selection_scroll.presented(revision, Instant::now());
+                }
                 self.links.unshifted = scroll_offset == 0.0;
                 state.accessibility.present_links(
                     &mut state.adapter,
@@ -2959,6 +3124,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.input.reset_scroll();
                 self.terminal_scroll.cancel();
                 state.renderer.resize(size, state.scale_factor);
+                self.cancel_pointer_sequence();
                 self.reveal_workspace_selection();
                 self.presentation.invalidate();
                 self.send_resize();
@@ -3089,6 +3255,7 @@ impl ApplicationHandler<UserEvent> for Application {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if self.shortcut_viewer.open {
+                    self.selection_scroll.cancel();
                     self.cursor = position;
                     self.links.pointer_inside = true;
                     return;
@@ -3118,6 +3285,7 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.cursor = position;
                 self.links.pointer_inside = true;
                 if over_scrollback {
+                    self.selection_scroll.edge(false, Instant::now());
                     self.links.focus = None;
                     if was_scrollback != over_scrollback {
                         self.refresh_client_view();
@@ -3128,6 +3296,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     || self.header_press.is_some()
                     || self.scrollback_press.is_some()
                 {
+                    self.selection_scroll.edge(false, Instant::now());
                     if was_scrollback != over_scrollback {
                         self.refresh_client_view();
                     }
@@ -3140,6 +3309,17 @@ impl ApplicationHandler<UserEvent> for Application {
                     if let Some(message) = size.and_then(|size| self.input.selection_motion(size)) {
                         self.send_or_defer_selection(message, presentation_current);
                     }
+                    self.selection_scroll.edge(
+                        workspace.as_ref().is_none_or(|workspace| {
+                            matches!(
+                                workspace.hit_test(position.x as f32, position.y as f32),
+                                Some(WorkspaceHit::Terminal)
+                            )
+                        }) && size
+                            .and_then(|size| self.input.selection_at_top(size))
+                            .is_some(),
+                        Instant::now(),
+                    );
                 } else if presented_revision.is_some()
                     && workspace.as_ref().is_none_or(|workspace| {
                         matches!(
@@ -3150,6 +3330,9 @@ impl ApplicationHandler<UserEvent> for Application {
                     && let Some(message) = motion
                 {
                     self.send(message);
+                }
+                if !self.input.is_selecting() {
+                    self.selection_scroll.edge(false, Instant::now());
                 }
                 self.inspect_pointer_link();
                 if was_scrollback != over_scrollback {
@@ -3170,6 +3353,9 @@ impl ApplicationHandler<UserEvent> for Application {
                 button,
                 ..
             } => {
+                if button == MouseButton::Left {
+                    self.selection_scroll.cancel();
+                }
                 if self.shortcut_viewer.open {
                     return;
                 }
@@ -3524,6 +3710,7 @@ impl ApplicationHandler<UserEvent> for Application {
             self.refresh_client_view();
         }
         self.retry_orbit(now);
+        self.drive_selection_autoscroll(now);
         let blinking = self
             .model
             .scene()
@@ -3550,6 +3737,7 @@ impl ApplicationHandler<UserEvent> for Application {
             [
                 self.next_blink,
                 self.next_animation,
+                self.selection_scroll.next,
                 self.orbit_retry.deadline,
                 // winit may suppress output-enter wakeups. Poll only until
                 // this window completes its initial native size admission.
@@ -6869,5 +7057,36 @@ mod tests {
                 Standard
             );
         }
+    }
+
+    #[test]
+    fn held_top_edge_waits_for_each_authoritative_frame_and_stops() {
+        let start = Instant::now();
+        let mut scroll = SelectionAutoscroll::default();
+        scroll.edge(true, start);
+        assert!(!scroll.take_due(start));
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL));
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 2));
+        assert!(scroll.accept(-1, 7));
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 3));
+        scroll.presented(6, start + SELECTION_SCROLL_INTERVAL * 3);
+        assert!(scroll.next.is_none());
+        scroll.presented(7, start + SELECTION_SCROLL_INTERVAL * 3);
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 4));
+        assert!(scroll.accept(0, 8));
+        scroll.presented(8, start + SELECTION_SCROLL_INTERVAL * 4);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 5));
+        scroll.edge(false, start + SELECTION_SCROLL_INTERVAL * 5);
+        scroll.edge(true, start + SELECTION_SCROLL_INTERVAL * 5);
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 6));
+        scroll.cancel();
+        assert!(scroll.accept(-1, 9));
+        scroll.presented(9, start + SELECTION_SCROLL_INTERVAL * 6);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 7));
+        scroll.edge(true, start + SELECTION_SCROLL_INTERVAL * 7);
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 8));
+        scroll.fail();
+        scroll.presented(10, start + SELECTION_SCROLL_INTERVAL * 8);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 9));
     }
 }

@@ -385,6 +385,15 @@ impl InputState {
     }
 
     #[must_use]
+    pub fn selection_at_top(&self, size: SurfaceSize) -> Option<SelectionPosition> {
+        if !self.is_selecting() {
+            return None;
+        }
+        let position = selection_position(self.cursor, size, false)?;
+        (position.y < size.padding_top as f32 + size.cell_height as f32).then_some(position)
+    }
+
+    #[must_use]
     pub fn pointer_busy(&self) -> bool {
         self.is_selecting() || !self.pressed_buttons.is_empty()
     }
@@ -1063,6 +1072,13 @@ mod tests {
         input.move_pointer(-1.0, -1.0).unwrap();
         let update = input.selection_motion(size).unwrap();
         assert_eq!(update, expected_update(5.0, 5.0));
+        assert!(input.selection_at_top(size).is_none());
+
+        input.move_pointer(16.0, 6.0).unwrap();
+        assert_eq!(
+            input.selection_at_top(size),
+            Some(SelectionPosition { x: 16.0, y: 6.0 })
+        );
 
         input.move_pointer(36.0, 46.0).unwrap();
         let update = input.selection_motion(size).unwrap();
