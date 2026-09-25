@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let full Eon open an independent window with Alt+Shift+N. Venus invokes the
+  Eon-supplied executable off the UI thread and reports launch failures in the
+  current window; native Shortcuts lists the action.
+
 - Continue a held top-row selection into older terminal history at a bounded
   pace. Orbit owns the viewport and selected text; release copies the complete
   selection. Ordinary wheel input queued after release survives an expected

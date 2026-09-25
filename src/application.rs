@@ -16,7 +16,7 @@ use std::{
     ffi::OsString,
     io::{self, Read, Write},
     os::unix::ffi::OsStringExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Arc,
     thread,
@@ -632,6 +632,7 @@ fn paste_shortcut(key: &Key, physical_key: PhysicalKey, modifiers: session::Modi
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NativeShortcutAction {
     ToggleViewer,
+    NewWindow,
     FocusTabPosition,
     Focus(WorkspaceDirection),
     Move(WorkspaceDirection),
@@ -825,6 +826,13 @@ static FIXED_SHORTCUTS: &[NativeShortcut] = &[
         KeyCode::KeyJ,
         CTRL_ALT,
         NativeShortcutAction::Move(WorkspaceDirection::Down),
+    ),
+    NativeShortcut::key(
+        "Host",
+        "Open new Eon window",
+        KeyCode::KeyN,
+        ALT_SHIFT,
+        NativeShortcutAction::NewWindow,
     ),
     NativeShortcut::key(
         "Host",
@@ -1126,6 +1134,28 @@ fn link_spawn_error(platform: NativePlatform) -> &'static str {
     }
 }
 
+fn run_new_window(executable: &Path) -> std::result::Result<(), String> {
+    let output = Command::new(executable)
+        .args(["window", "new"])
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| format!("Cannot open a new Eon window: {error}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        let detail = detail.trim();
+        Err(format!(
+            "Cannot open a new Eon window: {}",
+            if detail.is_empty() {
+                output.status.to_string()
+            } else {
+                detail.chars().take(500).collect()
+            }
+        ))
+    }
+}
+
 impl LinkOpener {
     fn start(uri: &str) -> std::result::Result<Self, &'static str> {
         validate_open_uri(uri)?;
@@ -1194,6 +1224,7 @@ enum UserEvent {
     Metadata,
     Transport,
     Workspace,
+    NewWindowFailed(String),
 }
 
 impl From<AccessKitEvent> for UserEvent {
@@ -1245,6 +1276,7 @@ struct Application {
     application_id: String,
     orbit_socket: Option<PathBuf>,
     workspace_socket: Option<PathBuf>,
+    new_window_executable: Option<PathBuf>,
     supervised: bool,
     startup_admission: bool,
     decorations: bool,
@@ -1321,6 +1353,9 @@ impl Application {
             application_id,
             orbit_socket,
             workspace_socket,
+            new_window_executable: std::env::var_os("EON_NEW_WINDOW_EXECUTABLE")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute()),
             supervised,
             startup_admission,
             decorations,
@@ -1634,6 +1669,11 @@ impl Application {
 
     fn handle_shortcut_viewer_key(&mut self, event: &winit::event::KeyEvent) -> bool {
         if !self.shortcut_viewer.open && self.workspace_model.snapshot().is_none() {
+            return false;
+        }
+        if native_key_shortcut(event.physical_key, self.input.modifiers())
+            .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::NewWindow)
+        {
             return false;
         }
         let command = match event.physical_key {
@@ -2074,6 +2114,32 @@ impl Application {
         }
     }
 
+    fn open_new_window(&mut self) {
+        let Some(executable) = self.new_window_executable.clone() else {
+            self.model.set_venus_notice(
+                LocalNoticeSource::Input,
+                "Cannot open a new Eon window: no Eon executable was supplied.",
+            );
+            self.refresh_client_view();
+            return;
+        };
+        let proxy = self.proxy.clone();
+        let result = thread::Builder::new()
+            .name("venus-new-eon-window".into())
+            .spawn(move || {
+                if let Err(failure) = run_new_window(&executable) {
+                    let _ = proxy.send_event(UserEvent::NewWindowFailed(failure));
+                }
+            });
+        if let Err(error) = result {
+            self.model.set_venus_notice(
+                LocalNoticeSource::Input,
+                format!("Cannot start a new Eon window request: {error}"),
+            );
+            self.refresh_client_view();
+        }
+    }
+
     fn handle_workspace_key(&mut self, event: &winit::event::KeyEvent) -> bool {
         let Some(snapshot) = self.workspace_model.snapshot() else {
             return false;
@@ -2088,6 +2154,8 @@ impl Application {
         let has_terminal = self.workspace_model.active_attachment().is_some();
         let cycles_focus =
             fixed.is_some_and(|shortcut| shortcut.action == NativeShortcutAction::CycleFocus);
+        let opens_window =
+            fixed.is_some_and(|shortcut| shortcut.action == NativeShortcutAction::NewWindow);
         let returns_to_terminal = fixed
             .is_some_and(|shortcut| shortcut.action == NativeShortcutAction::ReturnToTerminal)
             && focus != WorkspaceFocus::Terminal;
@@ -2118,10 +2186,16 @@ impl Application {
             event.physical_key,
             event.state,
             event.repeat,
-            cycles_focus || returns_to_terminal || tab_index.is_some() || action.is_some(),
+            opens_window
+                || cycles_focus
+                || returns_to_terminal
+                || tab_index.is_some()
+                || action.is_some(),
         ) {
             if event.state == ElementState::Pressed {
-                if cycles_focus && !event.repeat {
+                if opens_window && !event.repeat {
+                    self.open_new_window();
+                } else if cycles_focus && !event.repeat {
                     self.set_workspace_focus(match focus {
                         WorkspaceFocus::Terminal => WorkspaceFocus::Tabs,
                         WorkspaceFocus::Tabs if has_panes => WorkspaceFocus::Panes,
@@ -3608,6 +3682,11 @@ impl ApplicationHandler<UserEvent> for Application {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
+            UserEvent::NewWindowFailed(detail) => {
+                self.model
+                    .set_venus_notice(LocalNoticeSource::Input, detail);
+                self.refresh_client_view();
+            }
             UserEvent::Exit => event_loop.exit(),
             UserEvent::Present => {
                 if !self.window_focused
@@ -6489,6 +6568,44 @@ mod tests {
             workspace_shortcut(KeyCode::KeyH, Modifiers::ALT.union(Modifiers::SHIFT), "t2"),
             None
         );
+    }
+
+    #[test]
+    fn new_window_shortcut_invokes_the_supplied_eon_command() {
+        use std::{fs, os::unix::fs::PermissionsExt, time::SystemTime};
+
+        let shortcut = native_key_shortcut_for(
+            NativePlatform::Linux,
+            PhysicalKey::Code(KeyCode::KeyN),
+            ALT_SHIFT,
+        )
+        .unwrap();
+        assert_eq!(shortcut.action, NativeShortcutAction::NewWindow);
+        assert!(
+            shortcut_groups_for(NativePlatform::Linux, &[])
+                .iter()
+                .flat_map(|group| &group.rows)
+                .any(|row| row.shortcut == "Alt+Shift+N" && row.action == "Open new Eon window")
+        );
+
+        let script = std::env::temp_dir().join(format!(
+            "venus-new-window-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::write(
+            &script,
+            "#!/bin/sh\nprintf '%s|%s' \"$1\" \"$2\" >&2\nexit 7\n",
+        )
+        .unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(run_new_window(&script).unwrap_err().contains("window|new"));
+        fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+        assert!(run_new_window(&script).is_ok());
+        fs::remove_file(script).unwrap();
     }
 
     #[test]

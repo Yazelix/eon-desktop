@@ -50,6 +50,7 @@ the empty region between tabs and controls drags an undecorated window.
 | Alt+Shift+T | Request a pending tab |
 | Alt+M | Create a pane |
 | Alt+Shift+W | Close the active non-final tab |
+| Alt+Shift+N | Open an independent Eon window when supervised by Eon |
 | Alt+Z | Open Project; Eon supplies other popup shortcuts |
 | Alt+/ | Open or close Shortcuts |
 
@@ -64,6 +65,8 @@ ordinary input.
 Shortcuts shows fixed bindings and enabled popup entries. Wheel, arrow keys,
 Page Up/Down, Home, and End scroll it. Closing with Escape or Alt+/ restores the
 previous focus without sending a terminal key or workspace action.
+Alt+Shift+N also works while Shortcuts is open. A failed new-window request
+appears as a local notice in the current window.
 
 ### Labels and header scrolling
 

@@ -1516,6 +1516,31 @@ qualified by the identities and boundaries below.
   Installed full-product composition remains Eon's responsibility; the native
   boundary is x86_64 Linux Wayland and macOS remains outside VEN-C22.
 
+## VEN-C23 — New Eon window shortcut
+
+- **Status:** Candidate
+- **Consumer:** A Venus window supervised by full Eon on x86_64 Linux Wayland.
+- **Trigger:** Physical Alt+Shift+N, including while Shortcuts is open.
+- **Result:** Venus runs the exact Eon executable supplied by its supervisor
+  with `window new` on a worker thread. The action appears in native Shortcuts;
+  the current terminal does not receive the key. Eon owns the new workspace,
+  process, runtime identity, and Sessions.
+- **Important failures:** A missing executable, process launch failure, or
+  nonzero command status produces a bounded local notice and leaves the current
+  Venus window usable. The command receives fixed arguments without a shell or
+  PATH lookup.
+- **Owner:** Venus owns native key capture, help, command invocation, and local
+  failure notice. Eon owns `EON_NEW_WINDOW_EXECUTABLE` and all window policy.
+- **Consumes:** EON-C23 and EONW v7 at Eon
+  `f41a41c9aecc4c436edfa2f394b832aa6d8711ad`; Orbit ORBF v2 / ORBS v13
+  at `b6cecf8f2ee35570b41cfdc578b095889d917fe2` remains the unchanged
+  Session owner.
+- **Boundary:** This creates another Venus process and Eon workspace, not a
+  second view of an Orbit Session or a multi-window Venus event loop. The
+  composed macOS product remains unproved.
+- **Proof:** Candidate source only. Focused shortcut/help and exact-command
+  invocation check passes; installed full-Eon native observation remains open.
+
 ## Rules
 
 - Each contract uses one `## VEN-CN — Name` heading and the required fields

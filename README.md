@@ -26,6 +26,9 @@ view an Eon workspace, pass its workspace socket instead:
 cargo run --locked -- --workspace /path/to/eon.sock
 ```
 
+In full Eon, **Alt+Shift+N** opens an independent Eon window. The native
+Shortcuts viewer lists it; Eon supplies the exact launcher executable.
+
 [Running Venus](docs/LAUNCH.md) covers fonts, window options, attachment, and
 supervised startup. Apple Silicon macOS has partial native proof and remains
 unsupported as a product target.
@@ -53,16 +56,16 @@ benchmark CSV data, and disposable qualification patches.
 | Surface | Lines |
 |---|---:|
 | Agent policy inputs | 216 |
-| README | 68 |
+| README | 71 |
 | Repository attributes and ignore rules | 7 |
 | License | 201 |
 | Third-party notices | 37 |
-| Contracts and references | 2,309 |
-| Guides | 409 |
+| Contracts and references | 2,334 |
+| Guides | 412 |
 | Memory benchmark report | 158 |
 | Crate decisions | 302 |
-| Changelog | 305 |
-| Rust source, including unit tests | 20,649 |
+| Changelog | 309 |
+| Rust source, including unit tests | 20,766 |
 | Rust integration tests | 1,045 |
 | Cargo manifest | 33 |
-| **Total** | **25,739** |
+| **Total** | **25,891** |
