@@ -1518,7 +1518,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C23 — New Eon window shortcut
 
-- **Status:** Candidate
+- **Status:** Proved on x86_64 Linux Wayland.
 - **Consumer:** A Venus window supervised by full Eon on x86_64 Linux Wayland.
 - **Trigger:** Physical Alt+Shift+N, including while Shortcuts is open.
 - **Result:** Venus runs the exact Eon executable supplied by its supervisor
@@ -1538,8 +1538,19 @@ qualified by the identities and boundaries below.
 - **Boundary:** This creates another Venus process and Eon workspace, not a
   second view of an Orbit Session or a multi-window Venus event loop. The
   composed macOS product remains unproved.
-- **Proof:** Candidate source only. Focused shortcut/help and exact-command
-  invocation check passes; installed full-Eon native observation remains open.
+- **Proof:** Source `a23f9eed95120ca4acea8789bf7d32d2472d84ce` passed
+  locked fmt/check/test/clippy and the exact-command check. Nix built Venus
+  `/nix/store/b2g7c3blbk2jyizb4pnhn3kd3ndsj9ly-yazelix-venus-0.1.0`
+  into candidate full Eon
+  `/nix/store/h7dcdf0zz2bha4j0dc8b5n0vlh30762w-eon-0.1.0` with Orbit
+  `b6cecf8f2ee35570b41cfdc578b095889d917fe2` and EONW v7. On private
+  Sway 1.12, native x86_64 Linux Wayland with Mesa lavapipe, raw physical
+  Alt+Shift+N opened a second native window; `eon window new` opened a third.
+  A durable Session in the shortcut window survived Venus detach and reattach
+  with the same tab and endpoint; exact Stop of the CLI window left the other
+  two windows live. The private processes were stopped afterward. Observation
+  and logs are retained at
+  `~/.local/state/eon/proofs/eon-c23-native-2026-09-25/`.
 
 ## Rules
 
