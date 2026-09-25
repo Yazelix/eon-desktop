@@ -1532,7 +1532,7 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus owns native key capture, help, command invocation, and local
   failure notice. Eon owns `EON_NEW_WINDOW_EXECUTABLE` and all window policy.
 - **Consumes:** EON-C23 and EONW v7 at Eon
-  `f41a41c9aecc4c436edfa2f394b832aa6d8711ad`; Orbit ORBF v2 / ORBS v13
+  `fdefc640eae66c7e2781930b609e87159bde82e0`; Orbit ORBF v2 / ORBS v13
   at `b6cecf8f2ee35570b41cfdc578b095889d917fe2` remains the unchanged
   Session owner.
 - **Boundary:** This creates another Venus process and Eon workspace, not a
