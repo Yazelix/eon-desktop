@@ -1342,7 +1342,8 @@ qualified by the identities and boundaries below.
   snapshot. Wheel and navigation keys scroll bounded content. Opening,
   refreshing, scrolling, and closing send no terminal bytes or workspace
   action; matching releases remain captured and prior terminal/chrome focus is
-  restored on dismissal.
+  restored on dismissal. The title, subtitle, and first group heading occupy
+  separate readable vertical space.
 - **Important failures:** Repeated toggle events do not oscillate the viewer.
   Workspace loss, empty or maximum-size catalogs, long labels, resize, scale,
   focus loss, and tiny surfaces retain local dismissal and clipped, scrollable
@@ -1351,13 +1352,13 @@ qualified by the identities and boundaries below.
 - **Owner:** Venus owns viewer state, fixed native binding descriptors, scene,
   rendering, input precedence, and AccessKit projection. Eon owns the enabled
   popup catalog and must reserve Alt+Slash before full-product delivery.
-- **Consumes:** EONW v5 and `eon-workspace-protocol` 0.1.0 at exact Eon source
+- **Initial consumes:** EONW v5 and `eon-workspace-protocol` 0.1.0 at exact Eon source
   `0cc8f477298681ae3945903e8fdb5852d487c5ab`.
 - **Boundary:** No Orbit Session, Eon configuration parsing, child-application
   shortcuts, action execution from rows, search, filtering, rebinding,
   tutorial, telemetry, persistence, momentary timer, second renderer, generic
   modal framework, dependency, or platform-support expansion.
-- **Proof:** Accepted source
+- **Initial viewer proof:** Accepted source
   `2f05a408e499117c1ddb57f99255dcdb4a236bdf`:
   - **Environment:** Exact package source
     `/nix/store/v4kyjq0z34kfgrhz8js9gh7fkhd9lk3n-venus-popup-source`;
@@ -1377,9 +1378,33 @@ qualified by the identities and boundaries below.
     product process identity observed at proof start survives. Reproduction
     inputs, logs, accessibility tree, and captures are in
     `~/.local/state/eon/proofs/ven-toggleable-shortcut-viewer-s41-2026-09-12/`.
-- **Open proof:** Eon must reserve Alt+Slash and prove the installed full-product
-  interaction in `eon-deliver-native-shortcut-viewer-rif`. Apple Silicon macOS
-  remains under its separately approved proof chain.
+- **Header-spacing proof:** Accepted source
+  `8af87bb0d07bc975413b05e3bdea9404ed6c1e57`:
+  - **Environment:** x86_64 Linux, private Sway 1.12 native Wayland, Mesa 26.1.2
+    lavapipe; exact ORBF2/ORBS13 at Orbit
+    `b6cecf8f2ee35570b41cfdc578b095889d917fe2` and canonical EONW7 at Runtime
+    `b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa`.
+  - **Evidence:** Locked fmt/check/test/Clippy/build and the standalone Nix build
+    pass all 144 ordinary tests. The existing geometry regression covers normal,
+    compact, and tiny bounds at scales 1, 1.25, 1.5, and 2; scene-owned title and
+    subtitle rectangles reserve their complete footprint before group content.
+    The native artifact
+    `/nix/store/0qb4k6xb271nmqhspsb7rzbl7g6qvixv-venus-header-proof-0.1.0`
+    shows clear title/subtitle/Navigate separation and a complete first row at
+    1100x650 and 320x240, including compact scale 1.25. At 320x180, the header
+    remains readable while content clips and scrolls. PageDown/Home/End, resize,
+    Escape/Alt+Slash dismissal, fixed header/footer space, and AT-SPI group/row
+    order pass without viewer terminal bytes or workspace actions; subsequent
+    `a` and `b` reach the same Orbit Session. The existing native live-input
+    regression passes at scale 1 with accessibility disabled. Its synthetic
+    fixture panics in AccessKit with accessibility enabled on both the pre-fix
+    baseline and this source; the real viewer's enabled AT-SPI check passes.
+    Inputs, identities, logs, baseline failure, and captures are retained in
+    `~/.local/state/eon/proofs/ven-shortcut-viewer-header-spacing-ol8-2026-10-06/REPORT.md`.
+- **Installed delivery:** Eon `EON-C20` proves the original full-product
+  interaction through `eon-deliver-native-shortcut-viewer-rif`. Installed
+  adoption of the header correction requires a separate accepted Venus pin
+  refresh. Apple Silicon macOS remains under its separately approved proof chain.
 
 ## VEN-C21 — Native Eon Bar workspace header
 
