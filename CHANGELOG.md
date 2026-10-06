@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Consume Orbit's four-click selection ladder: double-click words, triple-click
+  space/tab-delimited spans including punctuation, and click four or more times
+  for logical lines, including soft wraps. Preserve native dragging, upward
+  history extension, mouse capture with Shift override, and frozen copy during
+  compatible output. Keep ORBF v2 / ORBS v13 and the native wide-spacer limit.
+
 - Separate the Shortcuts title, subtitle, and first group heading at normal and
   compact window sizes while preserving scrolling and dismissal.
 

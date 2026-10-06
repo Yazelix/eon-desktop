@@ -469,8 +469,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Four-click adoption awaits native Linux proof; prior history and
-  selection proofs remain accepted. Partially proved on Apple Silicon macOS.
+- **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence
   including a held drag in the top visible row, explicit copy, or activation of
@@ -555,13 +554,26 @@ qualified by the identities and boundaries below.
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
-- **Four-click adoption:** `ven-adopt-orbit-click-selection-ladder-23e` refreshes
-  the exact Orbit source without changing the canonical protocol package tree
-  `d1151ce365f371cd06498c8d65fbcf6831ee0afe` or Venus event policy. Native consumer
-  proof is pending. Orbit retains copy trimming and unwritten tab-gap behavior;
+- **Four-click consumer proof:** `c02e371c44909aa64cb3f2d77284b8a8ab2b4cc5`
+  consumes accepted Orbit `6bc269c40b18f08b95778939518f77556ba91c67` with
+  unchanged protocol package tree `d1151ce365f371cd06498c8d65fbcf6831ee0afe`
+  and no Venus Rust change. Locked fmt/check/test/clippy/release pass (144
+  ordinary tests). On private Sway 1.12, native scale 1 and host lavapipe,
+  complete native pairs select word/span/line at 2/3/4/5; fourth/fifth clicks
+  select across a 16-column soft wrap. Sentinel replacements prove fresh copy
+  to both clipboard destinations. Single-click reset, span drag, compatible
+  busy output and frozen explicit copy after row replacement pass. A held
+  triple-span drag copies exactly 1,195 UTF-8 bytes across 92 contiguous
+  `LINE-059-界` through `LINE-150-界` history lines. Native terminal mouse
+  press/release and Shift override pass, as does the existing native Application
+  regression with accessibility disabled. All five pre-existing product process
+  identities survive. Recipes, identities, captures, bytes, logs and harness
+  corrections are retained under
+  `~/.local/state/eon/proofs/ven-adopt-orbit-click-selection-ladder-23e-2026-10-06/`.
+  This is source consumer proof; installed Eon, macOS and AT remain separate.
+  Orbit retains copy trimming and unwritten tab-gap behavior;
   the inherited libghostty wide-spacer limit can truncate a span:
-  `a;界,é` selects `a;界`. This adoption does not repair that limit or accept
-  installed Eon delivery or macOS behavior.
+  `a;界,é` selects `a;界`.
 - **Upward selection source proof:** `773c6bab7d3e21e0b0d7d942c9bba72260a08b42`
   corrects the native response-order fixture from
   `59c94f6e48891b9717697a76b0e9381ccbe7a963` and
