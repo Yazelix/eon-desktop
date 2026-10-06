@@ -70,7 +70,7 @@ for one zero-payload semantic action without a new dependency or adapter.
 
 ### Orbit protocol consumer
 
-- **Selected shape:** Exact Git revision `b6cecf8f2ee35570b41cfdc578b095889d917fe2` of the
+- **Selected shape:** Exact Git revision `6bc269c40b18f08b95778939518f77556ba91c67` of the
   dependency-free, publish-false `orbit-protocol` 0.1.0 package
 - **Status:** Active
 - **Owner consequence:** Orbit alone owns ORBS v13, ORBF v2, semantic values, history, its display-row position and absolute return-to-live,
@@ -80,6 +80,9 @@ for one zero-payload semantic action without a new dependency or adapter.
   pane metadata, bounds, revision reduction, and the accepted lifecycle contracts. Venus
   keeps no mirror terminal schema or viewport authority; its native host supplies events and
   applies clipboard effects.
+  The four-click ladder remains Orbit-owned; this exact refresh preserves
+  package tree `d1151ce365f371cd06498c8d65fbcf6831ee0afe`, wire versions,
+  package version and dependency capability.
 
 ### Native host
 

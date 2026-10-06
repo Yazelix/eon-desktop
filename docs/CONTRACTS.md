@@ -5,7 +5,7 @@ remaining limitations. Beads and Git retain execution history; `CHANGELOG.md`
 retains accepted user-visible chronology.
 
 `VEN-C16` owns platform scope. The current locked consumer uses ORBF v2 /
-ORBS v13 at Orbit `b6cecf8f2ee35570b41cfdc578b095889d917fe2`, with source
+ORBS v13 at Orbit `6bc269c40b18f08b95778939518f77556ba91c67`, with source
 acceptance indexed in `VEN-C7`, and EONW v7 at Eon Runtime
 `b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa`, with provider evidence in `VEN-C8`.
 Older consumed revisions below
@@ -469,7 +469,8 @@ qualified by the identities and boundaries below.
 
 ## VEN-C7 — Authoritative history and selection interaction
 
-- **Status:** Proved on x86_64 Linux; partially proved on Apple Silicon macOS.
+- **Status:** Four-click adoption awaits native Linux proof; prior history and
+  selection proofs remain accepted. Partially proved on Apple Silicon macOS.
 - **Consumer:** One presented Venus terminal surface.
 - **Trigger:** Native wheel or touchpad movement, one left-pointer sequence
   including a held drag in the top visible row, explicit copy, or activation of
@@ -517,8 +518,10 @@ qualified by the identities and boundaries below.
     on each accepted frame. Orbit keeps parsing and owns anchored history.
   - Redraw follows native compositor callbacks.
   - Venus sends every left-pointer phase to Orbit. Orbit routes uncaptured
-    input to cell, word, or logical-line selection, preserves terminal mouse
-    capture, and treats Shift as a host-selection override.
+    input to cell selection, words at two clicks, space/tab-delimited spans at
+    three clicks, and logical lines at four or later clicks. Orbit preserves
+    native repeat timing, distance and drag behavior, terminal mouse capture,
+    and Shift as a host-selection override.
   - While a held host selection stays in the top visible row, Venus sends one
     upward selection tick at a time. Orbit moves at most one history row per
     tick and extends the same gesture; Venus waits for the accepted frame
@@ -545,13 +548,20 @@ qualified by the identities and boundaries below.
   viewport movement, routing, cells, revisions, selection, and copied text.
 - **Consumes:** Orbit `ORB-C4`, `ORB-C5`, `ORB-C6`, `ORB-C8`, and `ORB-C9`
   through canonical ORBF v2 / ORBS v13 at
-  `b6cecf8f2ee35570b41cfdc578b095889d917fe2`; exact patched winit
+  `6bc269c40b18f08b95778939518f77556ba91c67`; exact patched winit
   `7c209ec5bebbd2963f75a39f79b320af6b03f72c`, wgpu 30.0.0, and glyphon
   0.12.0.
 - **Boundary:** Client-owned history caches, bounce, device/source heuristics,
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
+- **Four-click adoption:** `ven-adopt-orbit-click-selection-ladder-23e` refreshes
+  the exact Orbit source without changing the canonical protocol package tree
+  `d1151ce365f371cd06498c8d65fbcf6831ee0afe` or Venus event policy. Native consumer
+  proof is pending. Orbit retains copy trimming and unwritten tab-gap behavior;
+  the inherited libghostty wide-spacer limit can truncate a span:
+  `a;界,é` selects `a;界`. This adoption does not repair that limit or accept
+  installed Eon delivery or macOS behavior.
 - **Upward selection source proof:** `773c6bab7d3e21e0b0d7d942c9bba72260a08b42`
   corrects the native response-order fixture from
   `59c94f6e48891b9717697a76b0e9381ccbe7a963` and

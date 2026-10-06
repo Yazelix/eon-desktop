@@ -110,8 +110,10 @@ continuous while signed commits are in flight. Discrete wheel steps move three
 retained rows without synthetic momentum. Terminal-owned mouse modes continue to
 receive their canonical Orbit input instead. Hold Shift while dragging the left
 mouse button to bypass that capture. Drag to select cells, double-click to
-select words, or triple-click to select logical lines. Hold a drag in the top
-visible row to extend the selection upward through history. Releasing writes
+select words, triple-click to select space/tab-delimited spans including
+punctuation, or click four or more times to select logical lines. Orbit's native
+wide-character spacer behavior can truncate a span after a wide glyph. Hold a
+drag in the top visible row to extend the selection upward through history. Releasing writes
 Orbit's exact bounded text to both the ordinary Wayland clipboard and primary
 selection; Ctrl+Shift+C remains an explicit ordinary-clipboard copy.
 Press Ctrl+Shift+V or the native Paste key to read the ordinary clipboard once.

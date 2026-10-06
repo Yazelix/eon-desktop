@@ -510,6 +510,18 @@ compares WezTerm, Kitty, Alacritty, Zellij, and Ghostty and adopts their common
 uncaptured selection plus Shift bypass behavior. Venus adds no click recognizer,
 terminal-state inference, dependency, or unreleased winit API.
 
+`ven-adopt-orbit-click-selection-ladder-23e` consumes accepted Orbit
+`6bc269c40b18f08b95778939518f77556ba91c67` through unchanged ORBF v2 / ORBS v13
+and package tree `d1151ce365f371cd06498c8d65fbcf6831ee0afe`. Exact patched winit
+`7c209ec5bebbd2963f75a39f79b320af6b03f72c` delivers native button phases;
+Venus forwards position, modifiers and monotonic delivery time through its
+existing release-presentation gate. Orbit owns words at two clicks, punctuation
+spans at three and logical lines at four or later, including drag/upward-tick
+granularity and frozen copy. Reuse the existing native clipboard effects and
+private Wayland/Vulkan proof route; no client classifier, boundary parser,
+source copying or dependency capability is added. Retain Orbit's documented
+wide-spacer span limitation rather than introducing a second terminal owner.
+
 ## Required for continuous-output scrollback acceptance
 
 `ven-accept-continuous-output-scrollback-a1s` consumes Orbit `ORB-C8` through
