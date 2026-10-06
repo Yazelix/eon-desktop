@@ -51,19 +51,29 @@ for one zero-payload semantic action without a new dependency or adapter.
 
 ### Eon workspace protocol consumer
 
-- **Selected shape:** Exact Git revision `0cc8f477298681ae3945903e8fdb5852d487c5ab` of the
-  dependency-free, publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package
+- **Selected shape:** Exact Eon Runtime Git revision
+  `b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa` of the dependency-free,
+  publish-false, Apache-2.0 `eon-workspace-protocol` 0.1.0 package (EONW v7).
 - **Status:** Active for internal development
-- **Owner consequence:** Eon alone owns EONW v5 values, validation, topology, pending tabs,
-  tab launch directories, popup catalog/geometry/lifecycle, optional selection, targeted actions, and
-  endpoint mappings. Venus owns only the Unix request worker and native projection.
+- **Owner consequence:** Eon Runtime owns canonical EONW values and validation.
+  The runtime owns workspace topology, pending tabs, tab launch directories,
+  popup lifecycle, selection, targeted actions and endpoint mappings; Eon
+  supplies product policy and composition. Venus owns the request worker and
+  native projection.
+- **Package identity:** Complete codec tree
+  `8409c419a3496d6f01eeef65295f5d95b943313e` equals the former Eon source
+  `f41a41c9aecc4c436edfa2f394b832aa6d8711ad`, including its manifest and
+  v2–v7 exports. No dependency, feature, build script or workspace inheritance
+  is added. Later runtime-only changes may retain this exact codec pin when
+  complete package/build inputs remain unchanged; version labels alone do not
+  prove equality. `eon-runtime-venus-rebind-tbmn` records source acceptance.
 
 ### Orbit protocol consumer
 
-- **Selected shape:** Exact Git revision `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` of the
+- **Selected shape:** Exact Git revision `b6cecf8f2ee35570b41cfdc578b095889d917fe2` of the
   dependency-free, publish-false `orbit-protocol` 0.1.0 package
 - **Status:** Active
-- **Owner consequence:** Orbit alone owns ORBS v12, ORBF v2, semantic values, history, its display-row position and absolute return-to-live,
+- **Owner consequence:** Orbit alone owns ORBS v13, ORBF v2, semantic values, history, its display-row position and absolute return-to-live,
   terminal-versus-host left-pointer routing, selection and completion revisions, typed wheel
   outcomes, signed scroll batches, bounded row-window previews, destination-tagged copied
   text, compatible-live-output gesture preservation, terminal clipboard effects, read-only
@@ -265,11 +275,12 @@ host-access failure notices remain open.
 
 ## Eon workspace protocol decision
 
-The exact Eon owner package adds one direct lock entry and no transitive, native,
+The canonical Eon Runtime package adds one direct lock entry and no transitive, native,
 or build dependency. Copying it would duplicate every EONW tag, bound, identity rule, and snapshot
 invariant. Parsing Eon CLI output, shelling out, and consuming the older private
-control format remain rejected. Replacement is one source-pin edit if EONW is
-later published unchanged; an adapter or local mirror is not a replacement path.
+control format remain rejected. Provider relocation keeps the complete package
+unchanged and adds no dependency cost; an adapter or local mirror is not a
+replacement path.
 
 ## Selected owner seam
 

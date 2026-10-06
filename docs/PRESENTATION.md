@@ -39,17 +39,18 @@ Venus recovers retryable socket loss and detaches without ending Sessions.
 
 ```text
 Eon                     -> product policy, composition, distribution
+Eon Runtime             -> workspace mechanisms, canonical EONW
 Eon Desktop / Venus     -> native presentation, interaction, client failure UX
 Eon Sessions / Orbit    -> PTYs, terminal state, session lifetime, wire authority
 ```
 
-Venus consumes EONW v7 through `eon-workspace-protocol` 0.1.0 at exact Eon source
-`f41a41c9aecc4c436edfa2f394b832aa6d8711ad`. Eon alone owns workspace order,
-optional selection, pending-tab state, identities, tab launch directories,
-popup catalog, geometry settings, commands, lifecycle, actions, Codex quota
-collection and normalization, and Session mappings. Venus consumes
-`orbit-protocol` 0.1.0, ORBF v2, and ORBS v12 at exact Orbit proof
-`f8ad14e5195109ba8cb421f30e5ae4a9619a1419`. One reducer turns complete canonical
+Venus consumes EONW v7 through `eon-workspace-protocol` 0.1.0 at exact Eon Runtime
+source `b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa`. Eon supplies popup definitions,
+commands and geometry defaults. The runtime validates configuration and owns
+live workspace and popup state, Session mappings, and Codex quota collection
+and normalization. Venus consumes
+`orbit-protocol` 0.1.0, ORBF v2, and ORBS v13 at exact Orbit proof
+`b6cecf8f2ee35570b41cfdc578b095889d917fe2`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -73,9 +74,3 @@ same renderer/model path with AppKit, AccessKit, Metal, and target-only arboard.
 Its opaque foundation and a bounded clipboard/key slice have native M1 proof;
 held-key repeat, dead keys, other IMEs, physical trackpad gesture quality, a
 host-access failure notice, lifecycle acceptance, effects, and Eon composition remain open.
-The exact `f8ad14e5195109ba8cb421f30e5ae4a9619a1419` Orbit package revision supplies
-accepted ORBF v2 / ORBS v12, including authoritative scrollback position and return to live,
-selection completion, routed native
-left-pointer gestures that survive compatible live output, bounded row-window
-previews, signed scroll batches, and read-only pane metadata. The exact source
-revision is available from the public Eon Sessions repository.

@@ -384,6 +384,15 @@ and backend-specific IME cursor-area comparison. Venus reused no source
 and rejected Alacritty's terminal, grid, selection, configuration, auto-copy,
 primary-selection, search, and raw-display clipboard ownership.
 
+## Canonical workspace protocol provider
+
+The current canonical package is
+[Eon Runtime's codec at `b8f18b4`](https://github.com/Yazelix/eon-runtime/tree/b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa/crates/eon-workspace-protocol).
+Inspect its complete manifest and v2–v7 sources for bounded values, validation
+and framing. [Crate decisions](CRATES.md#eon-workspace-protocol-consumer) record
+exact package identity and independent codec selection. The historical routes
+below retain their original semantic and native proofs.
+
 ## Native workspace foundation (historical v4 evidence)
 
 `ven-c87`, `ven-present-tab-directory-picker-a6v`, and

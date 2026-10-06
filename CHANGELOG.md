@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Consume the canonical EONW package from an exact accepted Eon Runtime source,
+  preserving package version `0.1.0`, v2–v7 exports and wire bytes.
+
 - Let full Eon open an independent window with Alt+Shift+N. Venus invokes the
   Eon-supplied executable off the UI thread and reports launch failures in the
   current window; native Shortcuts lists the action.

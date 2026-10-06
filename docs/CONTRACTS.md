@@ -5,9 +5,10 @@ remaining limitations. Beads and Git retain execution history; `CHANGELOG.md`
 retains accepted user-visible chronology.
 
 `VEN-C16` owns platform scope. The current locked consumer uses ORBF v2 /
-ORBS v12 at Orbit `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`, with source
-acceptance indexed in `VEN-C7`, and candidate EONW v7 at Eon
-`f41a41c9aecc4c436edfa2f394b832aa6d8711ad`. Older consumed revisions below
+ORBS v13 at Orbit `b6cecf8f2ee35570b41cfdc578b095889d917fe2`, with source
+acceptance indexed in `VEN-C7`, and EONW v7 at Eon Runtime
+`b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa`, with provider evidence in `VEN-C8`.
+Older consumed revisions below
 identify their named proofs; they do not select the current dependency.
 
 ## VEN-C19 — Startup typography and terminal geometry
@@ -750,6 +751,21 @@ qualified by the identities and boundaries below.
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Other Linux Wayland compositors remain outside the current
   proof.
+- **Codec provider relocation:** Source
+  `bbf4cf41b289f441683eb7a3f225a26a4d3edacc` selects Eon Runtime
+  `b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa`. Complete codec tree
+  `8409c419a3496d6f01eeef65295f5d95b943313e` equals the former Eon
+  `f41a41c9aecc4c436edfa2f394b832aa6d8711ad` dependency, retaining package
+  `0.1.0`, Rust 1.95, Apache-2.0 and v2–v7 bytes/exports. Locked format, check,
+  all 144 ordinary tests, strict Clippy and release build pass on x86_64 Linux
+  / Rust 1.96.0. All other resolved package identities/features and the native
+  source, tests and assets are unchanged. `eon-runtime-venus-rebind-tbmn`
+  retains exact metadata, logs and artifact under
+  `~/.local/state/eon/proofs/eon-runtime-venus-rebind-tbmn-2026-10-05/`.
+  This verifies source relocation, preserving VEN-C18/C20/C21/C22/C23 and
+  historical native proofs without a new native/macOS claim or Eon activation.
+  Runtime-only changes with unchanged complete codec/build identity retain
+  Venus's exact codec pin; that pin's reuse alone requires no new native proof.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
