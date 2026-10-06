@@ -554,6 +554,27 @@ qualified by the identities and boundaries below.
   public physics tuning, presentation feedback, unreleased winit, GPU-layer
   translation, and additional platform support are outside this contract.
   Apple Silicon physical trackpad gesture quality remains unaccepted.
+- **Pending-request ownership proof:**
+  `c7a0d07612e710854275a31500aaec651cc50a6f` preserves this contract with one
+  Application-owned pending scroll commit or selection tick. Queue admission
+  installs its origin; cancellation retains correlation until an ordered
+  response or attachment retirement. Preview state remains separate. Locked
+  fmt/check/test/Clippy and release build pass (144 ordinary tests). Existing
+  deterministic checks cover ordinary batching/cancellation, the two `-1`
+  origins, selection cadence, and wheel preservation after a rejected tick.
+  The native Application regression passes on x86_64 Linux, private Sway 1.12
+  headless/pixman at scale 1 and host lavapipe Vulkan. Queue checks pause the
+  writer while full and cover closed admission; both origins are rejected
+  without pending state. Encoded ReturnToLive waits for a
+  tick result or ordinary rejection and remains absent after local encoding
+  failure. All seven ambient product identities survive; private proof
+  processes are reaped. Exact candidate hashes, recipe and native logs are
+  retained in the `review-2026-10-06/` subdirectory of
+  `~/.local/state/eon/proofs/ven-pending-viewport-request-owner-9gt-2026-10-06/`.
+  Physics, native scheduling, canonical authority, wire bytes and pins remain
+  unchanged. This source proof uses a canonical test producer with private
+  accessibility disabled; installed Eon, macOS, screen-reader and physical
+  trackpad acceptance remain separate.
 - **Four-click consumer proof:** `c02e371c44909aa64cb3f2d77284b8a8ab2b4cc5`
   consumes accepted Orbit `6bc269c40b18f08b95778939518f77556ba91c67` with
   unchanged protocol package tree `d1151ce365f371cd06498c8d65fbcf6831ee0afe`
