@@ -74,6 +74,12 @@ enum NativeClipboard {
     Both,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingViewportRequest {
+    Scroll { rows: i16, cancelled: bool },
+    SelectionTick,
+}
+
 #[derive(Debug, Default)]
 struct TerminalScroll {
     pixels: f64,
@@ -84,8 +90,6 @@ struct TerminalScroll {
     velocity: f64,
     last_advance: Option<Instant>,
     preview_pending: Option<(u64, VerticalDirection)>,
-    in_flight: Option<i16>,
-    batch_cancelled: bool,
 }
 
 impl TerminalScroll {
@@ -191,12 +195,12 @@ impl TerminalScroll {
         self.stop_fling();
     }
 
-    fn cancel(&mut self) {
+    fn cancel(&mut self, pending: &mut Option<PendingViewportRequest>) {
         // A written batch still needs its ordered response before another request.
-        let in_flight = self.in_flight;
         *self = Self::default();
-        self.in_flight = in_flight;
-        self.batch_cancelled = in_flight.is_some();
+        if let Some(PendingViewportRequest::Scroll { cancelled, .. }) = pending {
+            *cancelled = true;
+        }
     }
 
     fn reset(&mut self) {
@@ -248,11 +252,12 @@ impl TerminalScroll {
 
     fn next_request(
         &mut self,
+        pending: Option<PendingViewportRequest>,
         frame_revision: u64,
         preview: Option<&ScenePreview>,
         cell_height: f64,
     ) -> Option<ClientMessage> {
-        if self.in_flight.is_some() || !cell_height.is_finite() || cell_height <= 0.0 {
+        if pending.is_some() || !cell_height.is_finite() || cell_height <= 0.0 {
             return None;
         }
         let direction = self.direction()?;
@@ -285,20 +290,28 @@ impl TerminalScroll {
             return None;
         }
         let requested = (-(crossed as i64)).clamp(-available, available) as i16;
-        self.in_flight = Some(requested);
         Some(ClientMessage::ScrollVertical {
             frame_revision: preview_revision,
             rows: requested,
         })
     }
 
-    fn accept_batch(&mut self, requested_rows: i16, applied_rows: i16, cell_height: f64) -> bool {
-        if self.in_flight != Some(requested_rows) {
+    fn accept_batch(
+        &mut self,
+        pending: &mut Option<PendingViewportRequest>,
+        requested_rows: i16,
+        applied_rows: i16,
+        cell_height: f64,
+    ) -> bool {
+        let Some(PendingViewportRequest::Scroll { rows, cancelled }) = *pending else {
+            return false;
+        };
+        if rows != requested_rows {
             return false;
         }
-        self.in_flight = None;
+        *pending = None;
         self.preview_pending = None;
-        if !std::mem::take(&mut self.batch_cancelled) {
+        if !cancelled {
             self.pixels += f64::from(applied_rows) * cell_height;
         }
         true
@@ -327,11 +340,17 @@ impl TerminalScroll {
         self.pixels.clamp(-limit, limit) as f32
     }
 
-    fn active(&self) -> bool {
+    fn active(&self, pending: Option<PendingViewportRequest>) -> bool {
         self.velocity != 0.0
             || self.pixels != 0.0
             || self.preview_pending.is_some()
-            || self.in_flight.is_some() && !self.batch_cancelled
+            || matches!(
+                pending,
+                Some(PendingViewportRequest::Scroll {
+                    cancelled: false,
+                    ..
+                })
+            )
     }
 }
 
@@ -339,13 +358,12 @@ impl TerminalScroll {
 struct SelectionAutoscroll {
     edge: bool,
     next: Option<Instant>,
-    in_flight: bool,
     awaiting_frame: Option<u64>,
     stopped: bool,
 }
 
 impl SelectionAutoscroll {
-    fn edge(&mut self, at_top: bool, now: Instant) {
+    fn edge(&mut self, at_top: bool, now: Instant, pending: Option<PendingViewportRequest>) {
         if !at_top {
             self.cancel();
             return;
@@ -354,13 +372,13 @@ impl SelectionAutoscroll {
             self.edge = true;
             self.stopped = false;
         }
-        self.schedule(now);
+        self.schedule(now, pending);
     }
 
-    fn schedule(&mut self, now: Instant) {
+    fn schedule(&mut self, now: Instant, pending: Option<PendingViewportRequest>) {
         if self.edge
             && !self.stopped
-            && !self.in_flight
+            && pending != Some(PendingViewportRequest::SelectionTick)
             && self.awaiting_frame.is_none()
             && self.next.is_none()
         {
@@ -368,20 +386,26 @@ impl SelectionAutoscroll {
         }
     }
 
-    fn take_due(&mut self, now: Instant) -> bool {
-        if self.next.is_none_or(|next| now < next) || self.in_flight {
+    fn take_due(&mut self, now: Instant, pending: Option<PendingViewportRequest>) -> bool {
+        if self.next.is_none_or(|next| now < next) || pending.is_some() {
             return false;
         }
         self.next = None;
-        self.in_flight = true;
         true
     }
 
-    fn accept(&mut self, applied_rows: i16, frame_revision: u64) -> bool {
-        if !self.in_flight || !matches!(applied_rows, -1..=0) {
+    fn accept(
+        &mut self,
+        pending: &mut Option<PendingViewportRequest>,
+        applied_rows: i16,
+        frame_revision: u64,
+    ) -> bool {
+        if *pending != Some(PendingViewportRequest::SelectionTick)
+            || !matches!(applied_rows, -1..=0)
+        {
             return false;
         }
-        self.in_flight = false;
+        *pending = None;
         if applied_rows == 0 {
             self.stopped = true;
         } else {
@@ -390,18 +414,17 @@ impl SelectionAutoscroll {
         true
     }
 
-    fn presented(&mut self, revision: u64, now: Instant) {
+    fn presented(&mut self, revision: u64, now: Instant, pending: Option<PendingViewportRequest>) {
         if self
             .awaiting_frame
             .is_some_and(|required| revision >= required)
         {
             self.awaiting_frame = None;
         }
-        self.schedule(now);
+        self.schedule(now, pending);
     }
 
     fn fail(&mut self) {
-        self.in_flight = false;
         self.next = None;
         self.awaiting_frame = None;
         self.stopped = true;
@@ -421,6 +444,7 @@ impl SelectionAutoscroll {
 }
 
 fn finish_scroll_failure(
+    pending: &mut Option<PendingViewportRequest>,
     terminal_scroll: &mut TerminalScroll,
     selection_scroll: &mut SelectionAutoscroll,
     expected_selection_rejection: bool,
@@ -428,7 +452,7 @@ fn finish_scroll_failure(
     if !expected_selection_rejection {
         terminal_scroll.reset();
     }
-    if selection_scroll.in_flight {
+    if pending.take() == Some(PendingViewportRequest::SelectionTick) {
         selection_scroll.fail();
     }
 }
@@ -1324,6 +1348,7 @@ struct Application {
     pane_scroll: f32,
     terminal_scroll: TerminalScroll,
     selection_scroll: SelectionAutoscroll,
+    pending_viewport: Option<PendingViewportRequest>,
     pending_return_to_live: bool,
     cursor: PhysicalPosition<f64>,
 }
@@ -1403,6 +1428,7 @@ impl Application {
             pane_scroll: 0.0,
             terminal_scroll: TerminalScroll::default(),
             selection_scroll: SelectionAutoscroll::default(),
+            pending_viewport: None,
             pending_return_to_live: false,
             cursor: PhysicalPosition::new(0.0, 0.0),
         }
@@ -1515,8 +1541,8 @@ impl Application {
     }
 
     fn cancel_terminal_scroll(&mut self) {
-        let redraw = self.terminal_scroll.active();
-        self.terminal_scroll.cancel();
+        let redraw = self.terminal_scroll.active(self.pending_viewport);
+        self.terminal_scroll.cancel(&mut self.pending_viewport);
         if !redraw {
             return;
         }
@@ -1527,11 +1553,12 @@ impl Application {
     }
 
     fn drive_terminal_scroll(&mut self) {
-        if self.selection_scroll.in_flight {
+        if self.pending_viewport == Some(PendingViewportRequest::SelectionTick) {
             return;
         }
         let Some(frame_revision) = self.model.scene().map(|scene| scene.revision) else {
             self.terminal_scroll.reset();
+            self.pending_viewport = None;
             return;
         };
         let Some(metrics) = self.window.as_ref().map(|state| state.renderer.metrics()) else {
@@ -1542,6 +1569,7 @@ impl Application {
             (
                 self.terminal_scroll.resolve_preview(preview),
                 self.terminal_scroll.next_request(
+                    self.pending_viewport,
                     frame_revision,
                     preview,
                     f64::from(metrics.height),
@@ -1564,7 +1592,7 @@ impl Application {
         {
             self.terminal_scroll.reset();
         }
-        if !self.terminal_scroll.active() {
+        if !self.terminal_scroll.active(self.pending_viewport) {
             self.model.clear_viewport_preview();
         }
     }
@@ -1583,7 +1611,7 @@ impl Application {
             && self.model.is_attached()
             && self.deferred_selection.is_empty()
             && matches!(self.selection_gate, SelectionGate::Ready)
-            && self.terminal_scroll.in_flight.is_none()
+            && self.pending_viewport.is_none()
             && self.presentation.presented_revision()
                 == self.model.scene().map(|scene| scene.revision))
         .then(|| {
@@ -1599,7 +1627,7 @@ impl Application {
             self.selection_scroll.next = None;
             return;
         };
-        if self.selection_scroll.take_due(now)
+        if self.selection_scroll.take_due(now, self.pending_viewport)
             && !self.send(ClientMessage::Selection(SelectionAction::AutoscrollUp {
                 position,
             }))
@@ -1871,6 +1899,7 @@ impl Application {
     fn set_orbit_attachment(&mut self, endpoint: Option<Vec<u8>>, live: bool) {
         self.terminal_scroll.reset();
         self.selection_scroll.reset();
+        self.pending_viewport = None;
         self.pending_return_to_live = false;
         self.deferred_selection.clear();
         self.selection_gate = SelectionGate::Ready;
@@ -1919,6 +1948,7 @@ impl Application {
         }
         self.model.prepare_reconnect();
         self.terminal_scroll.reset();
+        self.pending_viewport = None;
         self.reset_cursor_animation();
         self.retry_suppressed = false;
         self.last_resize = None;
@@ -2334,7 +2364,8 @@ impl Application {
                     ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { .. })
                 );
                 let server_failure = matches!(&message, ServerMessage::Failure(_));
-                let selection_scroll_failure = server_failure && self.selection_scroll.in_flight;
+                let selection_scroll_failure = server_failure
+                    && self.pending_viewport == Some(PendingViewportRequest::SelectionTick);
                 let expected_selection_rejection = selection_scroll_failure
                     && matches!(&message, ServerMessage::Failure(failure) if failure.code == FailureCode::InvalidInput);
                 let plain_frame = matches!(&message, ServerMessage::Frame(_));
@@ -2356,7 +2387,9 @@ impl Application {
                     .window
                     .as_ref()
                     .map_or(0.0, |state| f64::from(state.renderer.metrics().height));
-                let batch_accepted = if self.selection_scroll.in_flight {
+                let batch_accepted = if self.pending_viewport
+                    == Some(PendingViewportRequest::SelectionTick)
+                {
                     match &message {
                         ServerMessage::ScrollOutcome(ScrollOutcome::Viewport {
                             requested_rows,
@@ -2365,15 +2398,23 @@ impl Application {
                             ..
                         }) => {
                             *requested_rows == -1
-                                && self.selection_scroll.accept(*applied_rows, frame.revision)
+                                && self.selection_scroll.accept(
+                                    &mut self.pending_viewport,
+                                    *applied_rows,
+                                    frame.revision,
+                                )
                         }
                         ServerMessage::ScrollOutcome(ScrollOutcome::TerminalOwned { .. }) => false,
                         _ => true,
                     }
                 } else {
                     batch_response.is_none_or(|(requested, applied)| {
-                        self.terminal_scroll
-                            .accept_batch(requested, applied, cell_height)
+                        self.terminal_scroll.accept_batch(
+                            &mut self.pending_viewport,
+                            requested,
+                            applied,
+                            cell_height,
+                        )
                     })
                 };
                 let result = if !batch_accepted {
@@ -2401,6 +2442,7 @@ impl Application {
                     }
                     if server_failure {
                         finish_scroll_failure(
+                            &mut self.pending_viewport,
                             &mut self.terminal_scroll,
                             &mut self.selection_scroll,
                             expected_selection_rejection,
@@ -2440,6 +2482,7 @@ impl Application {
                     self.deferred_selection.clear();
                     self.selection_gate = SelectionGate::Ready;
                     self.selection_scroll.reset();
+                    self.pending_viewport = None;
                     self.input.retire_orbit_generation();
                     self.send_resize();
                     if let Some(message) = self.input.latest_focus() {
@@ -2451,6 +2494,12 @@ impl Application {
             TransportEvent::Incompatible { version } => self.model.mark_incompatible(version),
             TransportEvent::InvalidInput(detail) => {
                 self.terminal_scroll.reset();
+                if matches!(
+                    self.pending_viewport,
+                    Some(PendingViewportRequest::Scroll { .. })
+                ) {
+                    self.pending_viewport = None;
+                }
                 self.pending_return_to_live = false;
                 self.model.set_venus_notice(
                     LocalNoticeSource::Input,
@@ -2466,6 +2515,7 @@ impl Application {
         if retryable_event || self.model.is_terminal() {
             self.terminal_scroll.reset();
             self.selection_scroll.reset();
+            self.pending_viewport = None;
             self.pending_return_to_live = false;
             self.deferred_selection.clear();
             self.selection_gate = SelectionGate::Ready;
@@ -2482,8 +2532,7 @@ impl Application {
         if self.pending_return_to_live
             && self.model.is_attached()
             && self.transport.is_some()
-            && !self.selection_scroll.in_flight
-            && self.terminal_scroll.in_flight.is_none()
+            && self.pending_viewport.is_none()
         {
             self.pending_return_to_live = false;
             self.send(ClientMessage::ReturnToLive);
@@ -2510,7 +2559,7 @@ impl Application {
             && !self.shortcut_viewer.open
             && self.workspace_focus == WorkspaceFocus::Terminal
             && self.workspace_model.notice().is_none()
-            && !self.terminal_scroll.active()
+            && !self.terminal_scroll.active(self.pending_viewport)
             && unshifted
     }
 
@@ -2757,6 +2806,19 @@ impl Application {
     }
 
     fn send(&mut self, message: ClientMessage) -> bool {
+        let pending = match &message {
+            ClientMessage::ScrollVertical { rows, .. } => Some(PendingViewportRequest::Scroll {
+                rows: *rows,
+                cancelled: false,
+            }),
+            ClientMessage::Selection(SelectionAction::AutoscrollUp { .. }) => {
+                Some(PendingViewportRequest::SelectionTick)
+            }
+            _ => None,
+        };
+        if pending.is_some() && self.pending_viewport.is_some() {
+            return false;
+        }
         let resize = match &message {
             ClientMessage::Resize(size) => Some(*size),
             _ => None,
@@ -2790,9 +2852,7 @@ impl Application {
         let Some(transport) = &self.transport else {
             return false;
         };
-        if message == ClientMessage::ReturnToLive
-            && (self.selection_scroll.in_flight || self.terminal_scroll.in_flight.is_some())
-        {
+        if message == ClientMessage::ReturnToLive && self.pending_viewport.is_some() {
             self.pending_return_to_live = true;
             return true;
         }
@@ -2801,6 +2861,9 @@ impl Application {
                 .set_venus_notice(LocalNoticeSource::Queue, error.to_string());
             self.refresh_client_view();
             return false;
+        }
+        if let Some(pending) = pending {
+            self.pending_viewport = Some(pending);
         }
         if let Some(size) = resize {
             self.last_resize = Some(size);
@@ -3112,7 +3175,11 @@ impl Application {
                     || state.renderer.presented_scrollback_rect() != prior_scrollback_target;
                 self.presentation.publish(candidate);
                 if let Some(revision) = candidate.revision {
-                    self.selection_scroll.presented(revision, Instant::now());
+                    self.selection_scroll.presented(
+                        revision,
+                        Instant::now(),
+                        self.pending_viewport,
+                    );
                 }
                 self.links.unshifted = scroll_offset == 0.0;
                 state.accessibility.present_links(
@@ -3129,7 +3196,7 @@ impl Application {
             }
             Ok(PresentOutcome::Deferred) => {}
             Ok(PresentOutcome::Occluded) => {
-                self.terminal_scroll.cancel();
+                self.terminal_scroll.cancel(&mut self.pending_viewport);
                 self.links.unshifted = false;
             }
             Ok(PresentOutcome::Recovered) => {
@@ -3138,7 +3205,7 @@ impl Application {
                 state.window.request_redraw();
             }
             Err(error) => {
-                self.terminal_scroll.cancel();
+                self.terminal_scroll.cancel(&mut self.pending_viewport);
                 if let Some(notice) = record_render_failure(
                     &mut self.render_notice,
                     &mut self.presentation,
@@ -3230,7 +3297,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::Resized(size) => {
                 self.next_animation = None;
                 self.input.reset_scroll();
-                self.terminal_scroll.cancel();
+                self.terminal_scroll.cancel(&mut self.pending_viewport);
                 state.renderer.resize(size, state.scale_factor);
                 self.cancel_pointer_sequence();
                 self.reveal_workspace_selection();
@@ -3263,7 +3330,7 @@ impl ApplicationHandler<UserEvent> for Application {
                         }
                     }
                 }
-                self.terminal_scroll.cancel();
+                self.terminal_scroll.cancel(&mut self.pending_viewport);
                 state.scale_factor = scale_factor;
                 self.presentation.invalidate();
                 self.cancel_pointer_sequence();
@@ -3271,7 +3338,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::Occluded(occluded) => {
                 self.window_occluded = occluded;
                 self.next_animation = None;
-                self.terminal_scroll.cancel();
+                self.terminal_scroll.cancel(&mut self.pending_viewport);
                 state.renderer.reset_cursor_animation();
                 if occluded {
                     self.presentation.invalidate();
@@ -3348,7 +3415,7 @@ impl ApplicationHandler<UserEvent> for Application {
             WindowEvent::Focused(focused) => {
                 self.window_focused = focused;
                 self.next_animation = None;
-                self.terminal_scroll.cancel();
+                self.terminal_scroll.cancel(&mut self.pending_viewport);
                 state.renderer.reset_cursor_animation();
                 if !focused {
                     self.links.focus = None;
@@ -3393,7 +3460,8 @@ impl ApplicationHandler<UserEvent> for Application {
                 self.cursor = position;
                 self.links.pointer_inside = true;
                 if over_scrollback {
-                    self.selection_scroll.edge(false, Instant::now());
+                    self.selection_scroll
+                        .edge(false, Instant::now(), self.pending_viewport);
                     self.links.focus = None;
                     if was_scrollback != over_scrollback {
                         self.refresh_client_view();
@@ -3404,7 +3472,8 @@ impl ApplicationHandler<UserEvent> for Application {
                     || self.header_press.is_some()
                     || self.scrollback_press.is_some()
                 {
-                    self.selection_scroll.edge(false, Instant::now());
+                    self.selection_scroll
+                        .edge(false, Instant::now(), self.pending_viewport);
                     if was_scrollback != over_scrollback {
                         self.refresh_client_view();
                     }
@@ -3427,6 +3496,7 @@ impl ApplicationHandler<UserEvent> for Application {
                             .and_then(|size| self.input.selection_at_top(size))
                             .is_some(),
                         Instant::now(),
+                        self.pending_viewport,
                     );
                 } else if presented_revision.is_some()
                     && workspace.as_ref().is_none_or(|workspace| {
@@ -3440,7 +3510,8 @@ impl ApplicationHandler<UserEvent> for Application {
                     self.send(message);
                 }
                 if !self.input.is_selecting() {
-                    self.selection_scroll.edge(false, Instant::now());
+                    self.selection_scroll
+                        .edge(false, Instant::now(), self.pending_viewport);
                 }
                 self.inspect_pointer_link();
                 if was_scrollback != over_scrollback {
@@ -3468,7 +3539,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     return;
                 }
                 if button_state == ElementState::Pressed {
-                    self.terminal_scroll.cancel();
+                    self.terminal_scroll.cancel(&mut self.pending_viewport);
                     state.renderer.reset_cursor_animation();
                     state.window.request_redraw();
                 }
@@ -3618,7 +3689,7 @@ impl ApplicationHandler<UserEvent> for Application {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
                 if !matches!(hit, Some(WorkspaceHit::Terminal)) && workspace.is_some() {
-                    self.terminal_scroll.cancel();
+                    self.terminal_scroll.cancel(&mut self.pending_viewport);
                     state.renderer.reset_cursor_animation();
                     state.window.request_redraw();
                 }
@@ -4842,7 +4913,7 @@ mod tests {
         };
         use std::{
             os::unix::net::{UnixListener, UnixStream},
-            sync::mpsc,
+            sync::{Barrier, mpsc},
         };
         use winit::{event::DeviceId, platform::wayland::EventLoopBuilderExtWayland};
 
@@ -5306,7 +5377,19 @@ mod tests {
                 let pill = app
                     .scrollback_rect(app.workspace_scene().as_ref())
                     .expect("the presented scrollback pill is actionable");
-                app.selection_scroll.in_flight = true;
+                assert!(
+                    app.send(ClientMessage::Selection(SelectionAction::AutoscrollUp {
+                        position: session::SelectionPosition { x: 1.0, y: 1.0 },
+                    }))
+                );
+                assert!(!app.send(ClientMessage::ScrollVertical {
+                    frame_revision: 9,
+                    rows: -1
+                }));
+                assert_eq!(
+                    app.pending_viewport,
+                    Some(PendingViewportRequest::SelectionTick)
+                );
                 app.window_event(
                     event_loop,
                     id,
@@ -5389,7 +5472,15 @@ mod tests {
                     1,
                     "the pill sends one semantic action after the tick"
                 );
-                app.terminal_scroll.in_flight = Some(-1);
+                assert!(app.send(ClientMessage::ScrollVertical {
+                    frame_revision: 10,
+                    rows: -1
+                }));
+                assert!(
+                    !app.send(ClientMessage::Selection(SelectionAction::AutoscrollUp {
+                        position: session::SelectionPosition { x: 1.0, y: 1.0 },
+                    }))
+                );
                 assert!(app.send(ClientMessage::ReturnToLive));
                 assert_eq!(returns(), 0, "return waits for an ordinary scroll batch");
                 app.handle_transport(TransportEvent::Server(ServerMessage::Failure(
@@ -5400,12 +5491,87 @@ mod tests {
                 )));
                 assert!(app.model.is_attached(), "{:?}", app.model.connection());
                 assert_eq!(returns(), 1, "return follows the rejected scroll batch");
-                app.terminal_scroll.in_flight = Some(-1);
+                assert!(app.send(ClientMessage::ScrollVertical {
+                    frame_revision: 10,
+                    rows: -1
+                }));
+                assert!(
+                    !app.send(ClientMessage::Selection(SelectionAction::AutoscrollUp {
+                        position: session::SelectionPosition { x: 1.0, y: 1.0 },
+                    }))
+                );
                 assert!(app.send(ClientMessage::ReturnToLive));
                 assert_eq!(returns(), 0);
                 app.handle_transport(TransportEvent::InvalidInput("bad input".into()));
                 assert!(app.model.is_attached());
                 assert_eq!(returns(), 0, "a local failure cancels the queued return");
+                let original_transport = app.transport.take().unwrap();
+                let socket = std::env::temp_dir()
+                    .join(format!("venus-admission-{}.sock", std::process::id()));
+                let listener = UnixListener::bind(&socket).unwrap();
+                let resume_writer = Arc::new(Barrier::new(2));
+                let writer_gate = Arc::clone(&resume_writer);
+                let (paused, writer_paused) = mpsc::channel();
+                app.transport = Some(Transport::start(socket.clone(), move || {
+                    paused.send(()).unwrap();
+                    writer_gate.wait();
+                }));
+                let (blocked_stream, _) = listener.accept().unwrap();
+                let transport = app.transport.as_ref().unwrap();
+                // Hold the writer in its encoding-error wake so Full cannot race a dequeue.
+                transport
+                    .send(ClientMessage::ScrollVertical {
+                        frame_revision: 10,
+                        rows: 0,
+                    })
+                    .unwrap();
+                writer_paused.recv_timeout(Duration::from_secs(3)).unwrap();
+                let mut admission = Ok(());
+                for _ in 0..512 {
+                    admission = transport.send(ClientMessage::ReturnToLive);
+                    if admission.is_err() {
+                        break;
+                    }
+                }
+                assert_eq!(admission, Err(yazelix_venus::SendError::Full));
+                let requests = [
+                    ClientMessage::ScrollVertical {
+                        frame_revision: 10,
+                        rows: -1,
+                    },
+                    ClientMessage::Selection(SelectionAction::AutoscrollUp {
+                        position: session::SelectionPosition { x: 1.0, y: 1.0 },
+                    }),
+                ];
+                for request in &requests {
+                    assert!(!app.send(request.clone()));
+                    assert_eq!(app.pending_viewport, None);
+                }
+                resume_writer.wait();
+                blocked_stream.shutdown(std::net::Shutdown::Both).unwrap();
+                drop(blocked_stream);
+                drop(listener);
+                std::fs::remove_file(&socket).unwrap();
+                app.transport = Some(Transport::start(socket, || {}));
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while app
+                    .transport
+                    .as_ref()
+                    .unwrap()
+                    .send(ClientMessage::ReturnToLive)
+                    != Err(yazelix_venus::SendError::Closed)
+                {
+                    assert!(
+                        Instant::now() < deadline,
+                        "transport closes after connect failure"
+                    );
+                    thread::sleep(Duration::from_millis(1));
+                }
+                for request in requests {
+                    assert!(!app.send(request));
+                    assert_eq!(app.pending_viewport, None);
+                }
+                app.transport = Some(original_transport);
                 let snapshot = app.workspace_model.snapshot().unwrap().clone();
                 app.links.pressed = link;
                 app.handle_workspace(WorkspaceEvent::Unavailable("offline".into()));
@@ -5598,7 +5764,7 @@ mod tests {
         scroll.push_lines(0.6, 20.0);
         assert_eq!(scroll.pixels, 60.0);
 
-        scroll.cancel();
+        scroll.cancel(&mut None);
         scroll.push_pixels(0.0, TouchPhase::Started, start, 20.0);
         scroll.push_pixels(
             60.0,
@@ -5739,7 +5905,8 @@ mod tests {
     #[test]
     fn terminal_scroll_coalesces_one_signed_batch_without_losing_distance() {
         let start = Instant::now();
-        assert!(!TerminalScroll::default().accept_batch(-1, -1, 20.0));
+        let mut pending = None;
+        assert!(!TerminalScroll::default().accept_batch(&mut pending, -1, -1, 20.0));
         let row = yazelix_venus::DrawRow {
             wrapped: false,
             wrap_continuation: false,
@@ -5755,7 +5922,7 @@ mod tests {
         let mut continuous = TerminalScroll::default();
         continuous.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
         assert_eq!(
-            continuous.next_request(8, Some(&preview), 20.0),
+            continuous.next_request(None, 8, Some(&preview), 20.0),
             Some(ClientMessage::ScrollVertical {
                 frame_revision: 7,
                 rows: -2,
@@ -5766,42 +5933,54 @@ mod tests {
         scroll.push_pixels(50.0, TouchPhase::Moved, start, 20.0);
 
         assert_eq!(
-            scroll.next_request(7, None, 20.0),
+            scroll.next_request(pending, 7, None, 20.0),
             Some(ClientMessage::PreviewVertical {
                 frame_revision: 7,
                 direction: VerticalDirection::Up,
             })
         );
-        assert_eq!(scroll.next_request(7, None, 20.0), None);
+        assert_eq!(scroll.next_request(pending, 7, None, 20.0), None);
         scroll.preview_arrived(7, VerticalDirection::Up);
         scroll.resolve_preview(Some(&preview));
         assert_eq!(scroll.offset(Some(&preview), 20.0), 100.0);
         assert_eq!(
-            scroll.next_request(7, Some(&preview), 20.0),
+            scroll.next_request(pending, 7, Some(&preview), 20.0),
             Some(ClientMessage::ScrollVertical {
                 frame_revision: 7,
                 rows: -5,
             })
         );
 
+        pending = Some(PendingViewportRequest::Scroll {
+            rows: -5,
+            cancelled: false,
+        });
         scroll.push_pixels(40.0, TouchPhase::Moved, start, 20.0);
         scroll.rebase();
-        assert_eq!(scroll.next_request(8, None, 20.0), None);
-        assert!(!scroll.accept_batch(-4, -4, 20.0));
-        assert!(scroll.accept_batch(-5, -5, 20.0));
+        assert_eq!(scroll.next_request(pending, 8, None, 20.0), None);
+        assert!(!scroll.accept_batch(&mut pending, -4, -4, 20.0));
+        assert!(scroll.accept_batch(&mut pending, -5, -5, 20.0));
         assert_eq!(scroll.pixels, 80.0);
 
         let mut cancelled = TerminalScroll::default();
+        let mut cancelled_pending = None;
         cancelled.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
-        cancelled.next_request(7, None, 20.0);
+        cancelled.next_request(cancelled_pending, 7, None, 20.0);
         cancelled.preview_arrived(7, VerticalDirection::Up);
         cancelled.resolve_preview(Some(&preview));
-        cancelled.next_request(7, Some(&preview), 20.0);
-        cancelled.cancel();
-        assert!(!cancelled.active());
+        cancelled.next_request(cancelled_pending, 7, Some(&preview), 20.0);
+        cancelled_pending = Some(PendingViewportRequest::Scroll {
+            rows: -2,
+            cancelled: false,
+        });
+        cancelled.cancel(&mut cancelled_pending);
+        assert!(!cancelled.active(cancelled_pending));
         cancelled.push_pixels(20.0, TouchPhase::Moved, start, 20.0);
-        assert_eq!(cancelled.next_request(7, Some(&preview), 20.0), None);
-        assert!(cancelled.accept_batch(-2, -2, 20.0));
+        assert_eq!(
+            cancelled.next_request(cancelled_pending, 7, Some(&preview), 20.0),
+            None
+        );
+        assert!(cancelled.accept_batch(&mut cancelled_pending, -2, -2, 20.0));
         assert_eq!(cancelled.pixels, 40.0);
 
         let down_preview = ScenePreview::Viewport {
@@ -5816,7 +5995,7 @@ mod tests {
         down.resolve_preview(Some(&down_preview));
         assert_eq!(down.offset(Some(&down_preview), 20.0), -60.0);
         assert_eq!(
-            down.next_request(7, Some(&down_preview), 20.0),
+            down.next_request(None, 7, Some(&down_preview), 20.0),
             Some(ClientMessage::ScrollVertical {
                 frame_revision: 7,
                 rows: 3,
@@ -5824,7 +6003,7 @@ mod tests {
         );
 
         assert_eq!(
-            scroll.next_request(9, None, 20.0),
+            scroll.next_request(pending, 9, None, 20.0),
             Some(ClientMessage::PreviewVertical {
                 frame_revision: 9,
                 direction: VerticalDirection::Up,
@@ -5832,7 +6011,7 @@ mod tests {
         );
         scroll.rebase();
         assert_eq!(
-            scroll.next_request(10, None, 20.0),
+            scroll.next_request(pending, 10, None, 20.0),
             Some(ClientMessage::PreviewVertical {
                 frame_revision: 10,
                 direction: VerticalDirection::Up,
@@ -7256,50 +7435,69 @@ mod tests {
     #[test]
     fn held_top_edge_waits_for_each_authoritative_frame_and_stops() {
         let start = Instant::now();
+        let mut pending = None;
         let mut scroll = SelectionAutoscroll::default();
-        scroll.edge(true, start);
-        assert!(!scroll.take_due(start));
-        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL));
-        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 2));
-        assert!(scroll.accept(-1, 7));
-        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 3));
-        scroll.presented(6, start + SELECTION_SCROLL_INTERVAL * 3);
+        scroll.edge(true, start, pending);
+        pending = Some(PendingViewportRequest::Scroll {
+            rows: -1,
+            cancelled: false,
+        });
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL, pending));
+        assert!(!scroll.accept(&mut pending, -1, 6));
+        assert!(TerminalScroll::default().accept_batch(&mut pending, -1, -1, 20.0));
+        assert!(!scroll.take_due(start, pending));
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL, pending));
+        pending = Some(PendingViewportRequest::SelectionTick);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 2, pending));
+        assert!(scroll.accept(&mut pending, -1, 7));
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 3, pending));
+        scroll.presented(6, start + SELECTION_SCROLL_INTERVAL * 3, pending);
         assert!(scroll.next.is_none());
-        scroll.presented(7, start + SELECTION_SCROLL_INTERVAL * 3);
-        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 4));
-        assert!(scroll.accept(0, 8));
-        scroll.presented(8, start + SELECTION_SCROLL_INTERVAL * 4);
-        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 5));
-        scroll.edge(false, start + SELECTION_SCROLL_INTERVAL * 5);
-        scroll.edge(true, start + SELECTION_SCROLL_INTERVAL * 5);
-        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 6));
+        scroll.presented(7, start + SELECTION_SCROLL_INTERVAL * 3, pending);
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 4, pending));
+        pending = Some(PendingViewportRequest::SelectionTick);
+        assert!(scroll.accept(&mut pending, 0, 8));
+        scroll.presented(8, start + SELECTION_SCROLL_INTERVAL * 4, pending);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 5, pending));
+        scroll.edge(false, start + SELECTION_SCROLL_INTERVAL * 5, pending);
+        scroll.edge(true, start + SELECTION_SCROLL_INTERVAL * 5, pending);
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 6, pending));
+        pending = Some(PendingViewportRequest::SelectionTick);
         scroll.cancel();
-        assert!(scroll.accept(-1, 9));
-        scroll.presented(9, start + SELECTION_SCROLL_INTERVAL * 6);
-        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 7));
-        scroll.edge(true, start + SELECTION_SCROLL_INTERVAL * 7);
-        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 8));
-        scroll.fail();
-        scroll.presented(10, start + SELECTION_SCROLL_INTERVAL * 8);
-        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 9));
+        assert!(scroll.accept(&mut pending, -1, 9));
+        scroll.presented(9, start + SELECTION_SCROLL_INTERVAL * 6, pending);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 7, pending));
+        scroll.edge(true, start + SELECTION_SCROLL_INTERVAL * 7, pending);
+        assert!(scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 8, pending));
+        pending = Some(PendingViewportRequest::SelectionTick);
+        finish_scroll_failure(
+            &mut pending,
+            &mut TerminalScroll::default(),
+            &mut scroll,
+            true,
+        );
+        scroll.presented(10, start + SELECTION_SCROLL_INTERVAL * 8, pending);
+        assert!(!scroll.take_due(start + SELECTION_SCROLL_INTERVAL * 9, pending));
     }
 
     #[test]
     fn rejected_selection_tick_preserves_wheel_input_after_release() {
         let start = Instant::now();
+        let mut request = None;
         let mut wheel = TerminalScroll::default();
         let mut selection = SelectionAutoscroll::default();
-        selection.edge(true, start);
-        assert!(selection.take_due(start + SELECTION_SCROLL_INTERVAL));
+        selection.edge(true, start, request);
+        assert!(selection.take_due(start + SELECTION_SCROLL_INTERVAL, request));
+        request = Some(PendingViewportRequest::SelectionTick);
         selection.cancel();
         wheel.push_lines(1.0, 20.0);
         let pending = wheel.pixels;
 
-        finish_scroll_failure(&mut wheel, &mut selection, true);
+        finish_scroll_failure(&mut request, &mut wheel, &mut selection, true);
         assert_eq!(wheel.pixels, pending);
-        assert!(!selection.in_flight);
+        assert_eq!(request, None);
 
-        finish_scroll_failure(&mut wheel, &mut selection, false);
+        finish_scroll_failure(&mut request, &mut wheel, &mut selection, false);
         assert_eq!(wheel.pixels, 0.0);
     }
 }
