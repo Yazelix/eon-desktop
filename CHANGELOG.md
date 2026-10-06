@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Separate the Shortcuts title, subtitle, and first group heading at normal and
+  compact window sizes while preserving scrolling and dismissal.
+
 - Consume the canonical EONW package from an exact accepted Eon Runtime source,
   preserving package version `0.1.0`, v2–v7 exports and wire bytes.
 

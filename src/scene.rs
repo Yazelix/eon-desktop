@@ -313,6 +313,8 @@ impl ShortcutGroup {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShortcutViewerScene {
     pub bounds: SceneRect,
+    pub(crate) title: SceneRect,
+    pub(crate) subtitle: SceneRect,
     pub content: SceneRect,
     pub groups: Vec<ShortcutGroup>,
     pub scroll: f32,
@@ -338,13 +340,24 @@ impl ShortcutViewerScene {
             height: height - margin * 2.0,
         };
         let padding = metrics.padding.min(bounds.width / 8.0);
-        let header_height = (metrics.height * 2.5).min(bounds.height / 3.0);
-        let footer_height = (metrics.height * 1.75).min(bounds.height / 3.0);
-        let content = SceneRect {
+        let title = SceneRect {
             left: bounds.left + padding,
-            top: bounds.top + header_height,
+            top: bounds.top + padding,
             width: bounds.width - padding * 2.0,
-            height: bounds.height - header_height - footer_height,
+            height: metrics.height * 1.5,
+        };
+        let subtitle = SceneRect {
+            top: title.bottom(),
+            height: metrics.height,
+            ..title
+        };
+        let footer_height = (metrics.height * 1.75).min(bounds.height / 3.0);
+        let content_top =
+            (subtitle.bottom() + metrics.height * 0.5).min(bounds.bottom() - footer_height);
+        let content = SceneRect {
+            top: content_top,
+            height: bounds.bottom() - footer_height - content_top,
+            ..title
         };
         let heading_height = metrics.height * 1.4;
         let row_height = metrics.height * 2.25;
@@ -376,6 +389,8 @@ impl ShortcutViewerScene {
         }
         Self {
             bounds,
+            title,
+            subtitle,
             content,
             groups,
             scroll,
@@ -2090,25 +2105,45 @@ mod tests {
                 .map(|index| ShortcutRow::new("Alt+Z", format!("Entry {index}")))
                 .collect(),
         )];
-        let size = PhysicalSize::new(320, 180);
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            for (width, height) in [(960, 600), (320, 240), (320, 180)] {
+                let size = PhysicalSize::new(
+                    (f64::from(width) * scale) as u32,
+                    (f64::from(height) * scale) as u32,
+                );
+                let start = ShortcutViewerScene::new(groups.clone(), size, metrics, -100.0);
+                let end = ShortcutViewerScene::new(groups.clone(), size, metrics, f32::MAX);
+
+                assert_eq!(start.scroll, 0.0);
+                assert!(end.max_scroll > 0.0);
+                assert_eq!(end.scroll, end.max_scroll);
+                assert!(start.bounds.width <= size.width as f32);
+                assert!(start.bounds.height <= size.height as f32);
+                assert!(start.title.bottom() <= start.subtitle.top);
+                assert!(
+                    start.subtitle.bottom() + metrics.height * 0.25 <= start.groups[0].heading.top,
+                    "header text overlaps content at {size:?}, scale {scale}"
+                );
+                assert!(start.groups[0].heading.bottom() <= start.groups[0].rows[0].rect.top);
+                if height >= 240 {
+                    assert!(start.groups[0].rows[0].rect.bottom() <= start.content.bottom());
+                }
+                assert_eq!(start.title, end.title);
+                assert_eq!(start.subtitle, end.subtitle);
+                assert_eq!(start.content, end.content);
+                assert!(start.content.bottom() < start.bounds.bottom());
+                assert_eq!(end.groups[0].rows.len(), 32);
+            }
+        }
+
         let metrics = CellMetrics::for_scale(1.0);
-        let start = ShortcutViewerScene::new(groups.clone(), size, metrics, -100.0);
-        let end = ShortcutViewerScene::new(groups, size, metrics, f32::MAX);
-
-        assert_eq!(start.scroll, 0.0);
-        assert!(end.max_scroll > 0.0);
-        assert_eq!(end.scroll, end.max_scroll);
-        assert!(start.bounds.width <= size.width as f32);
-        assert!(start.bounds.height <= size.height as f32);
-        assert!(start.content.top > start.bounds.top);
-        assert!(start.content.bottom() < start.bounds.bottom());
-        assert_eq!(end.groups[0].rows.len(), 32);
-
         let tiny = ShortcutViewerScene::new(Vec::new(), PhysicalSize::new(1, 1), metrics, 0.0);
         assert!(tiny.bounds.right() <= 1.0 && tiny.bounds.bottom() <= 1.0);
         assert!(
             tiny.content.right() <= tiny.bounds.right()
                 && tiny.content.bottom() <= tiny.bounds.bottom()
         );
+        assert!(tiny.content.height >= 0.0);
     }
 }

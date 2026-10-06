@@ -1679,14 +1679,13 @@ impl Renderer {
             },
         ));
 
-        let title_top = viewer.bounds.top + padding;
         self.push_text_clipped(
             "Shortcuts",
-            viewer.content.left,
-            title_top,
-            viewer.content.width,
-            viewer.content.width,
-            self.metrics.height * 1.5,
+            viewer.title.left,
+            viewer.title.top,
+            viewer.title.width,
+            viewer.title.width,
+            viewer.title.height,
             SceneColor {
                 r: 239,
                 g: 244,
@@ -1697,11 +1696,11 @@ impl Renderer {
         );
         self.push_text_clipped(
             "Eon surface · physical keys",
-            viewer.content.left,
-            title_top + self.metrics.height * 1.45,
-            viewer.content.width,
-            viewer.content.width,
-            self.metrics.height,
+            viewer.subtitle.left,
+            viewer.subtitle.top,
+            viewer.subtitle.width,
+            viewer.subtitle.width,
+            viewer.subtitle.height,
             SceneColor {
                 r: 162,
                 g: 174,
