@@ -245,8 +245,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
-- **Status:** Partially proved — the accepted presentation baseline remains;
-  workspace cursor-tail continuity awaits source acceptance.
+- **Status:** Proved on x86_64 Linux.
 - **Consumer:** One Venus native surface consuming canonical Orbit frames and an
   optional cursor-tail color choice.
 - **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
@@ -286,8 +285,22 @@ qualified by the identities and boundaries below.
   `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `f6c1ebdb16df2960077dbd88ab6728a921b789d8`
-  - **Fallback visibility refinement:** The selected fill now has a
+- **Proof:** `3535f7b9bac28f54e567751abfad4b4ab164337b`
+  - **Workspace continuity refinement:** Focused red/green spring and native
+    Application checks prove fresh-frame handoff, missing-frame suspension,
+    rapid retargeting, and failure/reconnect resets. The complete locked Rust
+    route passes with 144 tests; the ignored native Application regression also
+    passes at duration `1.0`. Private Sway 1.12 headless/pixman, scale 1, and
+    host lavapipe against the exact Orbit source above show continuous keyboard
+    and pointer pane/tab navigation, layout movement, and rapid switching.
+    All six captured motions settle without an opaque trail. Capture duration
+    `4.0` makes motion observable; this is no timing or broader platform claim.
+    The isolated Eon workspace overrides only its Venus executable and does not
+    adopt this source into Eon's manifest or installed profiles. Source hashes,
+    red/green logs, native captures, and environment limits are retained at
+    `~/.local/state/eon/proofs/ven-cursor-tail-workspace-continuity-zln-2026-10-07/`.
+  - **Fallback visibility refinement at
+    `f6c1ebdb16df2960077dbd88ab6728a921b789d8`:** The selected fill has a
     shape-aware one-logical-pixel contrasting edge for block, bar, underline,
     and hollow stationary cursors. Focused red/green draw checks cover that
     edge, explicit Orbit color, blink, and moving trail; the full locked Rust
