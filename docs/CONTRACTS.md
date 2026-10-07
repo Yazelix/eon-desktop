@@ -245,8 +245,7 @@ qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
-- **Status:** Partially proved — workspace continuity is accepted on x86_64
-  Linux; recovery freshness and duration refinements await source acceptance.
+- **Status:** Proven on x86_64 Linux; broader native quality remains unproved.
 - **Consumer:** One Venus native surface consuming canonical Orbit frames and an
   optional cursor-tail color choice.
 - **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
@@ -289,7 +288,25 @@ qualified by the identities and boundaries below.
   `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `3535f7b9bac28f54e567751abfad4b4ab164337b`
+- **Proof:** `a27aad23822d3bd0b0e467ffc32c578bbde8b00d`
+  - **Recovery freshness and duration launch refinement:** Full locked Rust
+    checks pass (144 ordinary tests), along with the ignored native Application
+    regression on private Sway 1.12/headless/pixman and host lavapipe at scale 1.
+    Red/green checks cover a redraw between Attached and the first current frame,
+    retained failure-frame layout changes, and pane handoff after failure. Those
+    paths remain static until a fresh authoritative frame arrives. The existing
+    launch parameter accepts duration-only and ordinary color-plus-duration
+    overrides; Eon owns its product default and user configuration. Exact source
+    and binary hashes and logs are in
+    `~/.local/state/eon/proofs/ven-cursor-tail-review-a27aad2-2026-10-07/`.
+  - **Installed consumer continuity:** Eon source
+    `1ca418d9370061b4ba5ac03c0225236ad2b1461d` is qualified by Eon's EON-C4
+    installed proof. Its Eon-owned `1.5` default shows keyboard/pointer pane/tab,
+    layout and rapid-switch continuity with eventual settlement on private
+    Sway 1.12/headless/pixman, Nix Mesa 26.1.2 lavapipe and scale 1. The source,
+    artifacts, captures and configuration/reopen observations are in
+    `~/.local/state/eon/proofs/eon-cursor-tail-duration-1ca418d-2026-10-07/report.json`.
+  - **Earlier continuity source:** `3535f7b9bac28f54e567751abfad4b4ab164337b`.
   - **Workspace continuity refinement:** Focused red/green spring and native
     Application checks prove fresh-frame handoff, missing-frame suspension,
     rapid retargeting, and failure/reconnect resets. The complete locked Rust
