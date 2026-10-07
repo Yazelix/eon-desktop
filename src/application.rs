@@ -1912,6 +1912,8 @@ impl Application {
             && self.active_endpoint_live
             && live
             && endpoint.is_some()
+            && (self.model.scene().is_none()
+                || (self.model.is_attached() && !self.model.awaiting_current_frame()))
         {
             self.next_animation = None;
             if let Some(state) = &mut self.window {
@@ -2385,6 +2387,7 @@ impl Application {
                     self.retry_suppressed = true;
                 }
                 let was_attached = self.model.is_attached();
+                let awaiting_frame = self.model.awaiting_current_frame();
                 let previous_geometry = self
                     .model
                     .scene()
@@ -2477,6 +2480,12 @@ impl Application {
                     self.selection_gate = SelectionGate::Ready;
                 }
                 if accepted_frame {
+                    if awaiting_frame {
+                        self.next_animation = None;
+                        if let Some(state) = &mut self.window {
+                            state.renderer.attach_cursor_animation();
+                        }
+                    }
                     let geometry = self
                         .model
                         .scene()
@@ -2489,10 +2498,6 @@ impl Application {
                     }
                 }
                 if !was_attached && self.model.is_attached() {
-                    self.next_animation = None;
-                    if let Some(state) = &mut self.window {
-                        state.renderer.attach_cursor_animation();
-                    }
                     self.orbit_retry.reset();
                     self.deferred_selection.clear();
                     self.selection_gate = SelectionGate::Ready;
@@ -3110,7 +3115,10 @@ impl Application {
             self.terminal_scroll.advance(Instant::now());
             self.drive_terminal_scroll();
         }
-        if !cursor_animation_allowed(self.window_focused, self.window_occluded) {
+        if !cursor_animation_allowed(self.window_focused, self.window_occluded)
+            || (self.model.scene().is_some()
+                && (!self.model.is_attached() || self.model.awaiting_current_frame()))
+        {
             self.reset_cursor_animation();
         }
         let owned_status;
@@ -5658,6 +5666,13 @@ mod tests {
                     WindowEvent::Resized(PhysicalSize::new(960, 600)),
                 );
                 app.window_focused = true;
+                let animation_active = |app: &Application| {
+                    app.window
+                        .as_ref()
+                        .unwrap()
+                        .renderer
+                        .cursor_animation_active()
+                };
                 let root = self.listener.local_addr().unwrap();
                 let root = root.as_pathname().unwrap().parent().unwrap();
                 let sockets = [root.join("tail-a.sock"), root.join("tail-b.sock")];
@@ -5699,13 +5714,7 @@ mod tests {
                     streams.push(listeners[index].accept().unwrap().0);
                     assert!(app.model.scene().is_none());
                     app.render();
-                    assert!(
-                        !app.window
-                            .as_ref()
-                            .unwrap()
-                            .renderer
-                            .cursor_animation_active()
-                    );
+                    assert!(!animation_active(app));
                     assert!(app.next_animation.is_none());
                     app.handle_transport(TransportEvent::Server(ServerMessage::Attached));
                     app.render();
@@ -5713,48 +5722,55 @@ mod tests {
                     if streams.len() == 1 {
                         app.handle_transport(cursor_frame(1, 1));
                         app.render();
-                        assert!(
-                            app.window
-                                .as_ref()
-                                .unwrap()
-                                .renderer
-                                .cursor_animation_active()
-                        );
+                        assert!(animation_active(app));
                         thread::sleep(Duration::from_millis(20));
                         app.render();
                     }
                 }
                 app.handle_transport(cursor_frame(1, 0));
                 app.render();
-                assert!(
-                    app.window
-                        .as_ref()
-                        .unwrap()
-                        .renderer
-                        .cursor_animation_active()
-                );
+                assert!(animation_active(app));
                 app.handle_transport(TransportEvent::Lost("cursor proof disconnect".into()));
-                assert!(
-                    !app.window
-                        .as_ref()
-                        .unwrap()
-                        .renderer
-                        .cursor_animation_active()
-                );
+                assert!(!animation_active(app));
                 assert!(app.next_animation.is_none());
                 // Recovery may display the last complete Scene while waiting,
                 // but its first fresh cursor must snap after a real failure.
                 app.model.prepare_reconnect();
                 app.render();
                 app.handle_transport(TransportEvent::Server(ServerMessage::Attached));
+                app.render();
                 app.handle_transport(cursor_frame(1, 1));
                 app.render();
+                assert!(!animation_active(app));
+                // A retained failure Scene is static even if its layout moves,
+                // and cannot seed continuity into another attachment.
+                app.handle_transport(TransportEvent::Lost("cursor layout disconnect".into()));
+                app.render();
+                let mut header = snapshot.tabs[0].panes[0].clone();
+                header.id = "offline-header".into();
+                header.session = "offline-session".into();
+                header.live = false;
+                snapshot.tabs[0].panes.insert(0, header);
+                app.handle_workspace(WorkspaceEvent::Response(workspace::Response::Snapshot(
+                    snapshot.clone(),
+                )));
+                app.render();
                 assert!(
-                    !app.window
-                        .as_ref()
-                        .unwrap()
-                        .renderer
-                        .cursor_animation_active()
+                    !animation_active(app),
+                    "a retained failure frame must not animate"
+                );
+                snapshot.active_tab = snapshot.tabs[1].id.clone();
+                app.handle_workspace(WorkspaceEvent::Response(workspace::Response::Snapshot(
+                    snapshot,
+                )));
+                streams.push(listeners[1].accept().unwrap().0);
+                app.handle_transport(TransportEvent::Server(ServerMessage::Attached));
+                app.render();
+                app.handle_transport(cursor_frame(1, 0));
+                app.render();
+                assert!(
+                    !animation_active(app),
+                    "a failed attachment must not seed a healthy handoff"
                 );
                 drop(streams);
                 drop(listeners);
@@ -5766,6 +5782,7 @@ mod tests {
                 assert_eq!(app.presented_revision(), None);
                 assert!(app.pointer_link().is_none());
                 let mut empty = app.workspace_model.snapshot().unwrap().clone();
+                empty.active_tab = empty.tabs[0].id.clone();
                 show_test_popup(&mut empty);
                 empty.tabs[0].panes.clear();
                 empty.tabs[0].selected_pane = None;

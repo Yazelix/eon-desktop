@@ -1519,8 +1519,6 @@ impl Renderer {
             )
         };
         if scene.is_none() && self.cursor_handoff {
-            self.last_cursor_frame = None;
-            self.dynamic_vertex_count = 0;
             return;
         }
         self.cursor_handoff = false;

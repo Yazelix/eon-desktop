@@ -18,7 +18,7 @@ const CURSOR_COLOR_PRESETS: [(&str, Color); 8] = [
     ("nebula", rgb(0xa970ff)),
     ("bubblegum", rgb(0xff5da2)),
 ];
-const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--pane-frames true|false] [--background-opacity VALUE] [--background-blur] [--cursor-trail-color random|preset:NAME|custom:#RRGGBB] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB --cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
+const USAGE: &str = "usage: yazelix-venus [--application-id ID] [--no-decorations] [--pane-frames true|false] [--background-opacity VALUE] [--background-blur] [--cursor-trail-color random|preset:NAME|custom:#RRGGBB] [--cursor-effect-v1 none|tail] [--cursor-trail-color-v1 #RRGGBB] [--cursor-trail-duration-v1 0.25..4.0] [--font-family FAMILY] [--font-fallback FAMILY] [--font-size 6..96] [--line-height 1..3] [--columns N] [--rows N] [ORBIT_SOCKET | --workspace EON_WORKSPACE_SOCKET]";
 
 #[derive(Debug)]
 pub(super) struct LaunchArguments {
@@ -180,8 +180,10 @@ pub(super) fn launch_arguments(
         cursor_trail_color,
         cursor_trail_duration,
     ) {
-        (None, None, None, None) => Some((random_cursor_color(), 1.0)),
-        (Some(color), None, None, None) => Some((color, 1.0)),
+        (color, None, None, duration) => Some((
+            color.unwrap_or_else(random_cursor_color),
+            duration.unwrap_or(1.0),
+        )),
         (None, Some(false), None, None) => None,
         (None, Some(true), Some(color), Some(duration)) => Some((color, duration)),
         _ => return Err(USAGE.into()),
@@ -426,14 +428,14 @@ mod tests {
                 parse(&["--cursor-trail-color", &format!("preset:{name}")])
                     .unwrap()
                     .cursor_tail,
-                Some((color, 1.0))
+                Some((color, default_duration))
             );
         }
         let random = parse(&["--cursor-trail-color", "random"])
             .unwrap()
             .cursor_tail
             .unwrap();
-        assert_eq!(random.1, 1.0);
+        assert_eq!(random.1, default_duration);
         assert!(
             CURSOR_COLOR_PRESETS
                 .iter()
@@ -449,8 +451,27 @@ mod tests {
                     g: 0xab,
                     b: 0xcf,
                 },
-                1.0,
+                default_duration,
             ))
+        );
+        assert_eq!(
+            parse(&["--cursor-trail-duration-v1", "0.25"])
+                .unwrap()
+                .cursor_tail
+                .unwrap()
+                .1,
+            0.25
+        );
+        assert_eq!(
+            parse(&[
+                "--cursor-trail-color",
+                "preset:ice",
+                "--cursor-trail-duration-v1",
+                "2.5",
+            ])
+            .unwrap()
+            .cursor_tail,
+            Some((rgb(0x7ddcff), 2.5))
         );
 
         let supervised =
@@ -573,7 +594,12 @@ mod tests {
             &["--cursor-trail-color-v1", "#aéabc"][..],
             &["--cursor-trail-color-v1", "123456"][..],
             &["--cursor-trail-color-v1", "#12345g"][..],
-            &["--cursor-trail-duration-v1", "1"][..],
+            &[
+                "--cursor-effect-v1",
+                "none",
+                "--cursor-trail-duration-v1",
+                "1",
+            ][..],
             &[
                 "--cursor-effect-v1",
                 "tail",

@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+- Accept Eon-supplied cursor-tail durations with random, preset, and custom
+  color choices through the existing launch interface.
+
 - Keep the cursor tail continuous across pane and tab switches and workspace
   layout changes. Wait for the selected pane's fresh frame without drawing the
-  old pane, preserving safe resets for failures and native surface changes.
+  old pane, preserving safe resets through delayed reconnect frames, transport
+  failures, and native surface changes.
 
 - Consume Orbit's four-click selection ladder: double-click words, triple-click
   space/tab-delimited spans including punctuation, and click four or more times

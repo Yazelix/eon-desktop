@@ -132,7 +132,10 @@ Wayland compositors may ignore the best-effort request without failing launch.
 Venus does not configure blur strength.
 
 Venus chooses one random built-in cursor-tail color per launch by default and
-keeps it for that process. Choose `random`, a named preset, or a custom color:
+keeps it for that process, with an internal fallback multiplier of `1.0`.
+Eon owns product defaults and configuration in its `config.toml`; the parameters
+below are the component launch interface. Choose `random`,
+a named preset, or a custom color:
 
 ```sh
 cargo run --locked -- --cursor-trail-color preset:ice /path/to/orbit.sock
@@ -147,6 +150,15 @@ together. The cursor body uses the chosen color and a shape-aware contrasting
 edge unless Orbit supplies an explicit cursor color; Orbit still owns its shape,
 visibility, and blink state.
 
+Pass `--cursor-trail-duration-v1 VALUE` to override the duration with any color
+choice, or omit the color choice to keep a random color. Values must be finite
+multipliers from `0.25` through `4.0`:
+
+```sh
+cargo run --locked -- --cursor-trail-color preset:ice \
+  --cursor-trail-duration-v1 2.0 /path/to/orbit.sock
+```
+
 Pass `--cursor-effect-v1 none` for a static cursor. The lower-level complete
 tail profile remains available for an exact color and a finite duration
 multiplier from `0.25` through `4.0`:
@@ -160,7 +172,7 @@ cargo run --locked -- \
 ```
 
 Venus rejects unknown presets, malformed custom colors, duplicate choices,
-mixed high-level and lower-level options, incomplete profiles, non-finite
+conflicting color/effect options, incomplete profiles, non-finite
 durations, and out-of-range durations before opening a window.
 
 ### Supervised startup

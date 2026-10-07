@@ -245,7 +245,8 @@ qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
-- **Status:** Proved on x86_64 Linux.
+- **Status:** Partially proved — workspace continuity is accepted on x86_64
+  Linux; recovery freshness and duration refinements await source acceptance.
 - **Consumer:** One Venus native surface consuming canonical Orbit frames and an
   optional cursor-tail color choice.
 - **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
@@ -254,9 +255,12 @@ qualified by the identities and boundaries below.
   - Venus validates and materializes one coherent Orbit-authored structured
     frame into native draw inputs without terminal authority.
   - An omitted color choice selects one of eight Venus presets once per launch
-    and uses it for that process at duration `1.0`. One selector accepts
+    and uses it for that process at internal fallback duration `1.0`. Eon owns
+    product defaults and user configuration. One selector accepts
     `random`, `preset:<name>`, or `custom:#RRGGBB`; `none` is static, and the
-    complete lower-level `tail` profile supplies one validated color and duration.
+    duration flag can override the default for any color choice. Durations must
+    be finite multipliers from `0.25` through `4.0`; the complete lower-level
+    `tail` profile supplies one validated color and duration.
   - A bounded four-corner trail approaches Orbit's exact cursor destination.
     Healthy pane/tab switches and workspace layout changes retain window-local
     cosmetic motion toward the newly selected pane's fresh cursor. Attachment
@@ -320,7 +324,8 @@ qualified by the identities and boundaries below.
     exact ORBS v12 Orbit; the native capture is
     `~/.local/state/eon/proofs/ven-phm-2026-09-19/candidate-ice.png` (SHA-256
     `c2f6753f51ad116385ef2280c595807223b82d29027d5e03db51c62e9e02e948`).
-    Eon `a8540ff575e1ca6f3ab3825af7fd92d810e20ba6` pins this source and
+    Eon `a8540ff575e1ca6f3ab3825af7fd92d810e20ba6` pins the cursor-body source
+    `f0885517cbd63f6fac966e913e48aecccfc212eb`, and
     its installed EonTerm proof is recorded at
     `ee2a8fda1146b1f4481a5214f478d6c03104f622`. The block cursor keeps its
     existing 0.55 alpha, so its displayed pixel is darker than the opaque

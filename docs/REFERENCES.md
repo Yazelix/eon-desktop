@@ -584,9 +584,9 @@ policy, so native acceptance is platform-specific.
 
 ## Required for native cursor-tail materialization
 
-The current cursor path consumes canonical ORBF v2 / ORBS v12 cursor values and
+The current cursor path consumes canonical ORBF v2 / ORBS v13 cursor values and
 `orbit-protocol` 0.1.0 at accepted Orbit source
-`f8ad14e5195109ba8cb421f30e5ae4a9619a1419`. Orbit remains authoritative for
+`6bc269c40b18f08b95778939518f77556ba91c67`. Orbit remains authoritative for
 destination, shape, visibility, blink state, wide-tail state, and explicit cursor
 color. When no cursor color is present, Venus selects the cursor-body color from
 its chosen trail color; the static `none` profile retains Orbit's foreground
