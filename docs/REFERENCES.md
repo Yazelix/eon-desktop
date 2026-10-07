@@ -597,11 +597,17 @@ at `e019a9325b59a025cffa03a21d0788168514d502` is MIT-licensed required evidence
 for its complete trail cursor, spring helper, renderer glue, route reset, and
 redraw scheduling. Venus adopts the independently useful four-corner critically
 damped spring, 40 ms short-horizontal and 150 ms longer timing classes, 100 ms
-delta cap, first-frame and route snap, direction-ranked lag, two-triangle quad
+delta cap, first-frame snap, direction-ranked lag, two-triangle quad
 geometry, and redraw only while unsettled. It reuses no Rio source and rejects
 Rio's
 terminal state, Sugarloaf, renderer framework, configuration, panels, and
 polling.
+
+Window-local continuity supersedes Rio's route snap for healthy workspace
+navigation: Venus preserves bounded cosmetic spring state across the attachment
+gap, hides its draw inputs and deadlines, and retargets only after the selected
+attachment supplies a fresh frame. Route and workspace viewport identities do
+not reset motion; terminal authority and failure resets remain separate.
 
 [WCAG 2.2 relative luminance](https://www.w3.org/TR/WCAG22/#dfn-relative-luminance)
 defines the sRGB transfer and weighted luminance calculation. The W3C

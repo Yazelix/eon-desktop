@@ -1906,8 +1906,20 @@ impl Application {
         if let Some(message) = self.input.retire_orbit_generation() {
             self.send(message);
         }
-        self.reset_cursor_animation();
         let same_endpoint = self.active_endpoint == endpoint;
+        if !same_endpoint
+            && self.workspace_socket.is_some()
+            && self.active_endpoint_live
+            && live
+            && endpoint.is_some()
+        {
+            self.next_animation = None;
+            if let Some(state) = &mut self.window {
+                state.renderer.suspend_cursor_animation();
+            }
+        } else {
+            self.reset_cursor_animation();
+        }
         self.active_endpoint = endpoint.clone();
         self.active_endpoint_live = live;
         self.transport = None;
@@ -2477,7 +2489,10 @@ impl Application {
                     }
                 }
                 if !was_attached && self.model.is_attached() {
-                    self.reset_cursor_animation();
+                    self.next_animation = None;
+                    if let Some(state) = &mut self.window {
+                        state.renderer.attach_cursor_animation();
+                    }
                     self.orbit_retry.reset();
                     self.deferred_selection.clear();
                     self.selection_gate = SelectionGate::Ready;
@@ -3540,7 +3555,17 @@ impl ApplicationHandler<UserEvent> for Application {
                 }
                 if button_state == ElementState::Pressed {
                     self.terminal_scroll.cancel(&mut self.pending_viewport);
-                    state.renderer.reset_cursor_animation();
+                    let navigation = matches!(
+                        workspace.as_ref().and_then(|scene| {
+                            scene.hit_test(self.cursor.x as f32, self.cursor.y as f32)
+                        }),
+                        Some(
+                            WorkspaceHit::Tab(_) | WorkspaceHit::Pane(_) | WorkspaceHit::Control(_)
+                        )
+                    );
+                    if !navigation {
+                        state.renderer.reset_cursor_animation();
+                    }
                     state.window.request_redraw();
                 }
                 let renderer_size = state.renderer.size();
@@ -3689,8 +3714,11 @@ impl ApplicationHandler<UserEvent> for Application {
                     workspace.hit_test(self.cursor.x as f32, self.cursor.y as f32)
                 });
                 if !matches!(hit, Some(WorkspaceHit::Terminal)) && workspace.is_some() {
+                    let scrolling = self.terminal_scroll.active(self.pending_viewport);
                     self.terminal_scroll.cancel(&mut self.pending_viewport);
-                    state.renderer.reset_cursor_animation();
+                    if scrolling {
+                        state.renderer.reset_cursor_animation();
+                    }
                     state.window.request_redraw();
                 }
                 if workspace.as_ref().is_some_and(|scene| {
@@ -5621,6 +5649,117 @@ mod tests {
                         app.tab_scroll > 0.0,
                         "wheel over tab-strip gaps must scroll tabs"
                     );
+                }
+                // A healthy workspace handoff keeps only cosmetic position,
+                // including when several selections arrive before a frame.
+                app.window_event(
+                    event_loop,
+                    id,
+                    WindowEvent::Resized(PhysicalSize::new(960, 600)),
+                );
+                app.window_focused = true;
+                let root = self.listener.local_addr().unwrap();
+                let root = root.as_pathname().unwrap().parent().unwrap();
+                let sockets = [root.join("tail-a.sock"), root.join("tail-b.sock")];
+                let listeners = sockets
+                    .each_ref()
+                    .map(|socket| UnixListener::bind(socket).unwrap());
+                let mut snapshot = app.workspace_model.snapshot().unwrap().clone();
+                for (tab, socket) in snapshot.tabs.iter_mut().zip(&sockets) {
+                    tab.panes[0].endpoint = socket.clone().into_os_string().into_vec();
+                }
+                app.workspace_socket = Some(root.join("workspace.sock"));
+                app.active_endpoint_live = true;
+                let cursor_frame = |revision, x| {
+                    let TransportEvent::Server(ServerMessage::Frame(mut frame)) =
+                        linked_frame(revision, "https://example.invalid/tail")
+                    else {
+                        unreachable!()
+                    };
+                    for cell in &mut frame.rows[0].cells {
+                        cell.width = orbit_protocol::CellWidth::Narrow;
+                        cell.text = "x".into();
+                    }
+                    frame.cursor.visible = true;
+                    frame.cursor.viewport = Some(orbit_protocol::CursorViewport {
+                        x,
+                        y: 0,
+                        at_wide_tail: false,
+                    });
+                    TransportEvent::Server(ServerMessage::Frame(frame))
+                };
+                app.handle_transport(cursor_frame(1024, 0));
+                app.render();
+                let mut streams = Vec::new();
+                for index in [1, 0, 1, 0] {
+                    snapshot.active_tab = snapshot.tabs[index].id.clone();
+                    app.handle_workspace(WorkspaceEvent::Response(workspace::Response::Snapshot(
+                        snapshot.clone(),
+                    )));
+                    streams.push(listeners[index].accept().unwrap().0);
+                    assert!(app.model.scene().is_none());
+                    app.render();
+                    assert!(
+                        !app.window
+                            .as_ref()
+                            .unwrap()
+                            .renderer
+                            .cursor_animation_active()
+                    );
+                    assert!(app.next_animation.is_none());
+                    app.handle_transport(TransportEvent::Server(ServerMessage::Attached));
+                    app.render();
+                    assert!(app.model.scene().is_none());
+                    if streams.len() == 1 {
+                        app.handle_transport(cursor_frame(1, 1));
+                        app.render();
+                        assert!(
+                            app.window
+                                .as_ref()
+                                .unwrap()
+                                .renderer
+                                .cursor_animation_active()
+                        );
+                        thread::sleep(Duration::from_millis(20));
+                        app.render();
+                    }
+                }
+                app.handle_transport(cursor_frame(1, 0));
+                app.render();
+                assert!(
+                    app.window
+                        .as_ref()
+                        .unwrap()
+                        .renderer
+                        .cursor_animation_active()
+                );
+                app.handle_transport(TransportEvent::Lost("cursor proof disconnect".into()));
+                assert!(
+                    !app.window
+                        .as_ref()
+                        .unwrap()
+                        .renderer
+                        .cursor_animation_active()
+                );
+                assert!(app.next_animation.is_none());
+                // Recovery may display the last complete Scene while waiting,
+                // but its first fresh cursor must snap after a real failure.
+                app.model.prepare_reconnect();
+                app.render();
+                app.handle_transport(TransportEvent::Server(ServerMessage::Attached));
+                app.handle_transport(cursor_frame(1, 1));
+                app.render();
+                assert!(
+                    !app.window
+                        .as_ref()
+                        .unwrap()
+                        .renderer
+                        .cursor_animation_active()
+                );
+                drop(streams);
+                drop(listeners);
+                for socket in sockets {
+                    std::fs::remove_file(socket).unwrap();
                 }
                 app.set_orbit_attachment(Some(b"replacement".to_vec()), false);
                 assert!(app.status().contains("selected Eon pane is offline"));

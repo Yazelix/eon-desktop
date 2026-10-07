@@ -509,8 +509,6 @@ struct AnimatedCorner {
 struct CursorAnimation {
     corners: [AnimatedCorner; 4],
     target: Option<SceneRect>,
-    route: Option<String>,
-    viewport: Option<SceneRect>,
 }
 
 impl CursorAnimation {
@@ -521,7 +519,6 @@ impl CursorAnimation {
     fn update(
         &mut self,
         target: SceneRect,
-        route: Option<&str>,
         viewport: SceneRect,
         cell_width: f32,
         delta: f32,
@@ -535,11 +532,8 @@ impl CursorAnimation {
             self.reset();
             return false;
         }
-        if self.target.is_none()
-            || self.route.as_deref() != route
-            || self.viewport != Some(viewport)
-        {
-            self.snap(target, route, viewport);
+        if self.target.is_none() {
+            self.snap(target);
             return false;
         }
         if self
@@ -552,10 +546,8 @@ impl CursorAnimation {
         self.advance(delta)
     }
 
-    fn snap(&mut self, target: SceneRect, route: Option<&str>, viewport: SceneRect) {
+    fn snap(&mut self, target: SceneRect) {
         self.target = Some(target);
-        self.route = route.map(str::to_owned);
-        self.viewport = Some(viewport);
         self.corners = [AnimatedCorner::default(); 4];
     }
 
@@ -738,6 +730,7 @@ pub struct Renderer {
     presented_scrollback_rect: Option<SceneRect>,
     cursor_tail: Option<(SceneColor, SceneColor, f32)>,
     cursor_animation: CursorAnimation,
+    cursor_handoff: bool,
     last_cursor_frame: Option<Instant>,
     clear: wgpu::Color,
     background_opacity: f32,
@@ -992,6 +985,7 @@ impl Renderer {
             cursor_tail: cursor_tail
                 .map(|(color, duration)| (color, cursor_outline(color), duration)),
             cursor_animation: CursorAnimation::default(),
+            cursor_handoff: false,
             last_cursor_frame: None,
             clear: clear_color(DEFAULT_BACKGROUND, background_opacity, srgb_target),
             background_opacity,
@@ -1038,13 +1032,27 @@ impl Renderer {
 
     pub fn reset_cursor_animation(&mut self) {
         self.cursor_animation.reset();
+        self.cursor_handoff = false;
         self.last_cursor_frame = None;
         self.dynamic_vertex_count = 0;
     }
 
+    pub fn suspend_cursor_animation(&mut self) {
+        // Keep cosmetic position without drawing or ticking the old attachment.
+        self.cursor_handoff = self.cursor_animation.target.is_some();
+        self.last_cursor_frame = None;
+        self.dynamic_vertex_count = 0;
+    }
+
+    pub fn attach_cursor_animation(&mut self) {
+        if !self.cursor_handoff {
+            self.reset_cursor_animation();
+        }
+    }
+
     #[must_use]
     pub fn cursor_animation_active(&self) -> bool {
-        self.cursor_animation.is_active()
+        !self.cursor_handoff && self.cursor_animation.is_active()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1493,20 +1501,12 @@ impl Renderer {
             self.reset_cursor_animation();
             return;
         };
-        let (viewport, clip, route) = if let Some(workspace) = workspace {
+        let (viewport, clip) = if let Some(workspace) = workspace {
             let Some(clip) = workspace.visible_terminal() else {
                 self.reset_cursor_animation();
                 return;
             };
-            (
-                workspace.terminal,
-                Some(clip),
-                workspace
-                    .panes
-                    .iter()
-                    .find(|pane| pane.selected)
-                    .map(|pane| pane.id.as_str()),
-            )
+            (workspace.terminal, Some(clip))
         } else {
             (
                 SceneRect {
@@ -1516,9 +1516,14 @@ impl Renderer {
                     height: self.config.height as f32,
                 },
                 None,
-                None,
             )
         };
+        if scene.is_none() && self.cursor_handoff {
+            self.last_cursor_frame = None;
+            self.dynamic_vertex_count = 0;
+            return;
+        }
+        self.cursor_handoff = false;
         let now = Instant::now();
         let delta = self
             .last_cursor_frame
@@ -1534,7 +1539,6 @@ impl Renderer {
                 blink_visible,
                 self.metrics,
                 viewport,
-                route,
                 trail_color,
                 outline_color,
                 duration_scale,
@@ -3485,7 +3489,6 @@ fn build_tail_cursor(
     blink_visible: bool,
     metrics: CellMetrics,
     viewport: SceneRect,
-    route: Option<&str>,
     trail_color: SceneColor,
     outline_color: SceneColor,
     duration_scale: f32,
@@ -3502,14 +3505,7 @@ fn build_tail_cursor(
         animation.reset();
         return false;
     };
-    let active = animation.update(
-        bounds,
-        route,
-        viewport,
-        metrics.width,
-        delta,
-        duration_scale,
-    );
+    let active = animation.update(bounds, viewport, metrics.width, delta, duration_scale);
     if active {
         let corners = animation.corners();
         rectangles.push_quad(corners, outline_color, 1.0);
@@ -4523,16 +4519,16 @@ mod tests {
         let cell_width = origin.width;
 
         let mut animation = CursorAnimation::default();
-        assert!(!animation.update(origin, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
+        assert!(!animation.update(origin, viewport, cell_width, 0.0, 1.0));
         assert_eq!(animation.corners(), rect_corners(origin));
-        assert!(animation.update(short, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
-        assert!(!animation.update(short, Some("pane-1"), viewport, cell_width, 0.05, 1.0));
+        assert!(animation.update(short, viewport, cell_width, 0.0, 1.0));
+        assert!(!animation.update(short, viewport, cell_width, 0.05, 1.0));
         assert_eq!(animation.corners(), rect_corners(short));
 
         animation.reset();
-        assert!(!animation.update(origin, None, viewport, cell_width, 0.0, 1.0));
-        assert!(animation.update(long, None, viewport, cell_width, 0.0, 1.0));
-        assert!(animation.update(long, None, viewport, cell_width, 0.05, 1.0));
+        assert!(!animation.update(origin, viewport, cell_width, 0.0, 1.0));
+        assert!(animation.update(long, viewport, cell_width, 0.0, 1.0));
+        assert!(animation.update(long, viewport, cell_width, 0.05, 1.0));
 
         let wide_origin = SceneRect {
             width: 20.0,
@@ -4543,35 +4539,35 @@ mod tests {
             ..wide_origin
         };
         let mut wide_animation = CursorAnimation::default();
-        assert!(!wide_animation.update(wide_origin, None, viewport, cell_width, 0.0, 1.0));
-        assert!(wide_animation.update(wide_three_cells, None, viewport, cell_width, 0.0, 1.0));
-        assert!(wide_animation.update(wide_three_cells, None, viewport, cell_width, 0.05, 1.0));
+        assert!(!wide_animation.update(wide_origin, viewport, cell_width, 0.0, 1.0));
+        assert!(wide_animation.update(wide_three_cells, viewport, cell_width, 0.0, 1.0));
+        assert!(wide_animation.update(wide_three_cells, viewport, cell_width, 0.05, 1.0));
         let before_retarget = wide_animation.corners()[0].x;
         wide_three_cells.left = 80.0;
-        assert!(wide_animation.update(wide_three_cells, None, viewport, cell_width, 0.0, 1.0));
+        assert!(wide_animation.update(wide_three_cells, viewport, cell_width, 0.0, 1.0));
         assert!((wide_animation.corners()[0].x - before_retarget).abs() < CURSOR_SETTLED);
 
         let started = |scale| {
             let mut animation = CursorAnimation::default();
-            assert!(!animation.update(origin, None, viewport, cell_width, 0.0, scale));
-            assert!(animation.update(long, None, viewport, cell_width, 0.0, scale));
+            assert!(!animation.update(origin, viewport, cell_width, 0.0, scale));
+            assert!(animation.update(long, viewport, cell_width, 0.0, scale));
             animation
         };
         let mut fast = started(0.25);
         let mut slow = started(4.0);
-        assert!(!fast.update(long, None, viewport, cell_width, 0.05, 0.25));
-        assert!(slow.update(long, None, viewport, cell_width, 0.05, 4.0));
+        assert!(!fast.update(long, viewport, cell_width, 0.05, 0.25));
+        assert!(slow.update(long, viewport, cell_width, 0.05, 4.0));
 
         let mut bounded = started(4.0);
         let mut huge_delta = bounded.clone();
         assert_eq!(
-            bounded.update(long, None, viewport, cell_width, 0.1, 4.0),
-            huge_delta.update(long, None, viewport, cell_width, 10.0, 4.0)
+            bounded.update(long, viewport, cell_width, 0.1, 4.0),
+            huge_delta.update(long, viewport, cell_width, 10.0, 4.0)
         );
         assert_eq!(bounded.corners(), huge_delta.corners());
 
         for _ in 0..120 {
-            if !slow.update(long, None, viewport, cell_width, 1.0 / 60.0, 4.0) {
+            if !slow.update(long, viewport, cell_width, 1.0 / 60.0, 4.0) {
                 break;
             }
         }
@@ -4579,13 +4575,14 @@ mod tests {
         assert_eq!(slow.corners(), rect_corners(long));
 
         let moved = SceneRect { left: 80.0, ..long };
-        assert!(!slow.update(long, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
-        assert!(slow.update(moved, Some("pane-1"), viewport, cell_width, 0.0, 1.0));
-        assert!(!slow.update(moved, Some("pane-2"), viewport, cell_width, 0.0, 1.0));
-        assert_eq!(slow.corners(), rect_corners(moved));
-        assert!(!slow.update(
-            moved,
-            Some("pane-2"),
+        assert!(!slow.update(long, viewport, cell_width, 0.0, 1.0));
+        assert!(slow.update(moved, viewport, cell_width, 0.0, 1.0));
+        assert!(slow.update(moved, viewport, cell_width, 0.01, 1.0));
+        let before_switch = slow.corners();
+        assert!(slow.update(long, viewport, cell_width, 0.0, 1.0));
+        assert_eq!(slow.corners(), before_switch);
+        assert!(slow.update(
+            origin,
             SceneRect {
                 top: 10.0,
                 ..viewport
@@ -4594,6 +4591,12 @@ mod tests {
             0.0,
             1.0,
         ));
+        assert!(
+            slow.corners()
+                .iter()
+                .zip(before_switch)
+                .any(|(corner, previous)| *corner == previous)
+        );
     }
 
     #[test]
@@ -4715,7 +4718,6 @@ mod tests {
             true,
             metrics,
             viewport,
-            None,
             trail,
             outline,
             1.0,
@@ -4736,7 +4738,6 @@ mod tests {
             true,
             metrics,
             viewport,
-            None,
             trail,
             outline,
             1.0,
@@ -4772,7 +4773,6 @@ mod tests {
             true,
             metrics,
             viewport,
-            None,
             trail,
             outline,
             1.0,
@@ -4809,7 +4809,6 @@ mod tests {
                 true,
                 metrics,
                 viewport,
-                None,
                 trail,
                 outline,
                 1.0,
@@ -4834,7 +4833,6 @@ mod tests {
             true,
             metrics,
             viewport,
-            None,
             trail,
             outline,
             1.0,
@@ -4850,7 +4848,6 @@ mod tests {
             false,
             metrics,
             viewport,
-            None,
             trail,
             outline,
             1.0,

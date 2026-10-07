@@ -35,6 +35,11 @@ logical margins. Tabs remain available. A tab with only hidden popups has an
 empty body and keeps focus on its tab until a catalog shortcut reopens work.
 Venus recovers retryable socket loss and detaches without ending Sessions.
 
+The cursor tail follows pane and tab switches and workspace layout changes
+within the window. During attachment it waits without drawing the old pane;
+motion resumes toward the new pane's fresh cursor. Failures, hidden cursors,
+focus loss, occlusion, native resize, and GPU recovery reset the effect.
+
 ## Ownership
 
 ```text

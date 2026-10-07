@@ -245,7 +245,8 @@ qualified by the identities and boundaries below.
 
 ## VEN-C1 — Authoritative native presentation
 
-- **Status:** Proved
+- **Status:** Partially proved — the accepted presentation baseline remains;
+  workspace cursor-tail continuity awaits source acceptance.
 - **Consumer:** One Venus native surface consuming canonical Orbit frames and an
   optional cursor-tail color choice.
 - **Trigger:** Venus accepts an initial frame, an ordered later revision, or a
@@ -258,6 +259,12 @@ qualified by the identities and boundaries below.
     `random`, `preset:<name>`, or `custom:#RRGGBB`; `none` is static, and the
     complete lower-level `tail` profile supplies one validated color and duration.
   - A bounded four-corner trail approaches Orbit's exact cursor destination.
+    Healthy pane/tab switches and workspace layout changes retain window-local
+    cosmetic motion toward the newly selected pane's fresh cursor. Attachment
+    gaps publish no old terminal content or trail and schedule no animation;
+    only the bounded cosmetic position survives. First presentation, hidden
+    cursors, invalid geometry, transport failure, focus loss/occlusion, native
+    resize/scale changes, and GPU recovery retain safe reset behavior.
     Its solid fill receives a one-logical-pixel tint or shade with at least 3:1
     fill-to-outline contrast while preserving authoritative cursor shape,
     visibility, blink, and wide-cell geometry. The cursor body matches that
@@ -274,9 +281,9 @@ qualified by the identities and boundaries below.
   or accessibility state.
 - **Owner:** Venus Scene, renderer, and cursor-animation state; Orbit retains
   terminal and cursor authority.
-- **Consumes:** Orbit `ORB-C4` and `ORB-C6` through canonical ORBF v2 / ORBS v12
+- **Consumes:** Orbit `ORB-C4` and `ORB-C6` through canonical ORBF v2 / ORBS v13
   and `orbit-protocol` 0.1.0 at accepted source
-  `f8ad14e5195109ba8cb421f30e5ae4a9619a1419`; those contracts retain proof
+  `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
 - **Proof:** `f6c1ebdb16df2960077dbd88ab6728a921b789d8`
