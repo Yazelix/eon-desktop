@@ -288,8 +288,22 @@ qualified by the identities and boundaries below.
   `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Proof:** `a27aad23822d3bd0b0e467ffc32c578bbde8b00d`
-  - **Recovery freshness and duration launch refinement:** Full locked Rust
+- **Proof:** `bac1d8d155c04840d672f2d1bb299a830dcb625f`
+  - **Half-block rendering refinement:** Full locked Rust checks pass with 145
+    ordinary tests, plus the native Application input regression on private
+    Sway 1.12/headless/GLES2 and host Intel Vulkan. Exact cell rectangles bypass
+    shaping for narrow upper/lower half blocks while retaining resolved styles
+    and preview clipping. Deterministic checks cover scales 1/1.25/1.5/2;
+    independent native pixel checks cover the named fixture at 1 and 1.25.
+    Repeated same-toolchain release comparisons of 160×48 Anima plasma show
+    4.77–5.08 → 22.62–23.38 visible changes/s, p95 gaps 233 → 50 ms, and Venus
+    CPU 91 → 10–13% of one core. These are fixed-workload observations, not a
+    general FPS or fractional-quality guarantee. Exact identities, recordings,
+    profiles, checks and limitations are retained in
+    `~/.local/state/eon/proofs/ven-anima-half-blocks-2026-10-08/report.txt`.
+    Eon package/profile delivery and live COSMIC verification remain pending.
+  - **Earlier recovery freshness and duration launch refinement at
+    `a27aad23822d3bd0b0e467ffc32c578bbde8b00d`:** Full locked Rust
     checks pass (144 ordinary tests), along with the ignored native Application
     regression on private Sway 1.12/headless/pixman and host lavapipe at scale 1.
     Red/green checks cover a redraw between Attached and the first current frame,
