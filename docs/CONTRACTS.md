@@ -868,6 +868,16 @@ qualified by the identities and boundaries below.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
+  - Ordinary tab basenames and text home pane paths are accepted at source
+    `42a5ad291995847d5fa36bb62344065f95f6866f`
+    (`eon-decide-tab-house-icon-lff4`). Focused red/green checks prove home
+    basename, pane `~`, and root normalization including `///`, retaining full
+    launch-path context, bounded metadata and existing fallbacks. Locked format,
+    check, all 145 ordinary tests (five ignored) and strict Clippy pass on
+    x86_64 Linux / Rust 1.96.0. This proves scene-label projection; Eon's
+    delivery owns installed native acceptance. Evidence is retained in
+    `~/.local/state/eon/proofs/eon-home-labels-option-1-2026-10-09/`.
+    Other compositor, fractional-scale, screen-reader and macOS limits remain.
   - Positional labels and direct Alt-digit focus are accepted at source
     `f4845f1d0dd5c31301fd0c64b28fa8a907d1eae0`
     (`ven-positional-tabs-alt-digit-b3j`). The focused red/green checks and the
