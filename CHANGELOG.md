@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use ordinary directory names for tabs, including the home directory's name,
+  and show `~` in home pane headers while retaining compact descendant paths.
+
 - Draw upper and lower half-block terminal graphics from exact cell rectangles,
   preserving colors and styles without repeated text shaping during animation.
 

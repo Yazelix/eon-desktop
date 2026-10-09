@@ -8,7 +8,7 @@ order, selection, and popups; Venus draws the visible scene.
 
 ### Eon Bar
 
-- Tabs show their one-based position and the leaf, `~`, or `/` from Eon's tab
+- Tabs show their one-based position and the directory leaf or `/` from Eon's tab
   launch directory. Long labels use middle ellipsis; hover shows the full path.
   Selection brightens the tab, and keyboard focus adds an outline.
 - New tab sits beside the last tab and pins to the tab-region edge when tabs
@@ -25,9 +25,9 @@ order, selection, and popups; Venus draws the visible scene.
 One pane expands in a vertical stack while every fitting pane header stays
 visible. A rounded frame connects the stack; selection, hover, and keyboard
 focus have distinct fills or outlines. Visible headers pair Eon's opaque pane
-identity with Orbit's working directory. The home marker appears at `HOME`;
-without it, paths stay absolute. Only the selected endpoint receives terminal
-presentation and input.
+identity with Orbit's working directory. Home displays `~`, and its descendants
+use `~/`; without `HOME`, paths stay absolute. Only the selected endpoint receives
+terminal presentation and input.
 
 A fresh workspace or tab can begin with a Project popup and no pane. Tool popups
 and the chooser cover the stack in one rounded terminal surface with Eon's

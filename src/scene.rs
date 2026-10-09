@@ -93,7 +93,6 @@ pub enum PaneMetadata {
 }
 
 const MAX_PANE_METADATA_FIELD_CHARS: usize = 80;
-const HOME_MARKER: &str = "\u{f015}";
 
 fn pane_label(id: &str, live: bool, metadata: &PaneMetadata) -> String {
     if !live {
@@ -127,7 +126,7 @@ fn compact_working_directory(value: &str, home: Option<&Path>) -> String {
     let path = Path::new(value);
     if let Some(home) = home.filter(|home| !home.as_os_str().is_empty()) {
         if path == home {
-            return HOME_MARKER.to_owned();
+            return "~".to_owned();
         }
         if let Ok(relative) = path.strip_prefix(home) {
             return format!("~/{}", relative.display());
@@ -173,22 +172,14 @@ fn bounded_metadata_field(value: &str) -> String {
     format!("{prefix}{tail}")
 }
 
-fn tab_labels(
-    index: usize,
-    tab_count: usize,
-    directory: &[u8],
-    home: Option<&Path>,
-) -> (String, String) {
+fn tab_labels(index: usize, tab_count: usize, directory: &[u8]) -> (String, String) {
     let path = Path::new(OsStr::from_bytes(directory));
-    let leaf = if home.is_some_and(|home| path == home) {
-        "~".into()
-    } else if path == Path::new("/") {
+    let leaf = if path == Path::new("/") {
         "/".into()
     } else {
         path.file_name()
             .unwrap_or(path.as_os_str())
             .to_string_lossy()
-            .into_owned()
     };
     let position = index + 1;
     let clean = |text: &str| {
@@ -749,19 +740,14 @@ impl WorkspaceScene {
             .iter()
             .position(|tab| tab.id == snapshot.active_tab)
             .expect("EONW validates the active tab");
-        let home = std::env::var_os("HOME");
         let mut tab_end = gap;
         let mut tabs: Vec<_> = snapshot
             .tabs
             .iter()
             .enumerate()
             .map(|(index, tab)| {
-                let (label, accessible_label) = tab_labels(
-                    index,
-                    snapshot.tabs.len(),
-                    &tab.directory,
-                    home.as_deref().map(Path::new),
-                );
+                let (label, accessible_label) =
+                    tab_labels(index, snapshot.tabs.len(), &tab.directory);
                 let (label, text_width) = header_text(Some(&tab.id), &label);
                 let tab_width = (text_width.ceil() + metrics.padding * 2.0)
                     .clamp((metrics.font_size * 4.0).min(max_tab_width), max_tab_width);
@@ -1724,23 +1710,28 @@ mod tests {
     #[test]
     fn tab_directory_labels_use_current_position_and_bounded_path_context() {
         assert_eq!(
-            tab_labels(0, 5, b"/home/alice", Some(Path::new("/home/alice"))),
-            ("1  ~".into(), "Tab 1 of 5  /home/alice".into())
+            tab_labels(0, 5, b"/home/alice"),
+            ("1  alice".into(), "Tab 1 of 5  /home/alice".into())
         );
+        for directory in [b"/".as_slice(), b"///"] {
+            assert_eq!(
+                tab_labels(1, 5, directory),
+                (
+                    "2  /".into(),
+                    format!("Tab 2 of 5  {}", String::from_utf8_lossy(directory))
+                )
+            );
+        }
         assert_eq!(
-            tab_labels(1, 5, b"/", Some(Path::new("/home/alice"))),
-            ("2  /".into(), "Tab 2 of 5  /".into())
-        );
-        assert_eq!(
-            tab_labels(2, 5, b"/srv/nova", Some(Path::new("/home/alice"))),
+            tab_labels(2, 5, b"/srv/nova"),
             ("3  nova".into(), "Tab 3 of 5  /srv/nova".into())
         );
         assert_eq!(
-            tab_labels(3, 5, b"/tmp/eon-\xff", None),
+            tab_labels(3, 5, b"/tmp/eon-\xff"),
             ("4  eon-�".into(), "Tab 4 of 5  /tmp/eon-�".into())
         );
         let long = format!("/tmp/{}", "eon".repeat(100));
-        let labels = tab_labels(4, 5, long.as_bytes(), None);
+        let labels = tab_labels(4, 5, long.as_bytes());
         assert_eq!(labels.0, format!("5  {}", "eon".repeat(100)));
         assert_eq!(labels.1, format!("Tab 5 of 5  {long}"));
     }
@@ -1809,7 +1800,7 @@ mod tests {
                     working_directory: format!("file://host{home}"),
                 },
             ),
-            "p1  "
+            "p1  ~"
         );
         assert_eq!(
             pane_label(

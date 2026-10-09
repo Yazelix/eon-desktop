@@ -770,7 +770,7 @@ qualified by the identities and boundaries below.
 - **Result:**
   - Venus materializes ordered horizontal tabs and every fitting header for the
     active tab around exactly one expanded pane. Each tab shows its current
-    one-based position plus the leaf, `~`, or `/` derived from Eon's
+    one-based position plus the directory leaf or `/` derived from Eon's
     authoritative launch directory; positions update when Eon reorders tabs.
   - Tabs have pill-shaped corners and separated hit targets. Width follows shaped
     label text plus padding, capped near 280 logical pixels at default
@@ -803,7 +803,7 @@ qualified by the identities and boundaries below.
     persistent configuration and composed-launch policy.
   - Headers and AccessKit names show the opaque `pN` identity, two ASCII spaces,
     and one compact working-directory label.
-  - Home displays the packaged home marker; descendants use `~/`; paths outside
+  - Home displays `~`; descendants use `~/`; paths outside
     home remain absolute; overlong paths elide from the left to preserve the
     leaf; an unset or empty `HOME` keeps absolute paths.
   - Terminal title remains available to the selected window and is not repeated
