@@ -1086,12 +1086,6 @@ pub struct DrawCell {
     pub style: DrawStyle,
 }
 
-impl DrawCell {
-    pub(crate) fn is_full_block(&self) -> bool {
-        self.width == CellWidth::Narrow && self.text == "█"
-    }
-}
-
 /// One deterministic row of draw cells.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DrawRow {

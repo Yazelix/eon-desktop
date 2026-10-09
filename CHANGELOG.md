@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Draw upper and lower half-block terminal graphics from exact cell rectangles,
+  preserving colors and styles without repeated text shaping during animation.
+
 - Accept Eon-supplied cursor-tail durations with random, preset, and custom
   color choices through the existing launch interface.
 

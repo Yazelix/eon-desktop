@@ -2219,7 +2219,7 @@ impl Renderer {
         let mut runs = scene.glyph_runs();
         runs.retain(|run| run.style.foreground_visible(blink_visible));
         for (index, run) in runs.iter().enumerate() {
-            if is_full_block_run(run) {
+            if block_span(&run.text, run.columns == 1).is_some() {
                 continue;
             }
             let left =
@@ -2264,7 +2264,7 @@ impl Renderer {
             row.append_glyph_runs(0, &mut runs);
             runs.retain(|run| run.style.foreground_visible(blink_visible));
             for (index, run) in runs.iter().enumerate() {
-                if is_full_block_run(run) {
+                if block_span(&run.text, run.columns == 1).is_some() {
                     continue;
                 }
                 let left =
@@ -2734,8 +2734,13 @@ fn is_nerd_font_symbol(text: &str) -> bool {
     })
 }
 
-fn is_full_block_run(run: &GlyphRun) -> bool {
-    run.columns == 1 && run.text == "█"
+fn block_span(text: &str, narrow: bool) -> Option<(f32, f32)> {
+    match (narrow, text) {
+        (true, "█") => Some((0.0, 1.0)),
+        (true, "▀") => Some((0.0, 0.5)),
+        (true, "▄") => Some((0.5, 0.5)),
+        _ => None,
+    }
 }
 
 fn cell_ink_right(run: &GlyphRun, next: Option<&GlyphRun>, columns: u16) -> u16 {
@@ -3214,12 +3219,12 @@ fn build_row_rectangles(
         }
         let left = row_left + column as f32 * metrics.width;
         let top = row_top;
-        if cell.is_full_block() {
+        if let Some((offset, height)) = block_span(&cell.text, cell.width == CellWidth::Narrow) {
             rectangles.push(
                 left,
-                top,
+                top + metrics.height * offset,
                 metrics.width,
-                metrics.height,
+                metrics.height * height,
                 cell.style.foreground,
                 f32::from(cell.style.foreground_alpha()) / 255.0,
             );
@@ -4330,10 +4335,10 @@ mod tests {
     }
 
     #[test]
-    fn full_block_cells_use_exact_cell_rectangles() {
+    fn block_cells_use_exact_cell_rectangles() {
         let colors = [
             SceneColor { r: 255, g: 0, b: 0 },
-            SceneColor { r: 0, g: 255, b: 0 },
+            SceneColor { r: 255, g: 0, b: 0 },
             SceneColor { r: 0, g: 0, b: 255 },
             SceneColor {
                 r: 255,
@@ -4341,64 +4346,199 @@ mod tests {
                 b: 255,
             },
         ];
+        for (text, offset, height) in [("█", 0.0, 1.0), ("▀", 0.0, 0.5), ("▄", 0.5, 0.5)] {
+            let scene = Scene {
+                revision: 1,
+                columns: 2,
+                rows: 2,
+                screen: Screen::Primary,
+                title: String::new(),
+                working_directory: String::new(),
+                background: DEFAULT_BACKGROUND,
+                foreground: SceneColor::default(),
+                cursor: None,
+                content: colors
+                    .chunks_exact(2)
+                    .map(|row| DrawRow {
+                        wrapped: false,
+                        wrap_continuation: false,
+                        kitty_virtual_placeholder: false,
+                        cells: row
+                            .iter()
+                            .map(|foreground| DrawCell {
+                                width: CellWidth::Narrow,
+                                text: text.into(),
+                                hyperlink: String::new(),
+                                style: DrawStyle {
+                                    foreground: *foreground,
+                                    faint: *foreground == colors[2],
+                                    ..plain_style()
+                                },
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            };
+
+            let glyph_runs = scene.glyph_runs();
+            assert_eq!(glyph_runs.len(), 4);
+            for scale in [1.0, 1.25, 1.5, 2.0] {
+                let metrics = CellMetrics::for_scale(scale);
+                let viewport = SceneRect {
+                    left: 7.0,
+                    top: 11.0,
+                    width: 200.0,
+                    height: 200.0,
+                };
+                let mut actual = RectangleBatch::new(300, 300);
+                build_scene_rectangles(&mut actual, &scene, true, metrics, viewport, true);
+                let mut expected = RectangleBatch::new(300, 300);
+                for (index, color) in colors.into_iter().enumerate() {
+                    expected.push(
+                        viewport.left + metrics.padding + (index % 2) as f32 * metrics.width,
+                        viewport.top
+                            + metrics.padding
+                            + ((index / 2) as f32 + offset) * metrics.height,
+                        metrics.width,
+                        metrics.height * height,
+                        color,
+                        if index == 2 { 150.0 / 255.0 } else { 1.0 },
+                    );
+                }
+                assert_eq!(actual.bytes, expected.bytes, "{text}, scale {scale}");
+            }
+        }
+    }
+
+    #[test]
+    fn half_blocks_preserve_clipped_preview_styles() {
+        let foreground = SceneColor { r: 255, g: 0, b: 0 };
+        let background = SceneColor { r: 0, g: 0, b: 255 };
+        let row = DrawRow {
+            wrapped: false,
+            wrap_continuation: false,
+            kitty_virtual_placeholder: false,
+            cells: [
+                ("▄", true, false, false),
+                ("▀", false, true, false),
+                ("▄", false, false, true),
+            ]
+            .into_iter()
+            .map(|(text, faint, blink, invisible)| DrawCell {
+                width: CellWidth::Narrow,
+                text: text.into(),
+                hyperlink: String::new(),
+                style: DrawStyle {
+                    foreground,
+                    background,
+                    background_is_default: false,
+                    faint,
+                    blink,
+                    invisible,
+                    ..plain_style()
+                },
+            })
+            .collect(),
+        };
         let scene = Scene {
             revision: 1,
-            columns: 2,
-            rows: 2,
+            columns: 3,
+            rows: 1,
             screen: Screen::Primary,
             title: String::new(),
             working_directory: String::new(),
             background: DEFAULT_BACKGROUND,
-            foreground: SceneColor::default(),
+            foreground,
             cursor: None,
-            content: colors
-                .chunks_exact(2)
-                .map(|row| DrawRow {
-                    wrapped: false,
-                    wrap_continuation: false,
-                    kitty_virtual_placeholder: false,
-                    cells: row
-                        .iter()
-                        .map(|foreground| DrawCell {
-                            width: CellWidth::Narrow,
-                            text: "█".into(),
-                            hyperlink: String::new(),
-                            style: DrawStyle {
-                                foreground: *foreground,
-                                faint: *foreground == colors[2],
-                                ..plain_style()
-                            },
-                        })
-                        .collect(),
-                })
-                .collect(),
+            content: vec![row.clone()],
         };
-
-        let glyph_runs = scene.glyph_runs();
-        assert_eq!(glyph_runs.len(), 4);
-        assert!(glyph_runs.iter().all(is_full_block_run));
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let metrics = CellMetrics::for_scale(scale);
-            let viewport = SceneRect {
+            let origin = SceneRect {
                 left: 7.0,
-                top: 11.0,
+                top: 50.0,
                 width: 200.0,
                 height: 200.0,
             };
-            let mut actual = RectangleBatch::new(300, 300);
-            build_scene_rectangles(&mut actual, &scene, true, metrics, viewport, true);
-            let mut expected = RectangleBatch::new(300, 300);
-            for (index, color) in colors.into_iter().enumerate() {
-                expected.push(
-                    viewport.left + metrics.padding + (index % 2) as f32 * metrics.width,
-                    viewport.top + metrics.padding + (index / 2) as f32 * metrics.height,
-                    metrics.width,
-                    metrics.height,
-                    color,
-                    if index == 2 { 150.0 / 255.0 } else { 1.0 },
-                );
+            for direction in [VerticalDirection::Up, VerticalDirection::Down] {
+                let preview = ScenePreview::Viewport {
+                    frame_revision: 1,
+                    direction,
+                    edge_reached: false,
+                    rows: vec![row.clone()],
+                };
+                let left = origin.left + metrics.padding;
+                let top = origin.top
+                    + metrics.padding
+                    + if direction == VerticalDirection::Up {
+                        -metrics.height
+                    } else {
+                        metrics.height
+                    };
+                let clip = SceneRect {
+                    left: left + metrics.width * 0.5,
+                    top: top + metrics.height * 0.25,
+                    width: metrics.width * 2.0,
+                    height: metrics.height * 0.5,
+                };
+                for blink_visible in [false, true] {
+                    let mut actual = RectangleBatch::new(300, 300);
+                    actual.clip = Some(clip);
+                    build_preview_rectangles(
+                        &mut actual,
+                        &scene,
+                        Some(&preview),
+                        blink_visible,
+                        metrics,
+                        origin,
+                    );
+                    let mut expected = RectangleBatch::new(300, 300);
+                    expected.clip = Some(clip);
+                    expected.push(
+                        left,
+                        top,
+                        metrics.width * 3.0,
+                        metrics.height,
+                        background,
+                        1.0,
+                    );
+                    expected.push(
+                        left,
+                        top + metrics.height * 0.5,
+                        metrics.width,
+                        metrics.height * 0.5,
+                        foreground,
+                        150.0 / 255.0,
+                    );
+                    if blink_visible {
+                        expected.push(
+                            left + metrics.width,
+                            top,
+                            metrics.width,
+                            metrics.height * 0.5,
+                            foreground,
+                            1.0,
+                        );
+                    }
+                    assert_eq!(
+                        actual.bytes, expected.bytes,
+                        "{direction:?}, {scale}, blink {blink_visible}"
+                    );
+                }
             }
-            assert_eq!(actual.bytes, expected.bytes, "scale {scale}");
+        }
+        for (text, narrow) in [
+            ("▀\u{301}", true),
+            ("▄▄", true),
+            ("▌", true),
+            ("text", true),
+            ("▀", false),
+            ("▄", false),
+        ] {
+            assert!(
+                block_span(text, narrow).is_none(),
+                "{text}, narrow {narrow}"
+            );
         }
     }
 
