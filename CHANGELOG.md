@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose terminal text-range geometry from the shared cell grid so Orca line
+  review reaches visible output, preserving atomic graphemes and clipping.
+
 - Use ordinary directory names for tabs, including the home directory's name,
   and show `~` in home pane headers while retaining compact descendant paths.
 

@@ -60,12 +60,12 @@ benchmark CSV data, and disposable qualification patches.
 | Repository attributes and ignore rules | 7 |
 | License | 201 |
 | Third-party notices | 37 |
-| Contracts and references | 2,522 |
-| Guides | 426 |
+| Contracts and references | 2,545 |
+| Guides | 432 |
 | Memory benchmark report | 158 |
 | Crate decisions | 316 |
-| Changelog | 335 |
+| Changelog | 338 |
 | Rust source, including unit tests | 21,445 |
 | Rust integration tests | 1,045 |
 | Cargo manifest | 33 |
-| **Total** | **26,812** |
+| **Total** | **26,844** |

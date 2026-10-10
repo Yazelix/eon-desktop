@@ -288,6 +288,25 @@ qualified by the identities and boundaries below.
   `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
+- **Terminal text-geometry proof:** Source
+  `217f18a231d511f0b379ceee807769ad31c0a047` (`ven-restore-orca-terminal-line-review-gyu`)
+  hardens VEN-C1/C2/C7 through the existing Scene and shared cell metrics.
+  Accessible atomic units retain their canonical column spans; AccessKit text
+  positions and widths use the clipped row origin and viewport. Text, selection,
+  wide cells, trailing trim, zero-width newlines and oversized-cell degradation
+  keep their existing owners and semantics. Focused red/green checks cover
+  atomic/wide units and partial/full clipping at scales 1/1.25/1.5/2. Locked
+  formatting, check, all 146 ordinary tests, strict Clippy and build pass.
+  The native Application input regression also passes on a separate private
+  D-Bus session. On private native Sway 1.12/headless/pixman, scale 1,
+  host Mesa 26.1.6 lavapipe, Orca 49.4 and AT-SPI 2.58.1, real reader commands
+  review all bounded corpus rows and ASCII markers in order, report exact
+  `é 界` selection, and continue after history/AT return-to-live. Actual SSIP
+  and synthesized PCM are retained in
+  `~/.local/state/eon/proofs/ven-orca-line-review-gyu-2026-10-10/acceptance.json`.
+  Reader handlers were invoked through Orca D-Bus; native reader-key delivery,
+  retired-control reader focus, composed Eon qualification, other compositor/
+  native fractional-scale quality and macOS remain unaccepted.
 - **Proof:** `bac1d8d155c04840d672f2d1bb299a830dcb625f`
   - **Half-block rendering refinement:** Full locked Rust checks pass with 145
     ordinary tests, plus the native Application input regression on private
@@ -405,6 +424,8 @@ qualified by the identities and boundaries below.
   advances render content without withdrawing the last presented input geometry.
 - **Important failures:** Invalid, stale, unsettled, or non-presented geometry
   cannot reach Orbit; capture and focus transitions withdraw obsolete input.
+- **Bounded text-geometry proof:** See the scoped Venus source and reader
+  observation under VEN-C1; broader reader qualification remains separate.
 - **Owner:** Venus native input and geometry owners; Orbit encodes terminal
   behavior.
 - **Consumes:** Orbit `ORB-C5` proof
@@ -598,6 +619,8 @@ qualified by the identities and boundaries below.
   A change to screen, geometry, default cell colors, or palette retires the
   bounded preview before presentation. An unsolicited or mismatched scroll
   outcome is a protocol-order failure.
+- **Bounded text-geometry proof:** See the scoped Venus source and reader
+  observation under VEN-C1; broader reader qualification remains separate.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.

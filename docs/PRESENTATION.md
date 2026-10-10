@@ -55,7 +55,7 @@ commands and geometry defaults. The runtime validates configuration and owns
 live workspace and popup state, Session mappings, and Codex quota collection
 and normalization. Venus consumes
 `orbit-protocol` 0.1.0, ORBF v2, and ORBS v13 at exact Orbit proof
-`b6cecf8f2ee35570b41cfdc578b095889d917fe2`. One reducer turns complete canonical
+`6bc269c40b18f08b95778939518f77556ba91c67`. One reducer turns complete canonical
 frames into immutable scene data used by drawing and accessibility. The native
 host owns the local socket, window, input mapping, and redraw lifecycle; it owns
 no terminal state.
@@ -65,6 +65,12 @@ the EONW connection for workspace state
 and actions, one presentation connection to the selected popup or pane, and one read-only
 metadata observer for each visible live pane. Hidden and offline Sessions have no
 Venus observer and remain alive independently.
+
+Terminal accessibility text and selection come from the same accepted Scene.
+Atomic units retain their terminal columns, and AccessKit projects their
+positions and widths through the rendered grid and visible clipping. Scoped
+Linux Orca line-review evidence is indexed under VEN-C1; complete composed
+screen-reader qualification and native reader-key delivery remain separate.
 
 ## Platform and limits
 
