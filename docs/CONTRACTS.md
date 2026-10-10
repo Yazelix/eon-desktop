@@ -291,6 +291,24 @@ qualified by the identities and boundaries below.
   `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
+- **Terminal caret candidate:** Source
+  `58f2eaa8057627bdbf73262fdb10a1dc8b681ffc`
+  (`ven-expose-authoritative-accessible-caret-zki`) supplies the existing Orbit
+  viewport cursor through AccessKit's collapsed text selection. Focused
+  red/green coverage, all 146 ordinary locked Rust tests, strict Clippy and the
+  affected Nix package pass. Native selected-text inspection reports exact
+  `é 界`; line review reaches live and history rows, and Return to live restores
+  the real caret without inventing one in history. Native Orca at
+  `24c64c15c1e1a75f95d74f7d623f62ab028fd3a9` receives caret movement and reports
+  the picker caret at 27, but Say All retains its previous text context and
+  reads only the footer. The same failure reproduces with a full prior text
+  buffer in GNOME Terminal 3.60.0/VTE 0.84.0 and real fzf 0.73.1, without Eon
+  or Venus. The earlier short-buffer GNOME comparison passed and does not
+  establish that the defect is Venus-specific. Native logs, SSIP/PCM and the
+  standalone reproduction are retained in
+  `~/.local/state/eon/proofs/venus-picker-trace-2026-10-10-b3lmrz6w/`.
+  Query/path Say All acceptance and Eon adoption/qualification remain blocked;
+  this candidate does not supersede the accepted native reader proofs below.
 - **Terminal text-geometry proof:** Source
   `217f18a231d511f0b379ceee807769ad31c0a047` (`ven-restore-orca-terminal-line-review-gyu`)
   hardens VEN-C1/C2/C7 through the existing Scene and shared cell metrics.
