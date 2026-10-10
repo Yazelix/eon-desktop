@@ -291,7 +291,7 @@ qualified by the identities and boundaries below.
   `6bc269c40b18f08b95778939518f77556ba91c67`; those contracts retain proof
   `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Fractional/HiDPI native quality remains outside the proof.
-- **Terminal caret candidate:** Source
+- **Terminal caret proof:** Accepted source
   `58f2eaa8057627bdbf73262fdb10a1dc8b681ffc`
   (`ven-expose-authoritative-accessible-caret-zki`) supplies the existing Orbit
   viewport cursor through AccessKit's collapsed text selection. Focused
@@ -307,8 +307,16 @@ qualified by the identities and boundaries below.
   establish that the defect is Venus-specific. Native logs, SSIP/PCM and the
   standalone reproduction are retained in
   `~/.local/state/eon/proofs/venus-picker-trace-2026-10-10-b3lmrz6w/`.
-  Query/path Say All acceptance and Eon adoption/qualification remain blocked;
-  this candidate does not supersede the accepted native reader proofs below.
+  On 2026-10-10 the user accepted this Venus-owned repair while retaining the
+  [Orca #757 Say All limitation](https://gitlab.gnome.org/GNOME/orca/-/work_items/757).
+  The separately tested Orca correction restores query/full-path speech on
+  this exact Venus package; its evidence is retained in
+  `~/.local/state/eon/proofs/orca-caret-fix-2026-10-10-ss8xua84/submission/validation.json`.
+  No patched reader is installed or selected by Venus. Acceptance covers the
+  caret, selection and history boundary; unmodified-reader Say All remains
+  red. Full reader qualification remains open and Eon adoption is separate.
+  The acceptance record and unchanged-source identity check are in
+  `~/.local/state/eon/proofs/ven-caret-acceptance-2026-10-10-s9mhcd4x/acceptance.json`.
 - **Terminal text-geometry proof:** Source
   `217f18a231d511f0b379ceee807769ad31c0a047` (`ven-restore-orca-terminal-line-review-gyu`)
   hardens VEN-C1/C2/C7 through the existing Scene and shared cell metrics.
@@ -448,6 +456,8 @@ qualified by the identities and boundaries below.
   cannot reach Orbit; capture and focus transitions withdraw obsolete input.
 - **Bounded text-geometry proof:** See the scoped Venus source and reader
   observation under VEN-C1; broader reader qualification remains separate.
+- **Terminal caret proof:** See the accepted source and scoped native caret,
+  selection and history proof under VEN-C1, retaining the Orca #757 limitation.
 - **Reader-focus cache repair:** Source
   `5dca0688644ef11f7fa8e845bb42842603189d32`
   (`ven-resolve-reader-focus-after-return-to-live-lmt`) pins AccessKit to
@@ -963,9 +973,10 @@ qualified by the identities and boundaries below.
   This is Venus package proof through a private Eon launcher; installed Eon
   adoption and full reader qualification remain separate. The native route
   uses the previously verified pane-focus-to-picker transition. An initial
-  terminal-focus transition after Say All read only the picker footer; its
-  trace is retained, baseline causality is unresolved, and that transition
-  remains unqualified. No human listening, macOS or broader compositor claim.
+  terminal-focus transition after Say All read only the picker footer; that
+  transition was not accepted by this proof. The subsequent caret repair and
+  upstream Say All limitation are indexed under VEN-C1. No human listening,
+  macOS or broader compositor claim.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
