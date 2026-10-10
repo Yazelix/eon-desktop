@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose Orbit's terminal caret to native screen readers so Orca starts reading
+  a replacement picker at its current query instead of an old terminal offset.
+
 - Keep rejected workspace actions visible and available to screen readers
   across polling. Announce the failure once without moving terminal focus;
   retire the notice when a successful retry changes the workspace.

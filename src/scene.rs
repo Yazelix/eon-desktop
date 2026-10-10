@@ -1441,12 +1441,27 @@ impl Scene {
                 column_spans,
             });
         }
-        AccessibleText {
-            rows,
-            selection: anchor
-                .zip(focus)
-                .map(|(anchor, focus)| AccessibleSelection { anchor, focus }),
-        }
+        let selection = anchor
+            .zip(focus)
+            .map(|(anchor, focus)| AccessibleSelection { anchor, focus })
+            .or_else(|| {
+                let cursor = self.cursor?;
+                let row = usize::from(cursor.row);
+                let content = rows.get(row)?;
+                let column = usize::from(cursor.leading_column());
+                let character_index = content
+                    .column_spans
+                    .partition_point(|span| !span.is_empty() && span.end <= column);
+                let caret = AccessiblePosition {
+                    row,
+                    character_index,
+                };
+                Some(AccessibleSelection {
+                    anchor: caret,
+                    focus: caret,
+                })
+            });
+        AccessibleText { rows, selection }
     }
 
     /// Stable human-readable state used by focused contract checks.
@@ -1991,7 +2006,7 @@ mod tests {
 
     #[test]
     fn accessibility_projection_keeps_authoritative_selected_cells() {
-        let scene = Scene {
+        let mut scene = Scene {
             revision: 3,
             columns: 4,
             rows: 2,
@@ -2000,7 +2015,17 @@ mod tests {
             working_directory: String::new(),
             background: Color::default(),
             foreground: Color::default(),
-            cursor: None,
+            cursor: Some(DrawCursor {
+                visible: true,
+                blinking: false,
+                password_input: false,
+                shape: CursorShape::Block,
+                column: 0,
+                row: 0,
+                at_wide_tail: false,
+                color: Color::default(),
+                explicit_color: false,
+            }),
             content: vec![
                 DrawRow {
                     wrapped: false,
@@ -2046,6 +2071,51 @@ mod tests {
         assert_eq!(content.rows[0].column_spans, [0..1, 1..2, 2..3, 3..3]);
         assert_eq!(content.rows[1].column_spans.len(), 1);
         assert_eq!(content.rows[1].column_spans[0], 0..2);
+
+        for cell in scene.content.iter_mut().flat_map(|row| &mut row.cells) {
+            cell.style.selected = false;
+        }
+        for (row, column, at_wide_tail, character_index) in [
+            (0, 0, false, 0),
+            (0, 1, false, 1),
+            (0, 2, false, 2),
+            (0, 3, false, 2),
+            (1, 0, false, 0),
+            (1, 1, true, 0),
+            (1, 2, false, 1),
+            (1, 3, false, 1),
+        ] {
+            let cursor = scene.cursor.as_mut().unwrap();
+            cursor.row = row;
+            cursor.column = column;
+            cursor.at_wide_tail = at_wide_tail;
+            let caret = AccessiblePosition {
+                row: usize::from(row),
+                character_index,
+            };
+            assert_eq!(
+                scene.accessible_content().selection,
+                Some(AccessibleSelection {
+                    anchor: caret,
+                    focus: caret,
+                }),
+                "cursor at {row},{column}"
+            );
+        }
+        scene.content[1].cells.clear();
+        let caret = AccessiblePosition {
+            row: 1,
+            character_index: 0,
+        };
+        assert_eq!(
+            scene.accessible_content().selection,
+            Some(AccessibleSelection {
+                anchor: caret,
+                focus: caret,
+            })
+        );
+        scene.cursor = None;
+        assert_eq!(scene.accessible_content().selection, None);
     }
 
     #[test]

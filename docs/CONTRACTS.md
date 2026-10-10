@@ -277,7 +277,10 @@ qualified by the identities and boundaries below.
   - The immutable Scene alone owns accessible text and selection. Each visible,
     nonblank canonical head cell is one selectable UTF-8 unit; text above the
     AccessKit 255-byte unit limit becomes one U+FFFD accessibility unit without
-    changing visual or protocol text.
+    changing visual or protocol text. Without selected cells, the authoritative
+    viewport cursor supplies a collapsed accessible caret in those same atomic
+    units. Trimmed padding stops before the row newline; an absent viewport
+    cursor supplies no caret.
 - **Important failures:** Invalid frames, topology, cursor profiles, renderer
   admission, focus, occlusion, or presentation failure cannot publish stale draw
   or accessibility state.
