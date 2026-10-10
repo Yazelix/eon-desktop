@@ -885,7 +885,11 @@ qualified by the identities and boundaries below.
 - **Important failures:** Workspace loss, Orbit exit, endpoint replacement,
   liveness change, rejected close or movement, or incompatible metadata retires
   stale observations and never grants Venus topology or Session-lifecycle
-  ownership. Repeats create no second structural action.
+  ownership. Repeats create no second structural action. Rejected-action notices
+  remain available through unchanged and quota-only refreshes until workspace
+  structure changes. Connection-unavailable notices clear on a successful
+  snapshot. Terminal-status alerts announce their actual error without moving
+  focus; routine polling does not repeat the announcement.
 - **Owner:** Venus workspace materialization, bounded metadata observation,
   clipping, and accessibility projection; Eon owns topology and Orbit owns
   terminal metadata and Session lifetime.

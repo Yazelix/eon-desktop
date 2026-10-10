@@ -410,6 +410,7 @@ impl Snapshot {
         if status_alert {
             let mut status = Node::new(Role::Alert);
             status.set_label(self.status.as_str());
+            status.set_live(accesskit::Live::Assertive);
             nodes.push((STATUS, status));
         }
 
@@ -1147,6 +1148,10 @@ mod tests {
         );
         assert_eq!(node(&update, STATUS).role(), Role::Alert);
         assert_eq!(node(&update, STATUS).label(), Some("renderer failure"));
+        assert_eq!(
+            node(&update, STATUS).live(),
+            Some(accesskit::Live::Assertive)
+        );
         assert_eq!(node(&update, WINDOW).children(), &[CONTENT, STATUS]);
     }
 

@@ -87,7 +87,13 @@ pub struct SessionModel {
 #[derive(Debug, Default)]
 pub struct WorkspaceModel {
     snapshot: Option<Snapshot>,
-    notice: Option<String>,
+    notice: Option<WorkspaceNotice>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum WorkspaceNotice {
+    Action(String),
+    Unavailable(String),
 }
 
 #[must_use]
@@ -108,7 +114,9 @@ impl WorkspaceModel {
 
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
-        self.notice.as_deref()
+        self.notice.as_ref().map(|notice| match notice {
+            WorkspaceNotice::Action(text) | WorkspaceNotice::Unavailable(text) => text.as_str(),
+        })
     }
 
     /// Apply a response and report `(view changed, workspace changed)`.
@@ -122,16 +130,17 @@ impl WorkspaceModel {
                         || current.entries != snapshot.entries
                         || current.tabs != snapshot.tabs
                 });
-                let view_changed = snapshot_changed || self.notice.is_some();
+                let notice_cleared = (workspace_changed
+                    || matches!(self.notice, Some(WorkspaceNotice::Unavailable(_))))
+                    && self.notice.take().is_some();
                 self.snapshot = Some(snapshot);
-                self.notice = None;
-                (view_changed, workspace_changed)
+                (snapshot_changed || notice_cleared, workspace_changed)
             }
             WorkspaceResponse::Failure(failure) => (
-                self.set_notice(bounded(format!(
+                self.set_notice(WorkspaceNotice::Action(bounded(format!(
                     "Eon workspace {}: {}",
                     failure.code, failure.detail
-                ))),
+                )))),
                 false,
             ),
         }
@@ -143,7 +152,7 @@ impl WorkspaceModel {
             .as_mut()
             .and_then(|snapshot| snapshot.codex_quota.take())
             .is_some();
-        self.set_notice(bounded(detail.into())) || expired_quota
+        self.set_notice(WorkspaceNotice::Unavailable(bounded(detail.into()))) || expired_quota
     }
 
     #[must_use]
@@ -163,7 +172,7 @@ impl WorkspaceModel {
             .map(|pane| (pane.endpoint.as_slice(), pane.live))
     }
 
-    fn set_notice(&mut self, notice: String) -> bool {
+    fn set_notice(&mut self, notice: WorkspaceNotice) -> bool {
         let changed = self.notice.as_ref() != Some(&notice);
         self.notice = Some(notice);
         changed
@@ -568,21 +577,45 @@ mod tests {
         );
         assert_eq!(
             model.apply(WorkspaceResponse::Snapshot(refreshed_quota.clone())),
-            (true, false)
+            (false, false),
+            "an unchanged poll must not dismiss an action failure"
         );
-        assert_eq!(model.notice(), None);
+        assert!(model.notice().is_some());
         assert_eq!(
             model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
             (true, false)
         );
+        assert!(model.notice().is_some(), "quota updates retain the failure");
         assert_eq!(
             model.apply(WorkspaceResponse::Snapshot(snapshot.clone())),
             (false, false)
         );
 
+        let mut selected = snapshot.clone();
+        selected.active_tab = "t2".into();
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(selected)),
+            (true, true)
+        );
+        assert_eq!(
+            model.notice(),
+            None,
+            "a changed workspace retires the failure"
+        );
+
         assert!(model.mark_unavailable("Cannot connect to Eon"));
         assert!(model.snapshot().unwrap().codex_quota.is_none());
         assert!(!model.mark_unavailable("Cannot connect to Eon"));
+        let recovered = model.snapshot().unwrap().clone();
+        assert_eq!(
+            model.apply(WorkspaceResponse::Snapshot(recovered)),
+            (true, false)
+        );
+        assert_eq!(
+            model.notice(),
+            None,
+            "an identical snapshot proves reconnection"
+        );
 
         let mut offline = snapshot.clone();
         offline.tabs[0].panes[0].live = false;

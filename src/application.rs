@@ -5209,7 +5209,7 @@ mod tests {
                 assert_eq!(
                     app.presented_revision(),
                     Some(4),
-                    "an unchanged snapshot that clears a notice must keep presented geometry"
+                    "an unchanged snapshot that retains a notice must keep presented geometry"
                 );
 
                 // A workspace poll can skip intermediate pane selections.
