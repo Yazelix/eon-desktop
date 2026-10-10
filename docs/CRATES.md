@@ -136,6 +136,21 @@ for one zero-payload semantic action without a new dependency or adapter.
   adapter exposes standard Click actions but not model-level custom actions, so
   distinct Open and Copy nodes use that supported path.
 
+The Linux cache adapter is patched to exact `Yazelix/accesskit` revision
+`0f9d186ec6f5e66fe4ccc131ca318dc2725c12f5`, based on upstream
+`c88605b96d04431f9c3c792464a0f2f253480e94`. Its shared signal helper wraps
+each cache structure as one D-Bus argument, preserving the libatspi cache
+contract. One wire regression checks both encoded signal headers and values.
+The four existing packages `accesskit`, `accesskit_consumer`,
+`accesskit_atspi_common` and `accesskit_unix` share this pin so sibling paths
+retain one Rust type identity. Their versions, features and dependency edges
+are unchanged; the three sibling source trees equal the registry releases.
+No Venus focus workaround, extra package, native library or build tool is added.
+Nix consumers need one fixed-output hash for the shared Git source. Replace
+this patch with an accepted upstream release passing the cache-wire and real
+Orca return-to-live selection checks. `ven-resolve-reader-focus-after-return-to-live-lmt`
+owns the decision and scoped delivery proof.
+
 ### Native text clipboard
 
 - **Selected shape:** wl-clipboard-rs 0.9.3 on Linux and target-only arboard
