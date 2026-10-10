@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep rejected workspace actions visible and available to screen readers
+  across polling. Announce the failure once without moving terminal focus;
+  retire the notice when a successful retry changes the workspace.
+
 - Keep Orca selection inspection usable after Return to live output by
   correcting AccessKit’s Linux cache signals.
 

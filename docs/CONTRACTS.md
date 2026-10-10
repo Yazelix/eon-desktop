@@ -536,6 +536,8 @@ qualified by the identities and boundaries below.
   at `ea9fd28ce0908f218cf65d4e6df368f0a4e565f5`.
 - **Boundary:** Compositor title-bar visibility and broader Linux compositor
   proof remain outside the accepted slice.
+- **Workspace action failures:** VEN-C8 records the retained-notice and native
+  reader announcement proof at `dd31c0e74628674c772b1494590ce31cacce1ef0`.
 - **Quiet workspace proof:** `b7404dae6c59a8e6de6ca9efbf2c907eedf1262b`.
   Locked fmt/check/test/clippy/build pass (124 ordinary tests). The existing
   native Application input/presentation check goes red for routine connection
@@ -915,6 +917,34 @@ qualified by the identities and boundaries below.
   historical native proofs without a new native/macOS claim or Eon activation.
   Runtime-only changes with unchanged complete codec/build identity retain
   Venus's exact codec pin; that pin's reuse alone requires no new native proof.
+- **Workspace failure-notice proof:** Source
+  `dd31c0e74628674c772b1494590ce31cacce1ef0`
+  (`ven-retain-workspace-failure-notices-5sl`) passes focused red/green checks,
+  locked fmt/check/test/strict Clippy/build and the affected Nix package build
+  (146 ordinary tests, five existing ignored). Two existing tests are
+  strengthened; no maintained test is added. The exact package is
+  `/nix/store/ilrx1wws293b4zx5r6x4csikjabmn0g6-yazelix-venus-0.1.0`.
+  On x86_64 Linux native Wayland, private COSMIC/Sway and Mesa 26.1.2 lavapipe,
+  normal Orca at upstream `24c64c15c1e1a75f95d74f7d623f62ab028fd3a9`
+  announces an actual missing-directory pane-launch error once through SSIP
+  with non-silent captured PCM. The notice remains available for 12.90 seconds
+  across unchanged polls without repeated speech or terminal focus loss.
+  Restoring the directory and retrying natively creates exactly the next pane
+  and retires the notice; healthy terminal reading/input and both original
+  Orbit peers survive. Cleanup preserves all four ambient process identities,
+  the active profile and user focus. Exact dependencies remain AccessKit
+  `0f9d186ec6f5e66fe4ccc131ca318dc2725c12f5`, Orbit
+  `6bc269c40b18f08b95778939518f77556ba91c67` (ORBF 2 / ORBS 13) and EONW 7
+  `b8f18b4374ca0818a64d9cac6a3fcd02d9f2f2aa`.
+  Evidence is retained in
+  `~/.local/state/eon/proofs/ven-workspace-failure-notice-2026-10-10-3eeeed8v/acceptance.json`
+  (SHA-256 `5fcc2d9460c4845ae8b68a9aec7b33ad9cf39018089ea91477646db59bb4fded`).
+  This is Venus package proof through a private Eon launcher; installed Eon
+  adoption and full reader qualification remain separate. The native route
+  uses the previously verified pane-focus-to-picker transition. An initial
+  terminal-focus transition after Say All read only the picker footer; its
+  trace is retained, baseline causality is unresolved, and that transition
+  remains unqualified. No human listening, macOS or broader compositor claim.
 - **Proof:** `0791f00926cd5cc4fedcc7737aeac7bb68569aff` for tab shortcuts;
   `94b15af20d1798b648f4d9945fd6bb647f10add8` for one-line header layout;
   `e13970e90289d0d86f0adcbf350e4b9c1d5e5219` for workspace interaction
