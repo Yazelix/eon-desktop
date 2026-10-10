@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep Orca selection inspection usable after Return to live output by
+  correcting AccessKit’s Linux cache signals.
+
 - Expose terminal text-range geometry from the shared cell grid so Orca line
   review reaches visible output, preserving atomic graphemes and clipping.
 

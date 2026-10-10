@@ -275,6 +275,13 @@ remain separate license and user-approval gates.
   requires a real tree by the next display refresh even when the application
   would skip rendering. Venus derives that tree from the accepted scene;
   pointer hit testing follows the last-presented scene.
+  The Linux cache correction is pinned to
+  [AccessKit `0f9d186`](https://github.com/Yazelix/accesskit/commit/0f9d186ec6f5e66fe4ccc131ca318dc2725c12f5),
+  based on upstream `c88605b96d04431f9c3c792464a0f2f253480e94`.
+  [AT-SPI 2.58.1's cache handlers](https://gitlab.gnome.org/GNOME/at-spi2-core/-/blob/1c403959184b36a2d146840254b7a69dd080ec40/atspi/atspi-misc.c)
+  require each AddAccessible/RemoveAccessible structure as one signal argument.
+  The dependency's encoded-wire check and real Orca return-to-live selection
+  oracle prove this boundary; `docs/CRATES.md` owns the pin and exit decision.
 - [softbuffer 0.4.8](https://docs.rs/softbuffer/0.4.8/softbuffer/) remains the
   software comparison. Its CPU buffer supports damage on selected platforms,
   while AppKit presentation requires a blocking copy.

@@ -304,9 +304,10 @@ qualified by the identities and boundaries below.
   `é 界` selection, and continue after history/AT return-to-live. Actual SSIP
   and synthesized PCM are retained in
   `~/.local/state/eon/proofs/ven-orca-line-review-gyu-2026-10-10/acceptance.json`.
-  Reader handlers were invoked through Orca D-Bus; native reader-key delivery,
-  retired-control reader focus, composed Eon qualification, other compositor/
-  native fractional-scale quality and macOS remain unaccepted.
+  Reader handlers were invoked through Orca D-Bus. That geometry observation
+  does not prove retired-control reader focus; its repair is indexed under
+  VEN-C2. Native reader-key delivery, composed Eon qualification, other
+  compositor/native fractional-scale quality and macOS remain unaccepted.
 - **Proof:** `bac1d8d155c04840d672f2d1bb299a830dcb625f`
   - **Half-block rendering refinement:** Full locked Rust checks pass with 145
     ordinary tests, plus the native Application input regression on private
@@ -426,6 +427,24 @@ qualified by the identities and boundaries below.
   cannot reach Orbit; capture and focus transitions withdraw obsolete input.
 - **Bounded text-geometry proof:** See the scoped Venus source and reader
   observation under VEN-C1; broader reader qualification remains separate.
+- **Reader-focus cache repair:** Source
+  `5dca0688644ef11f7fa8e845bb42842603189d32`
+  (`ven-resolve-reader-focus-after-return-to-live-lmt`) pins AccessKit to
+  `0f9d186ec6f5e66fe4ccc131ca318dc2725c12f5`. Its Linux cache signals retain
+  each structure as one D-Bus argument; Venus adds no focus workaround.
+  The dependency's encoded-wire regression fails before and passes after;
+  all six adapter tests, strict Clippy, Venus's locked checks and 146 ordinary
+  tests, the isolated native Application regression, and the Nix package with
+  146 release tests pass. On private native Sway 1.12/headless/pixman, scale 1,
+  Nix Mesa 26.1.2 lavapipe, Orca 49.4 and AT-SPI 2.58.1, the reader keeps its
+  terminal script/locus through history/Say All and assistive Return to live.
+  Native selection `é 界` at 206..210 is synthesized as selected text without
+  a post-return F6/Escape repair. The retired control is absent and the current
+  terminal is focused. Exact Nix artifact, SSIP, PCM/WAV and cleanup are in
+  `~/.local/state/eon/proofs/ven-reader-focus-lmt-adoption-2026-10-10/acceptance.json`.
+  This hardens VEN-C2/C7/C8 and preserves VEN-C1/C4; Eon adoption and full
+  qualification, native reader-key delivery, other compositors, fractional
+  native quality and macOS remain separate.
 - **Owner:** Venus native input and geometry owners; Orbit encodes terminal
   behavior.
 - **Consumes:** Orbit `ORB-C5` proof
@@ -621,6 +640,8 @@ qualified by the identities and boundaries below.
   outcome is a protocol-order failure.
 - **Bounded text-geometry proof:** See the scoped Venus source and reader
   observation under VEN-C1; broader reader qualification remains separate.
+- **Reader-focus cache repair:** See the exact source and native selection
+  observation under VEN-C2.
 - **Owner:** Venus owns native fractional presentation, bounded kinetic state,
   gesture cancellation, and clipboard effects; Orbit alone owns history,
   viewport movement, routing, cells, revisions, selection, and copied text.
@@ -786,6 +807,8 @@ qualified by the identities and boundaries below.
 ## VEN-C8 — Eon workspace presentation
 
 - **Status:** Partially proved
+- **Reader-focus cache repair:** See the exact source and native workspace
+  observation under VEN-C2; broader qualification remains separate.
 - **Consumer:** One Venus surface controlled by an Eon workspace.
 - **Trigger:** Outside visible `VEN-C18` popup presentation, Eon supplies
   durable topology or a workspace action changes tab, pane, focus, order,
