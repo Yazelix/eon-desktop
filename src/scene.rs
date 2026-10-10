@@ -4,7 +4,7 @@ use orbit_protocol::{
     Cell, CellStyle, CellWidth, CursorShape, Frame, Rgb, Row, Screen, StyleColor, Underline,
     session::VerticalDirection,
 };
-use std::{ffi::OsStr, fmt::Write, os::unix::ffi::OsStrExt, path::Path};
+use std::{ffi::OsStr, fmt::Write, ops::Range, os::unix::ffi::OsStrExt, path::Path};
 use winit::dpi::PhysicalSize;
 
 /// Physical rectangle shared by workspace drawing, hit testing, and accessibility.
@@ -1252,6 +1252,7 @@ pub(crate) struct AccessibleText {
 pub(crate) struct AccessibleRow {
     pub value: String,
     pub character_lengths: Vec<u8>,
+    pub column_spans: Vec<Range<usize>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1377,31 +1378,43 @@ impl Scene {
                 match cell.width {
                     CellWidth::Narrow | CellWidth::Wide => {
                         if cell.style.invisible || cell.text.is_empty() {
-                            units.extend(
-                                (0..if wide { 2 } else { 1 })
-                                    .map(|_| (" ", 1, cell.style.selected)),
-                            );
+                            units.extend((0..if wide { 2 } else { 1 }).map(|offset| {
+                                (
+                                    " ",
+                                    1,
+                                    cell.style.selected,
+                                    column + offset..column + offset + 1,
+                                )
+                            }));
                         } else {
                             let (text, length) = u8::try_from(cell.text.len())
                                 .map_or(("\u{fffd}", 3), |length| (cell.text.as_str(), length));
-                            units.push((text, length, cell.style.selected));
+                            units.push((
+                                text,
+                                length,
+                                cell.style.selected,
+                                column..column + usize::from(wide) + 1,
+                            ));
                         }
                     }
-                    CellWidth::SpacerHead => units.push((" ", 1, cell.style.selected)),
+                    CellWidth::SpacerHead => {
+                        units.push((" ", 1, cell.style.selected, column..column + 1));
+                    }
                     CellWidth::SpacerTail => {}
                 }
                 column += usize::from(wide) + 1;
             }
             while units
                 .last()
-                .is_some_and(|(text, _, selected)| *text == " " && !selected)
+                .is_some_and(|(text, _, selected, _)| *text == " " && !selected)
             {
                 units.pop();
             }
 
             let mut value = String::new();
             let mut character_lengths = Vec::with_capacity(units.len() + 1);
-            for (character_index, (text, length, selected)) in units.into_iter().enumerate() {
+            let mut column_spans = Vec::with_capacity(units.len() + 1);
+            for (character_index, (text, length, selected, span)) in units.into_iter().enumerate() {
                 if selected {
                     anchor.get_or_insert(AccessiblePosition {
                         row: row_index,
@@ -1414,14 +1427,18 @@ impl Scene {
                 }
                 value.push_str(text);
                 character_lengths.push(length);
+                column_spans.push(span);
             }
             if row_index + 1 < self.content.len() {
                 value.push('\n');
                 character_lengths.push(1);
+                let end = column_spans.last().map_or(0, |span| span.end);
+                column_spans.push(end..end);
             }
             rows.push(AccessibleRow {
                 value,
                 character_lengths,
+                column_spans,
             });
         }
         AccessibleText {
@@ -2026,6 +2043,9 @@ mod tests {
             })
         );
         assert_eq!(content.rows[0].character_lengths, [1, 3, 1, 1]);
+        assert_eq!(content.rows[0].column_spans, [0..1, 1..2, 2..3, 3..3]);
+        assert_eq!(content.rows[1].column_spans.len(), 1);
+        assert_eq!(content.rows[1].column_spans[0], 0..2);
     }
 
     #[test]

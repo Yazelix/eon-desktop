@@ -390,10 +390,7 @@ impl Snapshot {
                 };
                 nodes.push((
                     text_run_id(index),
-                    text_run(
-                        row,
-                        visible_terminal.and_then(|visible| row_bounds.intersection(visible)),
-                    ),
+                    text_run(row, row_bounds, visible_terminal, self.metrics.width),
                 ));
             }
         }
@@ -685,13 +682,31 @@ fn text_selection(selection: AccessibleSelection) -> TextSelection {
     }
 }
 
-fn text_run(row: &AccessibleRow, bounds: Option<SceneRect>) -> Node {
+fn text_run(
+    row: &AccessibleRow,
+    row_bounds: SceneRect,
+    visible_terminal: Option<SceneRect>,
+    cell_width: f32,
+) -> Node {
     let mut node = Node::new(Role::TextRun);
     node.set_value(row.value.as_str());
     node.set_character_lengths(row.character_lengths.clone());
     node.set_text_direction(TextDirection::LeftToRight);
-    if let Some(bounds) = bounds {
+    if let Some(bounds) = visible_terminal.and_then(|visible| row_bounds.intersection(visible)) {
         node.set_bounds(rect(bounds));
+        let (positions, widths): (Vec<_>, Vec<_>) = row
+            .column_spans
+            .iter()
+            .map(|span| {
+                let start = (row_bounds.left + span.start as f32 * cell_width)
+                    .clamp(bounds.left, bounds.right());
+                let end = (row_bounds.left + span.end as f32 * cell_width)
+                    .clamp(bounds.left, bounds.right());
+                (start - bounds.left, end - start)
+            })
+            .unzip();
+        node.set_character_positions(positions);
+        node.set_character_widths(widths);
     }
     node
 }
@@ -1116,6 +1131,7 @@ mod tests {
                         .chars()
                         .map(|character| character.len_utf8() as u8)
                         .collect(),
+                    column_spans: (0..16).map(|column| column..column + 1).collect(),
                 }],
                 selection: None,
             },
@@ -1143,10 +1159,12 @@ mod tests {
                     AccessibleRow {
                         value: "one\n".into(),
                         character_lengths: vec![1, 1, 1, 1],
+                        column_spans: vec![0..1, 1..2, 2..3, 3..3],
                     },
                     AccessibleRow {
                         value: "界".into(),
                         character_lengths: vec![3],
+                        column_spans: std::iter::once(0..2).collect(),
                     },
                 ],
                 selection: Some(AccessibleSelection {
@@ -1187,10 +1205,113 @@ mod tests {
     }
 
     #[test]
+    fn text_geometry_preserves_atomic_cell_spans() {
+        let mut scene = linked_scene(1, "");
+        let cell = scene.content[0].cells[0].clone();
+        let oversized = format!("e{}", "\u{301}".repeat(128));
+        scene.columns = 7;
+        scene.rows = 2;
+        scene.content[0].cells = [
+            ("A", CellWidth::Narrow, false),
+            ("e\u{301}", CellWidth::Narrow, true),
+            ("界", CellWidth::Wide, true),
+            ("", CellWidth::SpacerTail, true),
+            ("", CellWidth::Narrow, true),
+            (oversized.as_str(), CellWidth::Wide, false),
+            ("", CellWidth::SpacerTail, false),
+        ]
+        .into_iter()
+        .map(|(text, width, selected)| {
+            let mut cell = cell.clone();
+            cell.text = text.into();
+            cell.width = width;
+            cell.style.selected = selected;
+            cell
+        })
+        .collect();
+        let mut blank = cell;
+        blank.text.clear();
+        scene.content.push(DrawRow {
+            cells: vec![blank; 7],
+            ..scene.content[0].clone()
+        });
+        let content = scene.accessible_content();
+
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let metrics = CellMetrics::for_scale(scale);
+            let update = Snapshot {
+                content: content.clone(),
+                columns: Some(scene.columns),
+                metrics,
+                ..Snapshot::new(PhysicalSize::new(800, 600))
+            }
+            .tree();
+            let row = node(&update, text_run_id(0));
+            assert_eq!(row.value(), Some("Ae\u{301}界 \u{fffd}\n"));
+            assert_eq!(row.character_lengths(), [1, 3, 3, 1, 3, 1]);
+            assert_eq!(
+                row.character_positions(),
+                Some(
+                    [0.0, 1.0, 2.0, 4.0, 5.0, 7.0]
+                        .map(|x| x * metrics.width)
+                        .as_slice()
+                ),
+                "scale {scale}"
+            );
+            assert_eq!(
+                row.character_widths(),
+                Some(
+                    [1.0, 1.0, 2.0, 1.0, 2.0, 0.0]
+                        .map(|x| x * metrics.width)
+                        .as_slice()
+                ),
+                "scale {scale}"
+            );
+
+            let row_bounds = SceneRect {
+                left: metrics.padding,
+                top: metrics.padding,
+                width: 7.0 * metrics.width,
+                height: metrics.height,
+            };
+            let clip = SceneRect {
+                left: metrics.padding + 1.5 * metrics.width,
+                top: metrics.padding + 0.25 * metrics.height,
+                width: 4.5 * metrics.width,
+                height: 0.5 * metrics.height,
+            };
+            let clipped = text_run(&content.rows[0], row_bounds, Some(clip), metrics.width);
+            assert_eq!(clipped.bounds(), Some(rect(clip)));
+            assert_eq!(
+                clipped.character_positions(),
+                Some(
+                    [0.0, 0.0, 0.5, 2.5, 3.5, 4.5]
+                        .map(|x| x * metrics.width)
+                        .as_slice()
+                )
+            );
+            assert_eq!(
+                clipped.character_widths(),
+                Some(
+                    [0.0, 0.5, 2.0, 1.0, 1.0, 0.0]
+                        .map(|x| x * metrics.width)
+                        .as_slice()
+                )
+            );
+            let hidden = text_run(&content.rows[0], row_bounds, None, metrics.width);
+            assert_eq!(hidden.bounds(), None);
+            assert_eq!(hidden.character_positions(), None);
+            assert_eq!(hidden.value(), row.value());
+            assert_eq!(hidden.character_lengths(), row.character_lengths());
+        }
+    }
+
+    #[test]
     fn text_runs_follow_the_rendered_cell_grid() {
         let row = AccessibleRow {
             value: String::new(),
             character_lengths: Vec::new(),
+            column_spans: Vec::new(),
         };
         let update = Snapshot {
             content: AccessibleText {
@@ -1295,10 +1416,12 @@ mod tests {
                         AccessibleRow {
                             value: "one\n".into(),
                             character_lengths: vec![1; 4],
+                            column_spans: vec![0..1, 1..2, 2..3, 3..3],
                         },
                         AccessibleRow {
                             value: "two".into(),
                             character_lengths: vec![1; 3],
+                            column_spans: vec![0..1, 1..2, 2..3],
                         },
                     ],
                     selection: None,
@@ -1509,6 +1632,7 @@ mod tests {
                 rows: vec![AccessibleRow {
                     value: "terminal".into(),
                     character_lengths: vec![1; 8],
+                    column_spans: (0..8).map(|column| column..column + 1).collect(),
                 }],
                 selection: None,
             },
@@ -1593,6 +1717,7 @@ mod tests {
                 rows: vec![AccessibleRow {
                     value: "popup".into(),
                     character_lengths: vec![1; 5],
+                    column_spans: (0..5).map(|column| column..column + 1).collect(),
                 }],
                 selection: None,
             },
